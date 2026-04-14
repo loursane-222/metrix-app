@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  atolye Atolye?
+}
+
+model Atolye {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  atolyeAdi String @default("")
+  sehir     String @default("")
+  ilce      String @default("")
+  telefon   String @default("")
+  email     String @default("")
+  adres     String @default("")
+  logoUrl   String @default("")
+
+  toplamMaas  Decimal @default(0)
+  sgkGideri   Decimal @default(0)
+  yemekGideri Decimal @default(0)
+  yolGideri   Decimal @default(0)
+
+  kira     Decimal @default(0)
+  elektrik Decimal @default(0)
+  su       Decimal @default(0)
+  dogalgaz Decimal @default(0)
+  internet Decimal @default(0)
+
+  sarfMalzeme Decimal @default(0)
+
+  aylikPorselenPlaka Int @default(0)
+  aylikKuvarsPlaka   Int @default(0)
+  aylikDogaltasPlaka Int @default(0)
+
+  plakaBasinaMtul Decimal @default(3.20)
+  dakikaMaliyeti  Decimal @default(0)
+
+  kdvOrani          Int @default(20)
+  teklifGecerlilik  Int @default(15)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  makineler Makine[]
+  araclar   Arac[]
+  isler     Is[]
+}
+
+model Makine {
+  id       String @id @default(cuid())
+  atolyeId String
+  atolye   Atolye @relation(fields: [atolyeId], references: [id])
+
+  makineAdi              String
+  alinanBedel            Decimal
+  paraBirimi             String  @default("TRY")
+  amortismanSuresiAy     Int
+  aylikAktifCalismaSaati Decimal
+
+  aylikAmortisman  Decimal @default(0)
+  saatlikMaliyet   Decimal @default(0)
+  dakikalikMaliyet Decimal @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  operasyonlar IsOperasyon[]
+}
+
+model Arac {
+  id       String @id @default(cuid())
+  atolyeId String
+  atolye   Atolye @relation(fields: [atolyeId], references: [id])
+
+  aracAdi            String
+  aracTipi           String
+  alinanBedel        Decimal
+  paraBirimi         String  @default("TRY")
+  amortismanSuresiAy Int
+
+  aylikBakim        Decimal @default(0)
+  aylikSigortaKasko Decimal @default(0)
+  aylikVergiMuayene Decimal @default(0)
+
+  aylikAmortisman         Decimal @default(0)
+  aylikToplamSabitMaliyet Decimal @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Is {
+  id       String @id @default(cuid())
+  atolyeId String
+  atolye   Atolye @relation(fields: [atolyeId], references: [id])
+
+  teklifNo  String @default("")
+
+  musteriAdi  String  @default("")
+  urunAdi     String
+  malzemeTipi String
+  musteriTipi String
+
+  plakaFiyatiEuro    Decimal
+  metrajMtul         Decimal
+  birMtulDakika      Decimal
+  tezgahArasiMtul    Decimal @default(0)
+  tezgahArasiDakika  Decimal @default(0)
+  adaTezgahMtul      Decimal @default(0)
+  adaTezgahDakika    Decimal @default(0)
+  kullanilanKur      Decimal @default(0)
+
+  plakaGenislikCm    Decimal @default(0)
+  plakaUzunlukCm     Decimal @default(0)
+  plakadanAlinanMtul Decimal @default(0)
+
+  kullanilanPlakaSayisi Decimal @default(0)
+
+  karYuzdesi Decimal
+
+  toplamSureDakika Decimal @default(0)
+  iscilikMaliyeti  Decimal @default(0)
+  malzemeMaliyeti  Decimal @default(0)
+  toplamMaliyet    Decimal @default(0)
+  kdvTutari        Decimal @default(0)
+  kdvDahilFiyat    Decimal @default(0)
+  satisFiyati      Decimal @default(0)
+  mtulSatisFiyati  Decimal @default(0)
+
+  teklifGecerlilikTarihi DateTime?
+
+  durum  String  @default("teklif_verildi")
+  notlar String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  operasyonlar IsOperasyon[]
+}
+
+model IsOperasyon {
+  id   String @id @default(cuid())
+  isId String
+  is   Is     @relation(fields: [isId], references: [id])
+
+  operasyonTipi String
+
+  makineId String?
+  makine   Makine? @relation(fields: [makineId], references: [id])
+
+  adet         Int
+  birimDakika  Decimal
+  toplamDakika Decimal
+
+  createdAt DateTime @default(now())
+}
