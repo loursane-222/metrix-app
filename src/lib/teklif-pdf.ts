@@ -78,14 +78,10 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
 
   const icerik = `
     <div style="font-family: Arial, sans-serif; padding: 32px; max-width: 794px; margin: 0 auto; color: #1f2937; font-size: 13px;">
-
-      <!-- ÜST BÖLÜM: Logo + Firma Bilgisi -->
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
         <tr>
           <td style="width: 50%; vertical-align: top;">
-            ${veri.firma.logoUrl
-              ? `<img src="${window.location.origin}${veri.firma.logoUrl}" style="height: 60px; object-fit: contain; margin-bottom: 8px;" /><br/>`
-              : ''}
+            ${veri.firma.logoUrl ? `<img src="${window.location.origin}${veri.firma.logoUrl}" style="height: 60px; object-fit: contain; margin-bottom: 8px;" /><br/>` : ''}
             <strong style="font-size: 16px; color: #111827;">${veri.firma.adi}</strong>
           </td>
           <td style="width: 50%; vertical-align: top; text-align: right; font-size: 12px; color: #4b5563; line-height: 1.8;">
@@ -96,10 +92,7 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
           </td>
         </tr>
       </table>
-
       <hr style="border: none; border-top: 2px solid #1e40af; margin-bottom: 20px;" />
-
-      <!-- MÜŞTERİ + TEKLİF BİLGİLERİ -->
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #e5e7eb;">
         <tr>
           <td style="padding: 8px 12px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; width: 30%;">Teklif Verilen Kuruluş</td>
@@ -120,14 +113,10 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
           <td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${veri.gecerlilikTarihi}</td>
         </tr>
       </table>
-
-      <!-- GİRİŞ CÜMLESİ -->
       <p style="margin: 0 0 20px; line-height: 1.7;">
         Sayın <strong>${veri.musteri.adi}</strong>,<br/>
         Yapmış olduğumuz görüşmeler sonucunda hazırlamış olduğumuz fiyat teklifimizi görüşlerinize sunarız.
       </p>
-
-      <!-- ÜRÜN TABLOSU -->
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
         <thead>
           <tr style="background: #1e40af; color: white;">
@@ -139,12 +128,8 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
             <th style="padding: 10px 12px; text-align: right; font-size: 12px; font-weight: 600;">Toplam</th>
           </tr>
         </thead>
-        <tbody>
-          ${satirHtml}
-        </tbody>
+        <tbody>${satirHtml}</tbody>
       </table>
-
-      <!-- TOPLAMLAR -->
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
         <tr>
           <td style="width: 60%;"></td>
@@ -166,16 +151,12 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
           </td>
         </tr>
       </table>
-
       ${veri.is.notlar ? `
-      <!-- NOTLAR -->
       <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px 16px; margin-bottom: 20px; background: #f9fafb;">
         <p style="margin: 0 0 4px; font-weight: 600; font-size: 12px;">Notlar:</p>
         <p style="margin: 0; font-size: 13px; color: #374151;">${veri.is.notlar}</p>
       </div>
       ` : ''}
-
-      <!-- ALT BİLGİ -->
       <hr style="border: none; border-top: 1px solid #e5e7eb; margin-bottom: 16px;" />
       <table style="width: 100%; border-collapse: collapse;">
         <tr>
@@ -188,7 +169,6 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
           </td>
         </tr>
       </table>
-
     </div>
   `
 
@@ -199,9 +179,9 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
   const options = {
     margin: 8,
     filename: `Teklif-${veri.teklifNo}-${veri.musteri.adi}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
+    image: { type: 'jpeg' as const, quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    jsPDF: { unit: 'mm' as const, format: 'a4', orientation: 'portrait' as const },
   }
 
   await html2pdf().set(options).from(element).save()
