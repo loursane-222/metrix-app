@@ -13,6 +13,7 @@ export default function DashboardLayout({
   const router = useRouter()
   const [menuAcik, setMenuAcik] = useState(false)
   const [mobil, setMobil] = useState(false)
+  const [atolyeBilgi, setAtolyeBilgi] = useState<{ atolyeAdi: string; logoUrl: string } | null>(null)
 
   useEffect(() => {
     function ekranKontrol() {
@@ -26,6 +27,12 @@ export default function DashboardLayout({
   useEffect(() => {
     setMenuAcik(false)
   }, [pathname])
+
+  useEffect(() => {
+    fetch('/api/atolye').then(r => r.json()).then(v => {
+      if (v.atolye) setAtolyeBilgi({ atolyeAdi: v.atolye.atolyeAdi, logoUrl: v.atolye.logoUrl })
+    })
+  }, [])
 
   async function cikisYap() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -45,7 +52,16 @@ export default function DashboardLayout({
       {/* Mobil üst bar */}
       {mobil && (
         <div style={{position:'fixed', top:0, left:0, right:0, background:'#1e1e2e', padding:'12px 16px', zIndex:100, display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #2e2e3e'}}>
-          <h1 style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#60a5fa'}}>Metrix</h1>
+          <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+            {atolyeBilgi?.logoUrl ? (
+              <img src={atolyeBilgi.logoUrl} alt="logo" style={{height:'28px', objectFit:'contain'}} />
+            ) : (
+              <h1 style={{margin:0, fontSize:'18px', fontWeight:'700', color:'#60a5fa'}}>Metrix</h1>
+            )}
+            {atolyeBilgi?.atolyeAdi && (
+              <span style={{fontSize:'13px', color:'#9ca3af'}}>{atolyeBilgi.atolyeAdi}</span>
+            )}
+          </div>
           <button onClick={() => setMenuAcik(!menuAcik)} style={{background:'transparent', border:'none', color:'white', fontSize:'24px', cursor:'pointer', padding:'4px 8px', lineHeight:1}}>
             {menuAcik ? '✕' : '☰'}
           </button>
@@ -59,22 +75,31 @@ export default function DashboardLayout({
 
       {/* Sol Menü */}
       <div style={{
-        width:'240px',
-        background:'#1e1e2e',
-        color:'white',
-        display:'flex',
-        flexDirection:'column',
-        flexShrink:0,
-        position:'fixed',
-        height:'100vh',
-        zIndex:99,
+        width:'240px', background:'#1e1e2e', color:'white', display:'flex', flexDirection:'column',
+        flexShrink:0, position:'fixed', height:'100vh', zIndex:99,
         transform: mobil ? (menuAcik ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
         transition:'transform 0.3s ease',
       }}>
-        <div style={{padding:'24px 20px', borderBottom:'1px solid #2e2e3e'}}>
-          <h1 style={{margin:0, fontSize:'22px', fontWeight:'700', color:'#60a5fa'}}>Metrix</h1>
-          <p style={{margin:'4px 0 0', fontSize:'12px', color:'#6b7280'}}>Atölye Yönetimi</p>
+        {/* Metrix Başlık */}
+        <div style={{padding:'20px 20px 0', borderBottom:'1px solid #2e2e3e'}}>
+          <div style={{display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px'}}>
+            <h1 style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#60a5fa'}}>Metrix</h1>
+            <span style={{fontSize:'11px', color:'#6b7280', marginTop:'2px'}}>Atölye Yönetimi</span>
+          </div>
+
+          {/* Firma Bilgisi */}
+          {(atolyeBilgi?.logoUrl || atolyeBilgi?.atolyeAdi) && (
+            <div style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px 0 14px'}}>
+              {atolyeBilgi.logoUrl && (
+                <img src={atolyeBilgi.logoUrl} alt="firma logo" style={{height:'36px', width:'36px', objectFit:'contain', borderRadius:'6px', background:'white', padding:'3px'}} />
+              )}
+              {atolyeBilgi.atolyeAdi && (
+                <span style={{fontSize:'13px', color:'#d1d5db', fontWeight:'500'}}>{atolyeBilgi.atolyeAdi}</span>
+              )}
+            </div>
+          )}
         </div>
+
         <nav style={{flex:1, padding:'12px 0'}}>
           {menuItems.map((item) => {
             const aktif = pathname === item.href
@@ -86,6 +111,7 @@ export default function DashboardLayout({
             )
           })}
         </nav>
+
         <div style={{padding:'16px 20px', borderTop:'1px solid #2e2e3e'}}>
           <button onClick={cikisYap} style={{width:'100%', padding:'10px', background:'transparent', border:'1px solid #374151', borderRadius:'8px', color:'#9ca3af', cursor:'pointer', fontSize:'14px'}}>
             Çıkış Yap
@@ -94,13 +120,7 @@ export default function DashboardLayout({
       </div>
 
       {/* İçerik */}
-      <div style={{
-        flex:1,
-        marginLeft: mobil ? '0' : '240px',
-        background:'#f9fafb',
-        minHeight:'100vh',
-        paddingTop: mobil ? '56px' : '0',
-      }}>
+      <div style={{flex:1, marginLeft: mobil ? '0' : '240px', background:'#f9fafb', minHeight:'100vh', paddingTop: mobil ? '56px' : '0'}}>
         {children}
       </div>
 
