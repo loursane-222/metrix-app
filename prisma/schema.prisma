@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -46,11 +46,10 @@ model Atolye {
   aylikKuvarsPlaka   Int @default(0)
   aylikDogaltasPlaka Int @default(0)
 
-  plakaBasinaMtul Decimal @default(3.20)
-  dakikaMaliyeti  Decimal @default(0)
-
-  kdvOrani          Int @default(20)
-  teklifGecerlilik  Int @default(15)
+  plakaBasinaMtul  Decimal @default(3.20)
+  dakikaMaliyeti   Decimal @default(0)
+  kdvOrani         Int     @default(20)
+  teklifGecerlilik Int     @default(15)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -108,9 +107,8 @@ model Is {
   atolyeId String
   atolye   Atolye @relation(fields: [atolyeId], references: [id])
 
-  teklifNo  String @default("")
-
-  musteriAdi  String  @default("")
+  teklifNo    String @default("")
+  musteriAdi  String @default("")
   urunAdi     String
   malzemeTipi String
   musteriTipi String
