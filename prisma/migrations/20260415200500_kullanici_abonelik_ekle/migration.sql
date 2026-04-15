@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "abonelikBitis" TIMESTAMP(3),
+ADD COLUMN     "ad" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "aktif" BOOLEAN NOT NULL DEFAULT true;

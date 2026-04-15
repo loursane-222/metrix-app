@@ -1,0 +1,44 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
+
+const prisma = new PrismaClient()
+
+export async function POST(req: NextRequest) {
+  try {
+    const { ad, email, password } = await req.json()
+
+    if (!ad || !email || !password) {
+      return NextResponse.json({ hata: 'Tüm alanlar zorunludur.' }, { status: 400 })
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ hata: 'Şifre en az 6 karakter olmalıdır.' }, { status: 400 })
+    }
+
+    const mevcutKullanici = await prisma.user.findUnique({ where: { email } })
+    if (mevcutKullanici) {
+      return NextResponse.json({ hata: 'Bu e-posta adresi zaten kayıtlı.' }, { status: 400 })
+    }
+
+    const sifreliParola = await bcrypt.hash(password, 10)
+
+    // 30 günlük deneme süresi
+    const abonelikBitis = new Date()
+    abonelikBitis.setDate(abonelikBitis.getDate() + 30)
+
+    const kullanici = await prisma.user.create({
+      data: {
+        ad,
+        email,
+        password: sifreliParola,
+        aktif: true,
+        abonelikBitis,
+      },
+    })
+
+    return NextResponse.json({ mesaj: 'Kayıt başarılı!', kullaniciId: kullanici.id })
+  } catch {
+    return NextResponse.json({ hata: 'Bir hata oluştu.' }, { status: 500 })
+  }
+}
