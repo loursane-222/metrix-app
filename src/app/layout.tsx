@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "Metrix — Atölye Yönetimi",
   description: "Tezgah atölyeleri için maliyet ve teklif yönetim sistemi",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/favicon.png",
   },
 };
 
