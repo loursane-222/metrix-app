@@ -16,7 +16,10 @@ export const metadata: Metadata = {
   title: "Metrix — Atölye Yönetimi",
   description: "Tezgah atölyeleri için maliyet ve teklif yönetim sistemi",
   icons: {
-    icon: "/favicon.png",
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: '/favicon.png',
   },
 };
 
@@ -27,6 +30,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
+      <head>
+        <link rel="icon" type="image/png" href="/favicon.png" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
       </body>
