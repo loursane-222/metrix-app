@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
-import { writeFile, mkdir } from 'fs/promises'
-import path from 'path'
+import { v2 as cloudinary } from 'cloudinary'
 
 const prisma = new PrismaClient()
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
 
 async function kullaniciAl() {
   const cookieStore = await cookies()
@@ -32,14 +37,22 @@ export async function POST(req: NextRequest) {
   const bytes = await dosya.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads')
-  await mkdir(uploadDir, { recursive: true })
+  const sonuc = await new Promise<{ secure_url: string }>((resolve, reject) => {
+    cloudinary.uploader.upload_stream(
+      {
+        folder: 'metrix-logolar',
+        public_id: `logo-${kullanici.id}`,
+        overwrite: true,
+        transformation: [{ width: 400, height: 200, crop: 'fit' }],
+      },
+      (hata, sonuc) => {
+        if (hata) reject(hata)
+        else resolve(sonuc as { secure_url: string })
+      }
+    ).end(buffer)
+  })
 
-  const dosyaAdi = `logo-${kullanici.id}${path.extname(dosya.name)}`
-  const dosyaYolu = path.join(uploadDir, dosyaAdi)
-  await writeFile(dosyaYolu, buffer)
-
-  const logoUrl = `/uploads/${dosyaAdi}`
+  const logoUrl = sonuc.secure_url
 
   await prisma.atolye.update({
     where: { userId: kullanici.id },
