@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 import { teklifPdfIndir } from '@/lib/teklif-pdf'
+import { PlakaPlanlayiciMini, type PlakaHesapSonucu } from '@/components/plaka-planlayici/PlakaPlanlayiciMini'
 
 const inputStil: React.CSSProperties = { width:'100%', border:'1px solid #d1d5db', borderRadius:'8px', padding:'8px 12px', fontSize:'14px', boxSizing:'border-box' }
 const labelStil: React.CSSProperties = { display:'block', fontSize:'13px', fontWeight:'500', color:'#374151', marginBottom:'4px' }
@@ -29,6 +30,7 @@ export default function YeniIs() {
   const [plakaBasinaOrtMtul, setPlakaBasinaOrtMtul] = useState('3.20')
   const [atolyeBilgi, setAtolyeBilgi] = useState<{adi:string;adres:string;telefon:string;email:string;sehir:string;ilce:string;logoUrl:string;kdvOrani:number}>({adi:'',adres:'',telefon:'',email:'',sehir:'',ilce:'',logoUrl:'',kdvOrani:20})
 
+  const [plakaHesap, setPlakaHesap] = useState<PlakaHesapSonucu | null>(null)
   const [sonuc, setSonuc] = useState<{
     toplamSureDakika: number; iscilikMaliyeti: number; malzemeMaliyeti: number
     toplamMaliyet: number; satisFiyati: number; mtulSatisFiyati: number
@@ -191,6 +193,13 @@ export default function YeniIs() {
             <div><label style={labelStil}>Bu Plakadan Alınan Mtül</label><input style={inputStil} type="number" step="0.01" value={form.plakadanAlinanMtul} onChange={e => guncelle('plakadanAlinanMtul', e.target.value)} /></div>
             <div><label style={labelStil}>Plaka Fiyatı (€)</label><input style={inputStil} type="number" step="0.01" required value={form.plakaFiyatiEuro} onChange={e => guncelle('plakaFiyatiEuro', e.target.value)} /></div>
             <div><label style={labelStil}>Güncel Kur (1€ = ? TL)</label><input style={inputStil} type="number" step="0.01" required value={form.kullanilanKur} onChange={e => guncelle('kullanilanKur', e.target.value)} /></div>
+          </div>
+          <PlakaPlanlayiciMini
+            plakaEni={form.plakaGenislikCm}
+            plakaBoy={form.plakaUzunlukCm}
+            onHesapla={(sonuc) => setPlakaHesap(sonuc)}
+          />
+          <div style={{display:"none"}}>
           </div>
         </div>
 
