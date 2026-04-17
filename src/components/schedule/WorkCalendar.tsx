@@ -92,16 +92,23 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
     setPopup({ entry, x: rect.left, y: rect.bottom + window.scrollY + 4 });
   }
 
+  const [statusError, setStatusError] = useState<string | null>(null);
+
   function handleStatusChange(isCompleted: boolean, overrideNote?: string) {
+    setStatusError(null);
     if (!popup) return;
     startTransition(async () => {
-      await togglePhaseCompletion({
-        schedulePhaseId: popup.entry.phaseId,
-        isCompleted,
-        overrideNote,
-      });
-      await refreshSchedules();
-      setPopup(null);
+      try {
+        await togglePhaseCompletion({
+          schedulePhaseId: popup.entry.phaseId,
+          isCompleted,
+          overrideNote,
+        });
+        await refreshSchedules();
+        setPopup(null);
+      } catch (err: any) {
+        setStatusError(err.message);
+      }
     });
   }
 
@@ -252,6 +259,12 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
               Tamamlandı
             </button>
           </div>
+
+          {statusError && (
+            <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+              ⚠ {statusError}
+            </div>
+          )}
 
           <div className="mt-2 pt-2 border-t">
             <button
