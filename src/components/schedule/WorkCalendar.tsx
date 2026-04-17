@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { ScheduleModal } from "./ScheduleModal";
+import { togglePhaseCompletion } from "@/app/actions/schedule";
 import type { ScheduleWithIs } from "@/lib/types/schedule";
 import { PHASE_ORDER, PHASE_LABELS } from "@/lib/types/schedule";
 
@@ -9,18 +10,26 @@ const TR_MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","A
 const TR_DAYS = ["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
 
 const PHASE_STYLES = {
-  OLCU:   { bg: "bg-blue-100",   text: "text-blue-800",   border: "border-blue-300",   dot: "bg-blue-500"   },
-  IMALAT: { bg: "bg-amber-100",  text: "text-amber-800",  border: "border-amber-300",  dot: "bg-amber-500"  },
-  MONTAJ: { bg: "bg-green-100",  text: "text-green-800",  border: "border-green-300",  dot: "bg-green-500"  },
+  OLCU:   { bg: "bg-blue-100",  text: "text-blue-800",  border: "border-blue-300",  dot: "bg-blue-500"  },
+  IMALAT: { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-300", dot: "bg-amber-500" },
+  MONTAJ: { bg: "bg-green-100", text: "text-green-800", border: "border-green-300", dot: "bg-green-500" },
 };
 
 interface PhaseEntry {
+  phaseId: string;
   scheduleId: string;
   phase: "OLCU" | "IMALAT" | "MONTAJ";
   isCompleted: boolean;
   musteriAdi: string;
   teklifNo: string;
   schedule: ScheduleWithIs;
+  allPhases: ScheduleWithIs["phases"];
+}
+
+interface QuickPopup {
+  entry: PhaseEntry;
+  x: number;
+  y: number;
 }
 
 interface WorkCalendarProps {
@@ -36,15 +45,29 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleWithIs | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [popup, setPopup] = useState<QuickPopup | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/schedule?year=${year}u0026month=${month}`);
+      const res = await fetch(`/api/schedule?year=${year}&month=${month}`);
       const data = await res.json();
       setSchedules(data);
     }, 30000);
     return () => clearInterval(interval);
   }, [year, month]);
+
+  useEffect(() => {
+    function handleClick() { setPopup(null); }
+    if (popup) document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [popup]);
+
+  async function refreshSchedules() {
+    const res = await fetch(`/api/schedule?year=${year}&month=${month}`);
+    const data = await res.json();
+    setSchedules(data);
+  }
 
   async function navigate(direction: "prev" | "next") {
     setIsLoading(true);
@@ -63,10 +86,23 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
     }
   }
 
-  async function refreshSchedules() {
-    const res = await fetch(`/api/schedule?year=${year}&month=${month}`);
-    const data = await res.json();
-    setSchedules(data);
+  function handlePhaseClick(e: React.MouseEvent, entry: PhaseEntry) {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPopup({ entry, x: rect.left, y: rect.bottom + window.scrollY + 4 });
+  }
+
+  function handleStatusChange(isCompleted: boolean, overrideNote?: string) {
+    if (!popup) return;
+    startTransition(async () => {
+      await togglePhaseCompletion({
+        schedulePhaseId: popup.entry.phaseId,
+        isCompleted,
+        overrideNote,
+      });
+      await refreshSchedules();
+      setPopup(null);
+    });
   }
 
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -78,7 +114,6 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
     const date = new Date(year, month - 1, day);
     date.setHours(0, 0, 0, 0);
     const entries: PhaseEntry[] = [];
-
     for (const schedule of schedules) {
       for (const phase of schedule.phases) {
         if (!phase.plannedStart || !phase.plannedEnd) continue;
@@ -86,12 +121,14 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
         const end = new Date(phase.plannedEnd); end.setHours(23,59,59,999);
         if (date >= start && date <= end) {
           entries.push({
+            phaseId: phase.id,
             scheduleId: schedule.id,
             phase: phase.phase as "OLCU" | "IMALAT" | "MONTAJ",
             isCompleted: phase.isCompleted,
             musteriAdi: schedule.is.musteriAdi,
             teklifNo: schedule.is.teklifNo,
             schedule,
+            allPhases: schedule.phases,
           });
         }
       }
@@ -113,7 +150,6 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
             <button onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }} className="text-xs px-2.5 py-1 rounded-full border hover:bg-gray-50">Bugün</button>
           )}
         </div>
-
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-3 text-xs text-gray-500">
             {PHASE_ORDER.map((p) => (
@@ -156,13 +192,16 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
                       const style = PHASE_STYLES[entry.phase];
                       return (
                         <button
-                          key={`${entry.scheduleId}-${entry.phase}-${idx}`}
-                          onClick={() => { setSelectedSchedule(entry.schedule); setIsModalOpen(true); }}
-                          className={`w-full text-left px-1.5 py-0.5 rounded text-xs border flex items-center gap-1 transition-all hover:shadow-sm ${style.bg} ${style.text} ${style.border} ${entry.isCompleted ? "opacity-60 line-through" : ""}`}
+                          key={`${entry.phaseId}-${idx}`}
+                          onClick={(e) => handlePhaseClick(e, entry)}
+                          className={`w-full text-left px-1.5 py-0.5 rounded text-xs border flex items-center gap-1 transition-all hover:shadow-sm ${style.bg} ${style.border} ${entry.isCompleted ? "opacity-50" : ""}`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`} />
-                          <span className="font-medium flex-shrink-0">{PHASE_LABELS[entry.phase]}</span>
-                          <span className="truncate opacity-75">— {entry.musteriAdi}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${entry.isCompleted ? "bg-green-500" : style.dot}`} />
+                          <span className={`font-medium flex-shrink-0 ${style.text} ${entry.isCompleted ? "line-through" : ""}`}>
+                            {PHASE_LABELS[entry.phase]}
+                          </span>
+                          <span className="truncate text-gray-500">— {entry.musteriAdi}</span>
+                          {entry.isCompleted && <span className="ml-auto text-green-600 flex-shrink-0">✓</span>}
                         </button>
                       );
                     })}
@@ -176,6 +215,60 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
           );
         })}
       </div>
+
+      {/* Hızlı Durum Popup */}
+      {popup && (
+        <div
+          className="fixed z-50 bg-white rounded-xl shadow-xl border p-3 w-56"
+          style={{ top: Math.min(popup.y, window.innerHeight - 180), left: Math.min(popup.x, window.innerWidth - 230) }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-2 pb-2 border-b">
+            <div className={`text-xs font-semibold ${PHASE_STYLES[popup.entry.phase].text}`}>
+              {PHASE_LABELS[popup.entry.phase]}
+            </div>
+            <div className="text-xs text-gray-500 truncate">{popup.entry.musteriAdi}</div>
+            {popup.entry.teklifNo && <div className="text-xs text-gray-400">{popup.entry.teklifNo}</div>}
+          </div>
+
+          <div className="space-y-1.5">
+            <button
+              onClick={() => handleStatusChange(false)}
+              disabled={isPending}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${!popup.entry.isCompleted ? "bg-blue-50 text-blue-700 border border-blue-200 font-medium" : "hover:bg-gray-50 text-gray-600"}`}
+            >
+              <span className="w-4 h-4 rounded-full border-2 border-blue-400 flex items-center justify-center flex-shrink-0">
+                {!popup.entry.isCompleted && <span className="w-2 h-2 rounded-full bg-blue-400" />}
+              </span>
+              Devam Ediyor
+            </button>
+
+            <button
+              onClick={() => handleStatusChange(true)}
+              disabled={isPending}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${popup.entry.isCompleted ? "bg-green-50 text-green-700 border border-green-200 font-medium" : "hover:bg-gray-50 text-gray-600"}`}
+            >
+              <span className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 text-white text-xs">✓</span>
+              Tamamlandı
+            </button>
+          </div>
+
+          <div className="mt-2 pt-2 border-t">
+            <button
+              onClick={() => { setSelectedSchedule(popup.entry.schedule); setIsModalOpen(true); setPopup(null); }}
+              className="w-full text-xs text-gray-400 hover:text-gray-600 text-center py-1"
+            >
+              Düzenle →
+            </button>
+          </div>
+
+          {isPending && (
+            <div className="absolute inset-0 bg-white/70 rounded-xl flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+      )}
 
       {isModalOpen && (
         <ScheduleModal
