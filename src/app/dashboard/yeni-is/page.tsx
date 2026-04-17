@@ -197,7 +197,22 @@ export default function YeniIs() {
           <PlakaPlanlayiciMini
             plakaEni={form.plakaGenislikCm}
             plakaBoy={form.plakaUzunlukCm}
-            onHesapla={(sonuc) => setPlakaHesap(sonuc)}
+            onHesapla={(sonuc) => {
+              setPlakaHesap(sonuc)
+              // Tezgah, tezgah arası ve ada tezgah mtül hesapla
+              if (sonuc.tezgahBoy > 0 && sonuc.tezgahAdet > 0) {
+                const tezgahMtul = (sonuc.tezgahBoy / 100) * sonuc.tezgahAdet
+                guncelle('metrajMtul', tezgahMtul.toFixed(2))
+              }
+              if (sonuc.tezgahArasiBoy > 0 && sonuc.tezgahArasiAdet > 0) {
+                const tezgahArasiMtul = (sonuc.tezgahArasiBoy / 100) * sonuc.tezgahArasiAdet
+                guncelle('tezgahArasiMtul', tezgahArasiMtul.toFixed(2))
+              }
+              if (sonuc.adaTezgahBoy > 0 && sonuc.adaTezgahAdet > 0) {
+                const adaMtul = (sonuc.adaTezgahBoy / 100) * sonuc.adaTezgahAdet
+                guncelle('adaTezgahMtul', adaMtul.toFixed(2))
+              }
+            }}
           />
           <div style={{display:"none"}}>
           </div>

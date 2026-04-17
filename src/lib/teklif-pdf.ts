@@ -49,8 +49,31 @@ function para(tutar: number, ondalik = 2): string {
   })
 }
 
+async function urlToBase64(url: string): Promise<string> {
+  try {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return ''
+  }
+}
+
 export async function teklifPdfIndir(veri: TeklifVerisi) {
   const html2pdf = (await import('html2pdf.js')).default
+  
+  // Logo'yu base64'e çevir
+  let logoBase64 = ''
+  if (veri.firma.logoUrl) {
+    const logoUrl = veri.firma.logoUrl.startsWith('http') 
+      ? veri.firma.logoUrl 
+      : window.location.origin + veri.firma.logoUrl
+    logoBase64 = await urlToBase64(logoUrl)
+  }
 
   const satirlar = []
   if (veri.is.metrajMtul > 0) {
@@ -81,7 +104,7 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
         <tr>
           <td style="width: 50%; vertical-align: top;">
-            ${veri.firma.logoUrl ? `<img src="${window.location.origin}${veri.firma.logoUrl}" style="height: 60px; object-fit: contain; margin-bottom: 8px;" /><br/>` : ''}
+            ${logoBase64 ? `<img src="${logoBase64}" style="height: 60px; object-fit: contain; margin-bottom: 8px; display: block;" /><br/>` : ''}
             <strong style="font-size: 16px; color: #111827;">${veri.firma.adi}</strong>
           </td>
           <td style="width: 50%; vertical-align: top; text-align: right; font-size: 12px; color: #4b5563; line-height: 1.8;">

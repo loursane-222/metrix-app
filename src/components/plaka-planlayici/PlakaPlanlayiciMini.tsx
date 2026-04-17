@@ -16,6 +16,12 @@ export interface PlakaHesapSonucu {
   toplamPlakaAdet: number;
   plakaEni: number;
   plakaBoy: number;
+  tezgahBoy: number;
+  tezgahAdet: number;
+  tezgahArasiBoy: number;
+  tezgahArasiAdet: number;
+  adaTezgahBoy: number;
+  adaTezgahAdet: number;
 }
 
 interface Props {
@@ -122,8 +128,24 @@ export function PlakaPlanlayiciMini({ plakaEni: plakaEniProp, plakaBoy: plakaBoy
     setUyari(uyarilar);
     setHesaplandi(true);
 
+    // Tezgah, tezgah arası, ada tezgah verilerini bul
+    const tezgahAlani = sabitAlanlar.find(a => a.baslik === "Tezgah" && a.aktif)
+    const tezgahArasiAlani = sabitAlanlar.find(a => a.baslik === "Tezgah Arası" && a.aktif)
+    const adaAlani = sabitAlanlar.find(a => a.baslik === "Ada" && a.aktif)
+
     // Üst bileşene bildir
-    onHesapla({ fireOrani: fire, toplamPlakaAdet: tumPlakalar.length, plakaEni, plakaBoy });
+    onHesapla({
+      fireOrani: fire,
+      toplamPlakaAdet: tumPlakalar.length,
+      plakaEni,
+      plakaBoy,
+      tezgahBoy: tezgahAlani ? parseFloat(tezgahAlani.detay.boy) : 0,
+      tezgahAdet: parseInt(tipAdet) || 1,
+      tezgahArasiBoy: tezgahArasiAlani ? parseFloat(tezgahArasiAlani.detay.boy) : 0,
+      tezgahArasiAdet: parseInt(tipAdet) || 1,
+      adaTezgahBoy: adaAlani ? parseFloat(adaAlani.detay.boy) : 0,
+      adaTezgahAdet: parseInt(tipAdet) || 1,
+    });
   }
 
   const plakaEniN = parseFloat(plakaEniProp)||0;
