@@ -39,7 +39,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/isler?q=${encodeURIComponent(searchQuery)}`);
+        const res = await fetch(`/api/isler-ara?q=${encodeURIComponent(searchQuery)}`);
         setSearchResults(await res.json());
       } finally {
         setIsSearching(false);
