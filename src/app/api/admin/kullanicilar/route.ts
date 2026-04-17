@@ -80,6 +80,42 @@ export async function POST(req: NextRequest) {
   }
 
   if (islem === 'sil') {
+    // Önce kullanıcının atölyesini bul
+    const kullanici = await prisma.user.findUnique({
+      where: { id: kullaniciId },
+      include: { atolye: true }
+    })
+    
+    if (kullanici?.atolye) {
+      const atolyeId = kullanici.atolye.id
+      
+      // İşlemlere bağlı operasyonları sil
+      const isler = await prisma.is.findMany({ where: { atolyeId } })
+      for (const is of isler) {
+        await prisma.isOperasyon.deleteMany({ where: { isId: is.id } })
+      }
+      
+      // İş programlarını sil
+      for (const is of isler) {
+        const ws = await prisma.workSchedule.findUnique({ where: { isId: is.id } })
+        if (ws) {
+          await prisma.schedulePhase.deleteMany({ where: { workScheduleId: ws.id } })
+          await prisma.workSchedule.delete({ where: { id: ws.id } })
+        }
+      }
+      
+      // İşleri sil
+      await prisma.is.deleteMany({ where: { atolyeId } })
+      
+      // Makineleri ve araçları sil
+      await prisma.makine.deleteMany({ where: { atolyeId } })
+      await prisma.arac.deleteMany({ where: { atolyeId } })
+      
+      // Atölyeyi sil
+      await prisma.atolye.delete({ where: { id: atolyeId } })
+    }
+    
+    // Kullanıcıyı sil
     await prisma.user.delete({ where: { id: kullaniciId } })
     return NextResponse.json({ mesaj: 'Kullanıcı silindi.' })
   }
