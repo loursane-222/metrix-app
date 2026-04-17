@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import { PrismaClient } from "@prisma/client";
 import { PhaseType, PHASE_ORDER, canCompletePhase } from "@/lib/types/schedule";
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+const prisma = globalForPrisma.prisma || new PrismaClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export async function getSchedulesForMonth(year: number, month: number) {
   const startOfMonth = new Date(year, month - 1, 1);
@@ -103,7 +105,7 @@ export async function upsertWorkSchedule(data: {
     }
   }
 
-  revalidatePath("/is-programi");
+  revalidatePath("/dashboard/is-programi");
   return schedule;
 }
 
@@ -140,7 +142,7 @@ export async function togglePhaseCompletion(data: {
     },
   });
 
-  revalidatePath("/is-programi");
+  revalidatePath("/dashboard/is-programi");
   return updated;
 }
 
