@@ -288,7 +288,9 @@ export default function YeniIs() {
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'16px', marginBottom:'16px'}}>
             <div style={{background:'white', borderRadius:'8px', padding:'16px', border:'1px solid #bbf7d0'}}>
               <p style={{margin:'0 0 4px', fontSize:'12px', color:'#6b7280'}}>TOPLAM SÜRE</p>
-              <p style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#111827'}}>{sonuc.toplamSureDakika.toFixed(0)} dk</p>
+              <p style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#111827'}}>
+                {Math.floor(sonuc.toplamSureDakika / 60) > 0 ? `${Math.floor(sonuc.toplamSureDakika / 60)} sa ` : ''}{Math.round(sonuc.toplamSureDakika % 60)} dk
+              </p>
             </div>
             <div style={{background:'white', borderRadius:'8px', padding:'16px', border:'1px solid #bbf7d0'}}>
               <p style={{margin:'0 0 4px', fontSize:'12px', color:'#6b7280'}}>İŞÇİLİK MALİYETİ</p>
