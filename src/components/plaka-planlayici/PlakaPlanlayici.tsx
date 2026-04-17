@@ -5,193 +5,149 @@ import { useState, useRef } from "react";
 const YON_SECENEKLERI = ["Enine", "Boyuna", "Serbest"];
 
 const SABIT_ALANLAR = [
-  "Ön Alın",
-  "Tezgah",
-  "Tezgah Arası",
-  "L Tezgah Dönüş",
-  "Ada",
-  "Ada Tezgah Ayak",
-  "Ada Tezgah Ayak Kalınlığı",
+  "Ön Alın","Tezgah","Tezgah Arası","L Tezgah Dönüş",
+  "Ada","Ada Tezgah Ayak","Ada Tezgah Ayak Kalınlığı",
 ];
 
-interface KesimDetay {
-  en: string;
-  boy: string;
-  on: string;
-  arka: string;
-  yon: string;
-}
-
-interface KesimAlani {
-  id: string;
-  baslik: string;
-  detay: KesimDetay;
-  aktif: boolean;
-  sira: number;
-}
-
+interface KesimDetay { en: string; boy: string; yon: string; }
+interface KesimAlani { id: string; baslik: string; detay: KesimDetay; aktif: boolean; sira: number; }
 interface UrunBilgisi {
-  urunAdi: string;
-  marka: string;
-  yuzey: string;
-  plakaEni: string;
-  plakaBoy: string;
-  gorselUrl: string | null;
+  urunAdi: string; marka: string; yuzey: string;
+  tipAdi: string; toplamAdet: string;
+  plakaEni: string; plakaBoy: string; gorselUrl: string | null;
 }
-
-interface YerlesilenParca {
-  id: string;
-  baslik: string;
-  x: number;
-  y: number;
-  en: number;
-  boy: number;
-  renk: string;
-}
+interface YerlesilenParca { id: string; baslik: string; x: number; y: number; en: number; boy: number; renk: string; }
 
 const RENKLER = [
   "#2563eb","#d97706","#059669","#dc2626","#7c3aed",
   "#0891b2","#ea580c","#65a30d","#db2777","#4f46e5",
 ];
+const bos: KesimDetay = { en: "", boy: "", yon: "Serbest" };
 
-const bos: KesimDetay = { en: "", boy: "", on: "", arka: "", yon: "Serbest" };
+// Yerleşim algoritması — tek plaka için
+function plakaYerlestir(
+  parcalar: { id: string; baslik: string; en: number; boy: number }[],
+  plakaEni: number, plakaBoy: number
+): { yerlesimler: YerlesilenParca[]; siganlar: string[]; sigmayalar: string[] } {
+  const yerlesimler: YerlesilenParca[] = [];
+  const siganlar: string[] = [];
+  const sigmayalar: string[] = [];
+  let mevcutX = 0; let mevcutY = 0; let satirY = 0;
+
+  parcalar.forEach((p, i) => {
+    const renk = RENKLER[i % RENKLER.length];
+    if (p.en > plakaEni || p.boy > plakaBoy) { sigmayalar.push(p.id); return; }
+    if (mevcutX + p.en > plakaEni) { mevcutX = 0; mevcutY = satirY; }
+    if (mevcutY + p.boy > plakaBoy) { sigmayalar.push(p.id); return; }
+    yerlesimler.push({ id: p.id, baslik: p.baslik, x: mevcutX, y: mevcutY, en: p.en, boy: p.boy, renk });
+    siganlar.push(p.id);
+    mevcutX += p.en;
+    if (mevcutY + p.boy > satirY) satirY = mevcutY + p.boy;
+  });
+  return { yerlesimler, siganlar, sigmayalar };
+}
 
 export function PlakaPlanlayici() {
   const [urun, setUrun] = useState<UrunBilgisi>({
-    urunAdi: "", marka: "", yuzey: "", plakaEni: "", plakaBoy: "", gorselUrl: null,
+    urunAdi: "", marka: "", yuzey: "", tipAdi: "", toplamAdet: "1",
+    plakaEni: "", plakaBoy: "", gorselUrl: null,
   });
-
   const [sabitAlanlar, setSabitAlanlar] = useState<KesimAlani[]>(
-    SABIT_ALANLAR.map((baslik, i) => ({
-      id: `sabit-${i}`, baslik, detay: { ...bos }, aktif: false, sira: i,
-    }))
+    SABIT_ALANLAR.map((b, i) => ({ id: `sabit-${i}`, baslik: b, detay: { ...bos }, aktif: false, sira: i }))
   );
-
   const [ozelAlanlar, setOzelAlanlar] = useState<KesimAlani[]>(
-    Array.from({ length: 5 }, (_, i) => ({
-      id: `ozel-${i}`, baslik: "", detay: { ...bos }, aktif: false, sira: 100 + i,
-    }))
+    Array.from({ length: 5 }, (_, i) => ({ id: `ozel-${i}`, baslik: "", detay: { ...bos }, aktif: false, sira: 100 + i }))
   );
-
   const [modalAcik, setModalAcik] = useState(false);
   const [aktifTip, setAktifTip] = useState<"sabit" | "ozel">("sabit");
   const [aktifIndex, setAktifIndex] = useState(0);
   const [geciciDetay, setGeciciDetay] = useState<KesimDetay>({ ...bos });
-  const [yerlesim, setYerlesim] = useState<YerlesilenParca[]>([]);
+  const [plakalar, setPlakalar] = useState<YerlesilenParca[][]>([]);
   const [uyari, setUyari] = useState<string[]>([]);
   const [hesaplandi, setHesaplandi] = useState(false);
+  const [fireOrani, setFireOrani] = useState(0);
+  const [toplamPlakaAdet, setToplamPlakaAdet] = useState(0);
   const gorselRef = useRef<HTMLInputElement>(null);
 
   function modalAc(tip: "sabit" | "ozel", index: number) {
     const alan = tip === "sabit" ? sabitAlanlar[index] : ozelAlanlar[index];
-    setAktifTip(tip);
-    setAktifIndex(index);
-    setGeciciDetay({ ...alan.detay });
-    setModalAcik(true);
+    setAktifTip(tip); setAktifIndex(index);
+    setGeciciDetay({ ...alan.detay }); setModalAcik(true);
   }
 
   function modalKaydet() {
     if (aktifTip === "sabit") {
-      setSabitAlanlar((prev) => {
-        const yeni = [...prev];
-        yeni[aktifIndex] = { ...yeni[aktifIndex], detay: geciciDetay, aktif: !!(geciciDetay.en && geciciDetay.boy) };
-        return yeni;
-      });
+      setSabitAlanlar(prev => { const y = [...prev]; y[aktifIndex] = { ...y[aktifIndex], detay: geciciDetay, aktif: !!(geciciDetay.en && geciciDetay.boy) }; return y; });
     } else {
-      setOzelAlanlar((prev) => {
-        const yeni = [...prev];
-        yeni[aktifIndex] = { ...yeni[aktifIndex], detay: geciciDetay, aktif: !!(geciciDetay.en && geciciDetay.boy) };
-        return yeni;
-      });
+      setOzelAlanlar(prev => { const y = [...prev]; y[aktifIndex] = { ...y[aktifIndex], detay: geciciDetay, aktif: !!(geciciDetay.en && geciciDetay.boy) }; return y; });
     }
     setModalAcik(false);
   }
 
   function gorselYukle(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setUrun((prev) => ({ ...prev, gorselUrl: url }));
+    const file = e.target.files?.[0]; if (!file) return;
+    setUrun(prev => ({ ...prev, gorselUrl: URL.createObjectURL(file) }));
   }
 
   function hesapla() {
-    setUyari([]);
-    setHesaplandi(false);
+    setUyari([]); setHesaplandi(false);
     const plakaEni = parseFloat(urun.plakaEni);
     const plakaBoy = parseFloat(urun.plakaBoy);
+    const adet = parseInt(urun.toplamAdet) || 1;
 
-    if (!plakaEni || !plakaBoy) {
-      setUyari(["Plaka eni ve boyu girilmeden hesaplama yapılamaz."]);
-      return;
-    }
+    if (!plakaEni || !plakaBoy) { setUyari(["Plaka eni ve boyu girilmeden hesaplama yapılamaz."]); return; }
 
-    // Aktif alanları sıraya göre al
-    const tumAlanlar = [...sabitAlanlar, ...ozelAlanlar]
-      .filter((a) => a.aktif && parseFloat(a.detay.en) > 0 && parseFloat(a.detay.boy) > 0)
-      .sort((a, b) => a.sira - b.sira);
+    // Aktif alanları sırayla al, adet ile çarp
+    const tekParcalar = [...sabitAlanlar, ...ozelAlanlar]
+      .filter(a => a.aktif && parseFloat(a.detay.en) > 0 && parseFloat(a.detay.boy) > 0)
+      .sort((a, b) => a.sira - b.sira)
+      .map(a => ({ id: a.id, baslik: a.baslik || a.id, en: parseFloat(a.detay.en), boy: parseFloat(a.detay.boy) }));
 
-    if (tumAlanlar.length === 0) {
-      setUyari(["Hiç kesim alanı girilmedi."]);
-      return;
-    }
+    if (tekParcalar.length === 0) { setUyari(["Hiç kesim alanı girilmedi."]); return; }
 
-    const parcalar = tumAlanlar.map((a) => ({
-      id: a.id,
-      baslik: a.baslik || a.id,
-      en: parseFloat(a.detay.en),
-      boy: parseFloat(a.detay.boy),
-    }));
+    // Adet kadar çoğalt
+    const tumParcalar = Array.from({ length: adet }, (_, i) =>
+      tekParcalar.map(p => ({ ...p, id: `${p.id}-${i}`, baslik: adet > 1 ? `${p.baslik} (${i + 1})` : p.baslik }))
+    ).flat();
 
-    // Büyükten küçüğe sırala (sabit alanlar kendi sırasında kalır)
-    // Sabit alanları sırayla, özel alanları büyükten küçüğe
-    const sabitSirali = parcalar.filter((p) => p.id.startsWith("sabit"));
-    const ozelSirali = parcalar
-      .filter((p) => p.id.startsWith("ozel"))
-      .sort((a, b) => b.en * b.boy - a.en * a.boy);
-    const sirali = [...sabitSirali, ...ozelSirali];
-
-    const yerlesimler: YerlesilenParca[] = [];
+    // Birden fazla plakaya yerleştir
+    const tumPlakalar: YerlesilenParca[][] = [];
+    let bekleyenler = [...tumParcalar];
     const uyarilar: string[] = [];
-    let mevcutX = 0;
-    let mevcutY = 0;
-    let satirYuksekligi = 0;
+    let plakaNo = 0;
 
-    sirali.forEach((parca, i) => {
-      const renk = RENKLER[i % RENKLER.length];
-      if (parca.en > plakaEni || parca.boy > plakaBoy) {
-        uyarilar.push(`"${parca.baslik}" parçası plakadan büyük, yerleştirilemedi.`);
-        return;
+    while (bekleyenler.length > 0 && plakaNo < 20) {
+      const { yerlesimler, siganlar, sigmayalar } = plakaYerlestir(bekleyenler, plakaEni, plakaBoy);
+      if (yerlesimler.length === 0) {
+        sigmayalar.forEach(id => { const p = bekleyenler.find(x => x.id === id); if (p) uyarilar.push(`"${p.baslik}" plakaya sığmıyor.`); });
+        break;
       }
-      if (mevcutX + parca.en > plakaEni) {
-        mevcutX = 0;
-        mevcutY += satirYuksekligi;
-        satirYuksekligi = 0;
-      }
-      if (mevcutY + parca.boy > plakaBoy) {
-        uyarilar.push(`"${parca.baslik}" için plakada yer kalmadı.`);
-        return;
-      }
-      yerlesimler.push({ id: parca.id, baslik: parca.baslik, x: mevcutX, y: mevcutY, en: parca.en, boy: parca.boy, renk });
-      mevcutX += parca.en;
-      if (parca.boy > satirYuksekligi) satirYuksekligi = parca.boy;
-    });
+      tumPlakalar.push(yerlesimler);
+      bekleyenler = bekleyenler.filter(p => !siganlar.includes(p.id));
+      // Sigmayalar da bekleyenlerden çıkar (sonsuz döngü önlemi)
+      bekleyenler = bekleyenler.filter(p => !sigmayalar.includes(p.id));
+      plakaNo++;
+    }
 
-    setYerlesim(yerlesimler);
+    // Fire oranı (ortalama)
+    const toplamPlakaCm2 = tumPlakalar.length * plakaEni * plakaBoy;
+    const kullanilanCm2 = tumPlakalar.flat().reduce((acc, p) => acc + p.en * p.boy, 0);
+    const fire = toplamPlakaCm2 > 0 ? ((toplamPlakaCm2 - kullanilanCm2) / toplamPlakaCm2) * 100 : 0;
+
+    // Fire oranını localStorage'a kaydet (yeni iş sayfası okusun)
+    try { localStorage.setItem("metrix_fire_orani", fire.toFixed(1)); } catch {}
+
+    setPlakalar(tumPlakalar);
+    setFireOrani(fire);
+    setToplamPlakaAdet(tumPlakalar.length);
     setUyari(uyarilar);
     setHesaplandi(true);
   }
 
   const plakaEni = parseFloat(urun.plakaEni) || 0;
   const plakaBoy = parseFloat(urun.plakaBoy) || 0;
-  const toplamPlaka = plakaEni * plakaBoy;
-  const kullanilanAlan = yerlesim.reduce((acc, p) => acc + p.en * p.boy, 0);
-  const bosAlan = toplamPlaka - kullanilanAlan;
-  const fireOrani = toplamPlaka > 0 ? ((bosAlan / toplamPlaka) * 100).toFixed(1) : "0";
-
-  // Plaka her zaman yatay: en > boy olacak şekilde
-  const CANVAS_EN = 560;
-  const oran = plakaEni > 0 && plakaBoy > 0 ? plakaBoy / plakaEni : 0.5;
-  const CANVAS_BOY = Math.round(CANVAS_EN * oran);
+  const CANVAS_EN = 540;
+  const CANVAS_BOY = plakaEni > 0 && plakaBoy > 0 ? Math.round(CANVAS_EN * (plakaBoy / plakaEni)) : 280;
   const olcek = plakaEni > 0 ? CANVAS_EN / plakaEni : 1;
 
   return (
@@ -207,31 +163,27 @@ export function PlakaPlanlayici() {
             { label: "Ürün Adı", key: "urunAdi", tip: "text" },
             { label: "Marka", key: "marka", tip: "text" },
             { label: "Yüzey", key: "yuzey", tip: "text" },
+            { label: "Tip Adı", key: "tipAdi", tip: "text" },
+            { label: "Toplam Tip Adeti", key: "toplamAdet", tip: "number" },
             { label: "Plaka Eni (cm)", key: "plakaEni", tip: "number" },
             { label: "Plaka Boyu (cm)", key: "plakaBoy", tip: "number" },
           ].map(({ label, key, tip }) => (
             <div key={key}>
               <label style={{ fontSize: "11px", color: "#6b7280", display: "block", marginBottom: "4px" }}>{label}</label>
-              <input
-                type={tip}
-                value={(urun as any)[key]}
-                onChange={(e) => setUrun((prev) => ({ ...prev, [key]: e.target.value }))}
-                style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "8px", padding: "7px 10px", fontSize: "13px", boxSizing: "border-box" }}
-              />
+              <input type={tip} value={(urun as any)[key]}
+                onChange={e => setUrun(prev => ({ ...prev, [key]: e.target.value }))}
+                style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "8px", padding: "7px 10px", fontSize: "13px", boxSizing: "border-box" }} />
             </div>
           ))}
         </div>
         <div style={{ marginTop: "14px" }}>
-          <label style={{ fontSize: "11px", color: "#6b7280", display: "block", marginBottom: "6px" }}>Plaka Görseli (yatay yükleyin)</label>
+          <label style={{ fontSize: "11px", color: "#6b7280", display: "block", marginBottom: "6px" }}>Plaka Görseli</label>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <button onClick={() => gorselRef.current?.click()}
               style={{ padding: "7px 14px", border: "1px dashed #d1d5db", borderRadius: "8px", background: "#f9fafb", cursor: "pointer", fontSize: "12px", color: "#6b7280" }}>
               📁 Görsel Yükle
             </button>
-            {urun.gorselUrl && (
-              <img src={urun.gorselUrl} alt="plaka"
-                style={{ height: "44px", width: "88px", objectFit: "cover", borderRadius: "6px", border: "1px solid #e5e7eb" }} />
-            )}
+            {urun.gorselUrl && <img src={urun.gorselUrl} alt="plaka" style={{ height: "44px", width: "88px", objectFit: "cover", borderRadius: "6px", border: "1px solid #e5e7eb" }} />}
             <input ref={gorselRef} type="file" accept="image/*" style={{ display: "none" }} onChange={gorselYukle} />
           </div>
         </div>
@@ -247,11 +199,7 @@ export function PlakaPlanlayici() {
                 <span style={{ fontSize: "12px", fontWeight: "600", color: "#374151" }}>{alan.baslik}</span>
                 {alan.aktif && <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: RENKLER[i % RENKLER.length], display: "inline-block" }} />}
               </div>
-              {alan.aktif && (
-                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>
-                  {alan.detay.en} × {alan.detay.boy} cm · {alan.detay.yon}
-                </div>
-              )}
+              {alan.aktif && <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>{alan.detay.en} × {alan.detay.boy} cm · {alan.detay.yon}</div>}
               <button onClick={() => modalAc("sabit", i)}
                 style={{ width: "100%", padding: "5px", border: "1px solid #e5e7eb", borderRadius: "6px", background: "white", cursor: "pointer", fontSize: "11px", color: "#374151" }}>
                 ✏ Detay Gir
@@ -266,19 +214,11 @@ export function PlakaPlanlayici() {
         <h2 style={{ fontSize: "15px", fontWeight: "600", marginBottom: "14px" }}>Diğer Kesim Ölçüleri</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
           {ozelAlanlar.map((alan, i) => (
-            <div key={alan.id} style={{ border: `1px solid ${alan.aktif ? RENKLER[(sabitAlanlar.length + i) % RENKLER.length] : "#e5e7eb"}`, borderRadius: "10px", padding: "12px", background: alan.aktif ? RENKLER[(sabitAlanlar.length + i) % RENKLER.length] + "11" : "#f9fafb" }}>
-              <input
-                type="text"
-                placeholder={`Özel Alan ${i + 1}`}
-                value={alan.baslik}
-                onChange={(e) => setOzelAlanlar((prev) => { const y = [...prev]; y[i] = { ...y[i], baslik: e.target.value }; return y; })}
-                style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: "6px", padding: "5px 8px", fontSize: "12px", marginBottom: "6px", boxSizing: "border-box" }}
-              />
-              {alan.aktif && (
-                <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>
-                  {alan.detay.en} × {alan.detay.boy} cm · {alan.detay.yon}
-                </div>
-              )}
+            <div key={alan.id} style={{ border: `1px solid ${alan.aktif ? RENKLER[(SABIT_ALANLAR.length + i) % RENKLER.length] : "#e5e7eb"}`, borderRadius: "10px", padding: "12px", background: alan.aktif ? RENKLER[(SABIT_ALANLAR.length + i) % RENKLER.length] + "11" : "#f9fafb" }}>
+              <input type="text" placeholder={`Özel Alan ${i + 1}`} value={alan.baslik}
+                onChange={e => setOzelAlanlar(prev => { const y = [...prev]; y[i] = { ...y[i], baslik: e.target.value }; return y; })}
+                style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: "6px", padding: "5px 8px", fontSize: "12px", marginBottom: "6px", boxSizing: "border-box" }} />
+              {alan.aktif && <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>{alan.detay.en} × {alan.detay.boy} cm · {alan.detay.yon}</div>}
               <button onClick={() => modalAc("ozel", i)}
                 style={{ width: "100%", padding: "5px", border: "1px solid #e5e7eb", borderRadius: "6px", background: "white", cursor: "pointer", fontSize: "11px", color: "#374151" }}>
                 ✏ Detay Gir
@@ -308,88 +248,105 @@ export function PlakaPlanlayici() {
         <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "20px" }}>
           <h2 style={{ fontSize: "15px", fontWeight: "600", marginBottom: "16px" }}>Sonuç</h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
+          {/* Özet istatistikler */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", marginBottom: "24px" }}>
             <div style={{ background: "#eff6ff", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
-              <div style={{ fontSize: "11px", color: "#6b7280" }}>Kullanılan Alan</div>
-              <div style={{ fontSize: "18px", fontWeight: "700", color: "#1d4ed8" }}>{kullanilanAlan.toFixed(0)} cm²</div>
-            </div>
-            <div style={{ background: "#f0fdf4", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
-              <div style={{ fontSize: "11px", color: "#6b7280" }}>Boş Alan</div>
-              <div style={{ fontSize: "18px", fontWeight: "700", color: "#16a34a" }}>{bosAlan.toFixed(0)} cm²</div>
+              <div style={{ fontSize: "11px", color: "#6b7280" }}>Toplam Plaka</div>
+              <div style={{ fontSize: "24px", fontWeight: "700", color: "#1d4ed8" }}>{toplamPlakaAdet} adet</div>
             </div>
             <div style={{ background: "#fef2f2", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
-              <div style={{ fontSize: "11px", color: "#6b7280" }}>Fire Oranı</div>
-              <div style={{ fontSize: "18px", fontWeight: "700", color: "#dc2626" }}>%{fireOrani}</div>
+              <div style={{ fontSize: "11px", color: "#6b7280" }}>Ortalama Fire</div>
+              <div style={{ fontSize: "24px", fontWeight: "700", color: "#dc2626" }}>%{fireOrani.toFixed(1)}</div>
             </div>
+            <div style={{ background: "#f0fdf4", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
+              <div style={{ fontSize: "11px", color: "#6b7280" }}>Plaka Ölçüsü</div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#16a34a" }}>{plakaEni} × {plakaBoy} cm</div>
+            </div>
+            {urun.tipAdi && (
+              <div style={{ background: "#faf5ff", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
+                <div style={{ fontSize: "11px", color: "#6b7280" }}>{urun.tipAdi}</div>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "#7c3aed" }}>{urun.toplamAdet} adet tip</div>
+              </div>
+            )}
           </div>
 
-          {/* Plaka Görsel — her zaman yatay */}
-          <div style={{ overflowX: "auto", marginBottom: "20px" }}>
-            <div style={{ position: "relative", width: CANVAS_EN, height: CANVAS_BOY, margin: "0 auto", borderRadius: "4px", overflow: "hidden", border: "2px solid #94a3b8" }}>
-              {/* Plaka görseli arka plan — tam kaplıyor, orijinal görünüyor */}
-              {urun.gorselUrl ? (
-                <img
-                  src={urun.gorselUrl}
-                  alt="plaka"
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-                />
-              ) : (
-                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #e2d9c8 0%, #d4c9b0 50%, #c8bda0 100%)" }} />
-              )}
+          {/* Fire oranı yeni iş sayfasına bilgi */}
+          <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "10px 14px", marginBottom: "20px", fontSize: "13px", color: "#92400e", display: "flex", alignItems: "center", gap: "8px" }}>
+            <span>💡</span>
+            <span>Fire oranı <strong>%{fireOrani.toFixed(1)}</strong> olarak hesaplandı. <strong>Yeni İş</strong> sayfasında "Plaka Planlayıcıdan Al" butonuna basarak bu oranı maliyete dahil edebilirsiniz.</span>
+          </div>
 
-              {/* Kesim parçaları — saydam dolgu, kalın renkli çerçeve */}
-              {yerlesim.map((p) => (
-                <div key={p.id} style={{
-                  position: "absolute",
-                  left: p.x * olcek,
-                  top: p.y * olcek,
-                  width: p.en * olcek,
-                  height: p.boy * olcek,
-                  background: p.renk + "22",
-                  border: `2px solid ${p.renk}`,
-                  boxSizing: "border-box",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  overflow: "hidden",
-                }}>
-                  <div style={{
-                    background: p.renk + "cc",
-                    borderRadius: "3px",
-                    padding: "2px 4px",
-                    fontSize: "9px",
-                    fontWeight: "700",
-                    color: "white",
-                    textAlign: "center",
-                    lineHeight: 1.3,
-                    maxWidth: "90%",
-                  }}>
-                    {p.baslik}<br />{p.en}×{p.boy}
+          {/* Her plaka ayrı gösterilsin */}
+          {plakalar.map((plakaYerlesim, plakaIdx) => {
+            const kullanilanCm2 = plakaYerlesim.reduce((a, p) => a + p.en * p.boy, 0);
+            const toplamCm2 = plakaEni * plakaBoy;
+            const plakaFire = toplamCm2 > 0 ? ((toplamCm2 - kullanilanCm2) / toplamCm2 * 100).toFixed(1) : "0";
+
+            return (
+              <div key={plakaIdx} style={{ marginBottom: "32px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: "600", margin: 0 }}>Plaka {plakaIdx + 1}</h3>
+                  <span style={{ fontSize: "12px", color: "#6b7280" }}>{plakaEni} × {plakaBoy} cm</span>
+                  <span style={{ fontSize: "12px", background: "#fef2f2", color: "#dc2626", borderRadius: "20px", padding: "2px 10px" }}>Fire: %{plakaFire}</span>
+                  <span style={{ fontSize: "12px", background: "#eff6ff", color: "#1d4ed8", borderRadius: "20px", padding: "2px 10px" }}>{plakaYerlesim.length} parça</span>
+                </div>
+
+                <div style={{ overflowX: "auto" }}>
+                  <div style={{ position: "relative", width: CANVAS_EN, height: CANVAS_BOY, margin: "0 auto", borderRadius: "4px", overflow: "hidden", border: "2px solid #94a3b8" }}>
+                    {/* Arka plan — plaka görseli */}
+                    {urun.gorselUrl ? (
+                      <img src={urun.gorselUrl} alt="plaka" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #e8dcc8 0%, #d4c4a0 50%, #c8b890 100%)" }} />
+                    )}
+
+                    {/* Plaka ölçüsü yazısı */}
+                    <div style={{ position: "absolute", top: 4, right: 6, fontSize: "10px", fontWeight: "700", color: "white", background: "rgba(0,0,0,0.5)", borderRadius: "4px", padding: "2px 6px" }}>
+                      {plakaEni} × {plakaBoy} cm
+                    </div>
+
+                    {/* Parçalar */}
+                    {plakaYerlesim.map(p => (
+                      <div key={p.id} style={{
+                        position: "absolute", left: p.x * olcek, top: p.y * olcek,
+                        width: p.en * olcek, height: p.boy * olcek,
+                        background: p.renk + "33", border: `2px solid ${p.renk}`,
+                        boxSizing: "border-box", overflow: "hidden",
+                      }}>
+                        {/* Parça etiketi */}
+                        <div style={{ position: "absolute", top: 2, left: 2, right: 2, background: p.renk + "dd", borderRadius: "3px", padding: "1px 3px" }}>
+                          <div style={{ fontSize: "8px", fontWeight: "700", color: "white", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {p.baslik}
+                          </div>
+                          <div style={{ fontSize: "8px", color: "rgba(255,255,255,0.9)", lineHeight: 1.2 }}>
+                            {p.en}×{p.boy}cm
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Parça Listesi */}
-          <h3 style={{ fontSize: "13px", fontWeight: "600", marginBottom: "8px" }}>Yerleştirilen Parçalar</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            {yerlesim.map((p) => (
-              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "#f9fafb", borderRadius: "8px", fontSize: "13px" }}>
-                <span style={{ width: "12px", height: "12px", borderRadius: "3px", background: p.renk, flexShrink: 0 }} />
-                <span style={{ fontWeight: "500", flex: 1 }}>{p.baslik}</span>
-                <span style={{ color: "#6b7280" }}>{p.en} × {p.boy} cm</span>
-                <span style={{ color: "#9ca3af" }}>{(p.en * p.boy).toFixed(0)} cm²</span>
+                {/* Bu plakanın parça listesi */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
+                  {plakaYerlesim.map(p => (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "4px 10px", background: "#f9fafb", borderRadius: "20px", fontSize: "12px", border: `1px solid ${p.renk}33` }}>
+                      <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: p.renk, flexShrink: 0 }} />
+                      <span style={{ fontWeight: "500" }}>{p.baslik}</span>
+                      <span style={{ color: "#9ca3af" }}>{p.en}×{p.boy}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       )}
 
       {/* Modal */}
       {modalAcik && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          <div style={{ background: "white", borderRadius: "16px", padding: "24px", width: "100%", maxWidth: "380px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <div style={{ background: "white", borderRadius: "16px", padding: "24px", width: "100%", maxWidth: "340px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
               <h3 style={{ fontSize: "15px", fontWeight: "600", margin: 0 }}>
                 {aktifTip === "sabit" ? sabitAlanlar[aktifIndex].baslik : (ozelAlanlar[aktifIndex].baslik || `Özel Alan ${aktifIndex + 1}`)}
@@ -398,32 +355,21 @@ export function PlakaPlanlayici() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              {[
-                { label: "En (cm)", key: "en" },
-                { label: "Boy (cm)", key: "boy" },
-                { label: "Ön (cm)", key: "on" },
-                { label: "Arka (cm)", key: "arka" },
-              ].map(({ label, key }) => (
+              {[{ label: "En (cm)", key: "en" }, { label: "Boy (cm)", key: "boy" }].map(({ label, key }) => (
                 <div key={key}>
                   <label style={{ fontSize: "11px", color: "#6b7280", display: "block", marginBottom: "4px" }}>{label}</label>
-                  <input
-                    type="number"
-                    value={(geciciDetay as any)[key]}
-                    onChange={(e) => setGeciciDetay((prev) => ({ ...prev, [key]: e.target.value }))}
-                    style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "8px", padding: "7px 10px", fontSize: "13px", boxSizing: "border-box" }}
-                  />
+                  <input type="number" value={(geciciDetay as any)[key]}
+                    onChange={e => setGeciciDetay(prev => ({ ...prev, [key]: e.target.value }))}
+                    style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "8px", padding: "7px 10px", fontSize: "13px", boxSizing: "border-box" }} />
                 </div>
               ))}
             </div>
 
             <div style={{ marginTop: "10px" }}>
               <label style={{ fontSize: "11px", color: "#6b7280", display: "block", marginBottom: "4px" }}>Yön</label>
-              <select
-                value={geciciDetay.yon}
-                onChange={(e) => setGeciciDetay((prev) => ({ ...prev, yon: e.target.value }))}
-                style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "8px", padding: "7px 10px", fontSize: "13px" }}
-              >
-                {YON_SECENEKLERI.map((y) => <option key={y} value={y}>{y}</option>)}
+              <select value={geciciDetay.yon} onChange={e => setGeciciDetay(prev => ({ ...prev, yon: e.target.value }))}
+                style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: "8px", padding: "7px 10px", fontSize: "13px" }}>
+                {YON_SECENEKLERI.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
 
