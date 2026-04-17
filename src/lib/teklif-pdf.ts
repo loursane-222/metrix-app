@@ -104,7 +104,7 @@ export async function teklifPdfIndir(veri: TeklifVerisi) {
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
         <tr>
           <td style="width: 50%; vertical-align: top;">
-            ${logoBase64 ? `<img src="${logoBase64}" style="height: 60px; object-fit: contain; margin-bottom: 8px; display: block;" /><br/>` : ''}
+            ${logoBase64 ? `<img src="${logoBase64}" style="height: 120px; object-fit: contain; margin-bottom: 8px; display: block;" /><br/>` : ''}
             <strong style="font-size: 16px; color: #111827;">${veri.firma.adi}</strong>
           </td>
           <td style="width: 50%; vertical-align: top; text-align: right; font-size: 12px; color: #4b5563; line-height: 1.8;">
