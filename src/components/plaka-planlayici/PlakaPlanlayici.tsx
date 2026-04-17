@@ -27,22 +27,37 @@ const bos: KesimDetay = { en: "", boy: "", yon: "Serbest" };
 // Yerleşim algoritması — tek plaka için
 function plakaYerlestir(
   parcalar: { id: string; baslik: string; en: number; boy: number }[],
-  plakaEni: number, plakaBoy: number
+  plakaEni: number, plakaBoy: number,
+  renkOffset: number = 0
 ): { yerlesimler: YerlesilenParca[]; siganlar: string[]; sigmayalar: string[] } {
   const yerlesimler: YerlesilenParca[] = [];
   const siganlar: string[] = [];
   const sigmayalar: string[] = [];
-  let mevcutX = 0; let mevcutY = 0; let satirY = 0;
+  let mevcutX = 0;
+  let mevcutY = 0;
+  let satirYuksekligi = 0;
 
   parcalar.forEach((p, i) => {
-    const renk = RENKLER[i % RENKLER.length];
-    if (p.en > plakaEni || p.boy > plakaBoy) { sigmayalar.push(p.id); return; }
-    if (mevcutX + p.en > plakaEni) { mevcutX = 0; mevcutY = satirY; }
-    if (mevcutY + p.boy > plakaBoy) { sigmayalar.push(p.id); return; }
+    const renk = RENKLER[(i + renkOffset) % RENKLER.length];
+    if (p.en > plakaEni || p.boy > plakaBoy) {
+      sigmayalar.push(p.id);
+      return;
+    }
+    // Satıra sığmıyorsa alt satıra geç
+    if (mevcutX + p.en > plakaEni) {
+      mevcutX = 0;
+      mevcutY += satirYuksekligi;
+      satirYuksekligi = 0;
+    }
+    // Plaka boyunu aştı mı?
+    if (mevcutY + p.boy > plakaBoy) {
+      sigmayalar.push(p.id);
+      return;
+    }
     yerlesimler.push({ id: p.id, baslik: p.baslik, x: mevcutX, y: mevcutY, en: p.en, boy: p.boy, renk });
     siganlar.push(p.id);
     mevcutX += p.en;
-    if (mevcutY + p.boy > satirY) satirY = mevcutY + p.boy;
+    if (p.boy > satirYuksekligi) satirYuksekligi = p.boy;
   });
   return { yerlesimler, siganlar, sigmayalar };
 }
@@ -117,7 +132,7 @@ export function PlakaPlanlayici() {
     let plakaNo = 0;
 
     while (bekleyenler.length > 0 && plakaNo < 20) {
-      const { yerlesimler, siganlar, sigmayalar } = plakaYerlestir(bekleyenler, plakaEni, plakaBoy);
+      const { yerlesimler, siganlar, sigmayalar } = plakaYerlestir(bekleyenler, plakaEni, plakaBoy, tumPlakalar.flat().length);
       if (yerlesimler.length === 0) {
         sigmayalar.forEach(id => { const p = bekleyenler.find(x => x.id === id); if (p) uyarilar.push(`"${p.baslik}" plakaya sığmıyor.`); });
         break;
