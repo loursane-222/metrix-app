@@ -105,7 +105,7 @@ export function PlakaPlanlayici() {
   }
 
   function hesapla() {
-    setUyari([]); setHesaplandi(false);
+    setUyari([]); setHesaplandi(false); setPlakalar([]);
     const plakaEni = parseFloat(urun.plakaEni);
     const plakaBoy = parseFloat(urun.plakaBoy);
     const adet = parseInt(urun.toplamAdet) || 1;
@@ -133,14 +133,20 @@ export function PlakaPlanlayici() {
 
     while (bekleyenler.length > 0 && plakaNo < 20) {
       const { yerlesimler, siganlar, sigmayalar } = plakaYerlestir(bekleyenler, plakaEni, plakaBoy, tumPlakalar.flat().length);
+      
+      // Hiçbir parça yerleştirilemediyse dur
       if (yerlesimler.length === 0) {
-        sigmayalar.forEach(id => { const p = bekleyenler.find(x => x.id === id); if (p) uyarilar.push(`"${p.baslik}" plakaya sığmıyor.`); });
+        bekleyenler.forEach(p => uyarilar.push(`"${p.baslik}" plakaya sığmıyor.`));
         break;
       }
+      
       tumPlakalar.push(yerlesimler);
-      bekleyenler = bekleyenler.filter(p => !siganlar.includes(p.id));
-      // Sigmayalar da bekleyenlerden çıkar (sonsuz döngü önlemi)
-      bekleyenler = bekleyenler.filter(p => !sigmayalar.includes(p.id));
+      
+      // Yerleştirilen ve sığmayanları bekleyenlerden çıkar
+      const yerlestirilmisIdler = new Set(yerlesimler.map(y => y.id));
+      const sigmayaIdler = new Set(sigmayalar);
+      bekleyenler = bekleyenler.filter(p => !yerlestirilmisIdler.has(p.id) && !sigmayaIdler.has(p.id));
+      
       plakaNo++;
     }
 
