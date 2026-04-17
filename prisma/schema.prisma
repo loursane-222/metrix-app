@@ -151,6 +151,7 @@ model Is {
   updatedAt DateTime @updatedAt
 
   operasyonlar IsOperasyon[]
+  workSchedule  WorkSchedule?
 }
 
 model IsOperasyon {
@@ -168,4 +169,51 @@ model IsOperasyon {
   toplamDakika Decimal
 
   createdAt DateTime @default(now())
+}
+enum PhaseType {
+  OLCU
+  IMALAT
+  MONTAJ
+}
+
+model WorkSchedule {
+  id        String   @id @default(cuid())
+  isId      String   @unique
+  is        Is       @relation(fields: [isId], references: [id], onDelete: Cascade)
+
+  startDate DateTime?
+  endDate   DateTime?
+  notes     String?
+
+  phases    SchedulePhase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("work_schedules")
+}
+
+model SchedulePhase {
+  id             String       @id @default(cuid())
+  workScheduleId String
+  workSchedule   WorkSchedule @relation(fields: [workScheduleId], references: [id], onDelete: Cascade)
+
+  phase          PhaseType
+
+  plannedStart   DateTime?
+  plannedEnd     DateTime?
+
+  isCompleted    Boolean   @default(false)
+  completedAt    DateTime?
+  completedBy    String?
+
+  isOverridden   Boolean   @default(false)
+  overrideNote   String?
+  notes          String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([workScheduleId, phase])
+  @@map("schedule_phases")
 }
