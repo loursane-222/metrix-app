@@ -44,6 +44,7 @@ export default function DashboardLayout({
     { href: '/dashboard/atolye', label: 'Atölye Profili', icon: '⚙' },
     { href: '/dashboard/yeni-is', label: 'Yeni İş', icon: '+' },
     { href: '/dashboard/isler', label: 'İş Listesi', icon: '≡' },
+    { href: '/dashboard/is-programi', label: 'İş Programı', icon: '📅' },
   ]
 
   return (
