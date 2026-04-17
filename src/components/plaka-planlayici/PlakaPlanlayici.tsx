@@ -108,6 +108,115 @@ export function PlakaPlanlayici() {
     setUyari([]); setHesaplandi(false); setPlakalar([]);
     const plakaEni = parseFloat(urun.plakaEni);
     const plakaBoy = parseFloat(urun.plakaBoy);
+    const adet = Math.max(1, parseInt(urun.toplamAdet) || 1);
+
+    if (!plakaEni || !plakaBoy) {
+      setUyari(["Plaka eni ve boyu girilmeden hesaplama yapılamaz."]);
+      return;
+    }
+
+    // Sadece aktif ve geçerli alanları al
+    const aktifAlanlar = [...sabitAlanlar, ...ozelAlanlar]
+      .filter(a => a.aktif && parseFloat(a.detay.en) > 0 && parseFloat(a.detay.boy) > 0)
+      .sort((a, b) => a.sira - b.sira);
+
+    if (aktifAlanlar.length === 0) {
+      setUyari(["Hiç kesim alanı girilmedi."]);
+      return;
+    }
+
+    // Her alanı adet kadar çoğalt
+    const tumParcalar: { id: string; baslik: string; en: number; boy: number }[] = [];
+    for (let tipNo = 1; tipNo <= adet; tipNo++) {
+      for (const alan of aktifAlanlar) {
+        tumParcalar.push({
+          id: `tip${tipNo}_${alan.id}`,
+          baslik: adet > 1 ? `${alan.baslik} (${tipNo})` : alan.baslik,
+          en: parseFloat(alan.detay.en),
+          boy: parseFloat(alan.detay.boy),
+        });
+      }
+    }
+
+    console.log("Toplam parça:", tumParcalar.length, "Adet:", adet);
+
+    // Plaka plaka yerleştir
+    const tumPlakalar: YerlesilenParca[][] = [];
+    let bekleyenler = [...tumParcalar];
+    const uyarilar: string[] = [];
+
+    while (bekleyenler.length > 0) {
+      if (tumPlakalar.length >= 50) {
+        uyarilar.push("Maksimum 50 plaka sınırına ulaşıldı.");
+        break;
+      }
+
+      let mevcutX = 0;
+      let mevcutY = 0;
+      let satirYuksekligi = 0;
+      const buPlakaYerlesim: YerlesilenParca[] = [];
+      const yerlestirildi: Set<string> = new Set();
+      const sigmadi: Set<string> = new Set();
+
+      for (const parca of bekleyenler) {
+        const renk = RENKLER[tumParcalar.findIndex(p => p.id === parca.id) % RENKLER.length];
+
+        if (parca.en > plakaEni || parca.boy > plakaBoy) {
+          sigmadi.add(parca.id);
+          continue;
+        }
+
+        if (mevcutX + parca.en > plakaEni) {
+          mevcutX = 0;
+          mevcutY += satirYuksekligi;
+          satirYuksekligi = 0;
+        }
+
+        if (mevcutY + parca.boy > plakaBoy) {
+          continue;
+        }
+
+        buPlakaYerlesim.push({
+          id: parca.id,
+          baslik: parca.baslik,
+          x: mevcutX,
+          y: mevcutY,
+          en: parca.en,
+          boy: parca.boy,
+          renk,
+        });
+
+        yerlestirildi.add(parca.id);
+        mevcutX += parca.en;
+        if (parca.boy > satirYuksekligi) satirYuksekligi = parca.boy;
+      }
+
+      if (buPlakaYerlesim.length === 0) {
+        bekleyenler.forEach(p => {
+          if (!sigmadi.has(p.id)) uyarilar.push(`"${p.baslik}" plakaya sığmıyor.`);
+        });
+        break;
+      }
+
+      tumPlakalar.push(buPlakaYerlesim);
+      bekleyenler = bekleyenler.filter(p => !yerlestirildi.has(p.id) && !sigmadi.has(p.id));
+    }
+
+    const toplamPlakaCm2 = tumPlakalar.length * plakaEni * plakaBoy;
+    const kullanilanCm2 = tumPlakalar.flat().reduce((acc, p) => acc + p.en * p.boy, 0);
+    const fire = toplamPlakaCm2 > 0 ? ((toplamPlakaCm2 - kullanilanCm2) / toplamPlakaCm2) * 100 : 0;
+
+    try { localStorage.setItem("metrix_fire_orani", fire.toFixed(1)); } catch {}
+
+    setPlakalar(tumPlakalar);
+    setFireOrani(fire);
+    setToplamPlakaAdet(tumPlakalar.length);
+    setUyari(uyarilar);
+    setHesaplandi(true);
+  }
+
+  const plakaEni = parseFloat(urun.plakaEni);
+    const plakaBoy = parseFloat(urun.plakaBoy);
     const adet = parseInt(urun.toplamAdet) || 1;
 
     if (!plakaEni || !plakaBoy) { setUyari(["Plaka eni ve boyu girilmeden hesaplama yapılamaz."]); return; }
