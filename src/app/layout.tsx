@@ -15,12 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Metrix — Atölye Yönetimi",
   description: "Tezgah atölyeleri için maliyet ve teklif yönetim sistemi",
-  icons: {
-    icon: [
-      { url: '/favicon.png', type: 'image/png' },
-    ],
-    apple: '/favicon.png',
-  },
+
 };
 
 export default function RootLayout({
@@ -31,8 +26,7 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <head>
-        <link rel="icon" type="image/png" href="/favicon.png?v=2" />
-        <link rel="shortcut icon" href="/favicon.png?v=2" />
+
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
