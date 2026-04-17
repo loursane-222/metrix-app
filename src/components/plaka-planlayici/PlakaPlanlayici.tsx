@@ -112,7 +112,7 @@ export function PlakaPlanlayici() {
 
     if (!plakaEni || !plakaBoy) { setUyari(["Plaka eni ve boyu girilmeden hesaplama yapılamaz."]); return; }
 
-    // Aktif alanları sırayla al, adet ile çarp
+    // Aktif alanları sırayla al — her alan sadece 1 kez
     const tekParcalar = [...sabitAlanlar, ...ozelAlanlar]
       .filter(a => a.aktif && parseFloat(a.detay.en) > 0 && parseFloat(a.detay.boy) > 0)
       .sort((a, b) => a.sira - b.sira)
@@ -120,10 +120,18 @@ export function PlakaPlanlayici() {
 
     if (tekParcalar.length === 0) { setUyari(["Hiç kesim alanı girilmedi."]); return; }
 
-    // Adet kadar çoğalt
-    const tumParcalar = Array.from({ length: adet }, (_, i) =>
-      tekParcalar.map(p => ({ ...p, id: `${p.id}-${i}`, baslik: adet > 1 ? `${p.baslik} (${i + 1})` : p.baslik }))
-    ).flat();
+    // Adet kadar çoğalt — her tip için ayrı ID
+    const tumParcalar: { id: string; baslik: string; en: number; boy: number }[] = [];
+    for (let i = 0; i < adet; i++) {
+      for (const p of tekParcalar) {
+        tumParcalar.push({
+          id: `parca-${i}-${p.id}`,
+          baslik: adet > 1 ? `${p.baslik} (${i + 1})` : p.baslik,
+          en: p.en,
+          boy: p.boy,
+        });
+      }
+    }
 
     // Birden fazla plakaya yerleştir
     const tumPlakalar: YerlesilenParca[][] = [];
