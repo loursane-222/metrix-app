@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ScheduleModal } from "./ScheduleModal";
 import type { ScheduleWithIs } from "@/lib/types/schedule";
 import { PHASE_ORDER, PHASE_LABELS } from "@/lib/types/schedule";
@@ -36,6 +36,15 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleWithIs | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/schedule?year=${year}u0026month=${month}`);
+      const data = await res.json();
+      setSchedules(data);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [year, month]);
 
   async function navigate(direction: "prev" | "next") {
     setIsLoading(true);
