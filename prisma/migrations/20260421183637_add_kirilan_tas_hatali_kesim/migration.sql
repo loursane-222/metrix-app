@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Is" ADD COLUMN     "hataliKesimPlaka" DECIMAL(65,30) NOT NULL DEFAULT 0,
+ADD COLUMN     "kirilanTasPlaka" DECIMAL(65,30) NOT NULL DEFAULT 0;

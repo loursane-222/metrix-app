@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 
 type Is = {
@@ -28,6 +29,7 @@ const durumRenk: { [key: string]: { bg: string; color: string; label: string } }
 }
 
 export default function IsListesi() {
+  const router = useRouter()
   const [isler, setIsler] = useState<Is[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
 
@@ -101,6 +103,12 @@ export default function IsListesi() {
                     <option value="onaylandi">Onaylandı</option>
                     <option value="kaybedildi">Kaybedildi</option>
                   </select>
+                  <button
+                    onClick={() => router.push(`/dashboard/isler/${is.id}`)}
+                    style={{background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:'6px', padding:'6px 12px', fontSize:'12px', cursor:'pointer', fontWeight:'500'}}
+                  >
+                    ✏ Düzenle
+                  </button>
                 </div>
               </div>
             </div>

@@ -143,6 +143,8 @@ model Is {
   mtulSatisFiyati  Decimal @default(0)
 
   teklifGecerlilikTarihi DateTime?
+  kirilanTasPlaka    Decimal @default(0)
+  hataliKesimPlaka   Decimal @default(0)
 
   durum  String  @default("teklif_verildi")
   notlar String?
