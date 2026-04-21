@@ -33,7 +33,8 @@ function toplamHesapla(atolye: {
   const toplamPlaka = Number(atolye.aylikPorselenPlaka) + Number(atolye.aylikKuvarsPlaka) + Number(atolye.aylikDogaltasPlaka)
   const toplamAylikDakika = toplamPlaka * 480
   const dakikaMaliyeti = toplamAylikDakika > 0 ? toplamAylikGider / toplamAylikDakika : 0
-  return { toplamAylikGider, dakikaMaliyeti }
+  const gunlukGider = toplamAylikGider / 26
+  return { toplamAylikGider, dakikaMaliyeti, gunlukGider }
 }
 
 export async function GET() {
@@ -45,10 +46,10 @@ export async function GET() {
     include: { makineler: true, araclar: true }
   })
 
-  if (!atolye) return NextResponse.json({ atolye: null, toplamAylikGider: 0, dakikaMaliyeti: 0 })
+  if (!atolye) return NextResponse.json({ atolye: null, toplamAylikGider: 0, dakikaMaliyeti: 0, gunlukGider: 0 })
 
-  const { toplamAylikGider, dakikaMaliyeti } = toplamHesapla(atolye)
-  return NextResponse.json({ atolye, toplamAylikGider, dakikaMaliyeti })
+  const { toplamAylikGider, dakikaMaliyeti, gunlukGider } = toplamHesapla(atolye)
+  return NextResponse.json({ atolye, toplamAylikGider, dakikaMaliyeti, gunlukGider })
 }
 
 export async function POST(req: NextRequest) {
@@ -121,5 +122,5 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  return NextResponse.json({ atolye, toplamAylikGider, dakikaMaliyeti })
+  return NextResponse.json({ atolye, toplamAylikGider, dakikaMaliyeti, gunlukGider })
 }

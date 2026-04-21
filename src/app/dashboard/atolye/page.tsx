@@ -18,6 +18,7 @@ export default function AtolyeProfili() {
   const [mesaj, setMesaj] = useState('')
   const [dakikaMaliyeti, setDakikaMaliyeti] = useState<number>(0)
   const [toplamAylikGider, setToplamAylikGider] = useState<number>(0)
+  const [gunlukGider, setGunlukGider] = useState<number>(0)
   const [makineler, setMakineler] = useState<Makine[]>([])
   const [araclar, setAraclar] = useState<Arac[]>([])
   const [yeniMakine, setYeniMakine] = useState({ makineAdi:'', alinanBedel:'', paraBirimi:'TRY', amortismanSuresiAy:'', aylikAktifCalismaSaati:'' })
@@ -64,6 +65,7 @@ export default function AtolyeProfili() {
         }
         if (av.toplamAylikGider !== undefined) setToplamAylikGider(Number(av.toplamAylikGider))
         if (av.dakikaMaliyeti !== undefined) setDakikaMaliyeti(Number(av.dakikaMaliyeti))
+        if (av.gunlukGider !== undefined) setGunlukGider(Number(av.gunlukGider))
         if (mv.makineler) setMakineler(mv.makineler)
         if (arv.araclar) setAraclar(arv.araclar)
       })
@@ -113,6 +115,7 @@ export default function AtolyeProfili() {
         const sonuc = await yanit.json()
         setDakikaMaliyeti(Number(sonuc.dakikaMaliyeti) || 0)
         setToplamAylikGider(Number(sonuc.toplamAylikGider) || 0)
+        setGunlukGider(Number(sonuc.gunlukGider) || 0)
         setMesaj('Kaydedildi!')
       } else { setMesaj('Hata oluştu.') }
     } finally { setKaydediliyor(false) }
@@ -154,6 +157,10 @@ export default function AtolyeProfili() {
         <div>
           <p style={{margin:'0 0 4px', fontSize:'12px', color:'#3b82f6', fontWeight:'500'}}>DAKİKA MALİYETİ</p>
           <p style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#1e40af'}}>{paraGoster(dakikaMaliyeti, 4)}</p>
+          </div>
+          <div style={{background:'white', borderRadius:'12px', padding:'20px', border:'1px solid #e5e7eb', textAlign:'center'}}>
+            <p style={{margin:'0 0 4px', fontSize:'13px', color:'#6b7280', fontWeight:'500'}}>GÜNLÜK GİDER (26 İş Günü)</p>
+            <p style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#7c3aed'}}>{paraGoster(gunlukGider)}</p>
         </div>
       </div>
 
