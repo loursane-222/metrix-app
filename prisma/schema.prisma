@@ -152,7 +152,9 @@ model Is {
 
   isTarihi   DateTime?
 
-  tahsilat   Decimal   @default(0)
+  tahsilat         Decimal   @default(0)
+  onaylanmaTarihi  DateTime?
+  kaybedilmeTarihi DateTime?
   notlar String?
 
   createdAt DateTime @default(now())
