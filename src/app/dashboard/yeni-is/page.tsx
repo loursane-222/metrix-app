@@ -44,7 +44,7 @@ export default function YeniIs() {
     tezgahArasiMtul: '', tezgahArasiDakika: '',
     adaTezgahMtul: '', adaTezgahDakika: '',
     kullanilanKur: '', karYuzdesi: '30', notlar: '',
-    plakaGenislikCm: '', plakaUzunlukCm: '', plakadanAlinanMtul: '', isTarihi: '', isTarihi: '',
+    plakaGenislikCm: '', plakaUzunlukCm: '', plakadanAlinanMtul: '',  isTarihi: '',
   })
 
   const [seciliOperasyonlar, setSeciliOperasyonlar] = useState<{ [key: string]: boolean }>({})
