@@ -210,3 +210,51 @@ export async function searchIsler(q: string) {
     orderBy: { createdAt: "desc" },
   });
 }
+
+export async function movePhase(data: {
+  schedulePhaseId: string;
+  newStart: Date;
+  newEnd: Date;
+}) {
+  const atolyeId = await atolyeIdAl();
+  if (!atolyeId) throw new Error("Yetkisiz");
+
+  const phase = await prisma.schedulePhase.findUnique({
+    where: { id: data.schedulePhaseId },
+    include: { workSchedule: { include: { is: true } } },
+  });
+  if (!phase) throw new Error("Aşama bulunamadı");
+  if (phase.workSchedule.is.atolyeId !== atolyeId) throw new Error("Yetkisiz");
+
+  const updated = await prisma.schedulePhase.update({
+    where: { id: data.schedulePhaseId },
+    data: {
+      plannedStart: data.newStart,
+      plannedEnd: data.newEnd,
+    },
+  });
+
+  revalidatePath("/dashboard/is-programi");
+  return updated;
+}
+
+export async function updateTasDurumu(data: {
+  isId: string;
+  tasDurumu: string;
+}) {
+  const atolyeId = await atolyeIdAl();
+  if (!atolyeId) throw new Error("Yetkisiz");
+
+  const is = await prisma.is.findFirst({
+    where: { id: data.isId, atolyeId },
+  });
+  if (!is) throw new Error("İş bulunamadı");
+
+  const updated = await prisma.is.update({
+    where: { id: data.isId },
+    data: { tasDurumu: data.tasDurumu },
+  });
+
+  revalidatePath("/dashboard/is-programi");
+  return updated;
+}

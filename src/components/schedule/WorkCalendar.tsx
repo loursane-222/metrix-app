@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { ScheduleModal } from "./ScheduleModal";
-import { togglePhaseCompletion } from "@/app/actions/schedule";
+import { togglePhaseCompletion, movePhase, updateTasDurumu } from "@/app/actions/schedule";
 import type { ScheduleWithIs } from "@/lib/types/schedule";
 import { PHASE_ORDER, PHASE_LABELS } from "@/lib/types/schedule";
 
@@ -24,14 +24,16 @@ interface PhaseEntry {
   teklifNo: string;
   schedule: ScheduleWithIs;
   allPhases: ScheduleWithIs["phases"];
+  plannedStart: Date;
+  plannedEnd: Date;
 }
-
 
 interface TasAlinacakEntry {
   isId: string;
   musteriAdi: string;
   tasAdi: string;
   olcuTarihi: Date;
+  tasAlindi: boolean;
 }
 
 interface QuickPopup {
@@ -55,7 +57,14 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   const [isLoading, setIsLoading] = useState(false);
   const [popup, setPopup] = useState<QuickPopup | null>(null);
   const [tasPopup, setTasPopup] = useState<{ entry: TasAlinacakEntry; x: number; y: number } | null>(null);
+  const [tasAlindi, setTasAlindi] = useState(false);
+  const [tasKaydediliyor, setTasKaydediliyor] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  // Drag state
+  const dragEntry = useRef<PhaseEntry | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null); // dayNum
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -101,8 +110,6 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
     setPopup({ entry, x: rect.left, y: rect.bottom + window.scrollY + 4 });
   }
 
-  const [statusError, setStatusError] = useState<string | null>(null);
-
   function handleStatusChange(isCompleted: boolean, overrideNote?: string) {
     setStatusError(null);
     if (!popup) return;
@@ -121,18 +128,79 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
     });
   }
 
+  // --- Drag & Drop ---
+  function handleDragStart(e: React.DragEvent, entry: PhaseEntry) {
+    dragEntry.current = entry;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", entry.phaseId);
+  }
+
+  function handleDragOver(e: React.DragEvent, dayNum: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver(dayNum);
+  }
+
+  function handleDragLeave() {
+    setDragOver(null);
+  }
+
+  async function handleDrop(e: React.DragEvent, dayNum: number) {
+    e.preventDefault();
+    setDragOver(null);
+    const entry = dragEntry.current;
+    if (!entry) return;
+    dragEntry.current = null;
+
+    // Mevcut aralığın gün sayısını hesapla
+    const oldStart = new Date(entry.plannedStart);
+    const oldEnd = new Date(entry.plannedEnd);
+    oldStart.setHours(0,0,0,0);
+    oldEnd.setHours(0,0,0,0);
+    const durasyonGun = Math.round((oldEnd.getTime() - oldStart.getTime()) / (1000 * 60 * 60 * 24));
+
+    const newStart = new Date(year, month - 1, dayNum);
+    const newEnd = new Date(year, month - 1, dayNum + durasyonGun);
+
+    try {
+      await movePhase({
+        schedulePhaseId: entry.phaseId,
+        newStart,
+        newEnd,
+      });
+      await refreshSchedules();
+    } catch (err) {
+      console.error("Taşıma hatası:", err);
+    }
+  }
+
+  // --- Taş Alındı ---
+  async function tasSave() {
+    if (!tasPopup) return;
+    setTasKaydediliyor(true);
+    try {
+      await updateTasDurumu({
+        isId: tasPopup.entry.isId,
+        tasDurumu: tasAlindi ? 'alindi' : 'alinacak',
+      });
+      await refreshSchedules();
+      setTasPopup(null);
+    } finally {
+      setTasKaydediliyor(false);
+    }
+  }
+
+  // --- Takvim Hesapları ---
   const daysInMonth = new Date(year, month, 0).getDate();
   let firstDayOfWeek = new Date(year, month - 1, 1).getDay();
   firstDayOfWeek = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
   const totalCells = Math.ceil((daysInMonth + firstDayOfWeek) / 7) * 7;
 
-
   function isBuGunIsGunu(d: Date): boolean {
-    const gun = d.getDay();
-    return gun !== 0 && gun !== 6;
+    return d.getDay() !== 0 && d.getDay() !== 6;
   }
 
-  function isGunuEkle(baslangic: Date, gun: number): Date {
+  function isGunuGeriGit(baslangic: Date, gun: number): Date {
     let sayac = 0;
     const d = new Date(baslangic);
     while (sayac < gun) {
@@ -149,11 +217,11 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
     for (const schedule of schedules) {
       if (!schedule.is) continue;
       const is = schedule.is as any;
-      if (is.tasDurumu !== 'alinacak') continue;
+      if (is.tasDurumu !== 'alinacak' && is.tasDurumu !== 'alindi') continue;
       const olcuPhase = schedule.phases.find((p: any) => p.phase === 'OLCU');
       if (!olcuPhase?.plannedStart) continue;
       const olcuTarihi = new Date(olcuPhase.plannedStart);
-      const tasAlisTarihi = isGunuEkle(olcuTarihi, 3);
+      const tasAlisTarihi = isGunuGeriGit(olcuTarihi, 3);
       tasAlisTarihi.setHours(0, 0, 0, 0);
       if (tasAlisTarihi.getTime() === date.getTime()) {
         entries.push({
@@ -161,6 +229,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
           musteriAdi: is.musteriAdi,
           tasAdi: is.urunAdi || '',
           olcuTarihi,
+          tasAlindi: is.tasDurumu === 'alindi',
         });
       }
     }
@@ -186,6 +255,8 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
             teklifNo: schedule.is.teklifNo,
             schedule,
             allPhases: schedule.phases,
+            plannedStart: new Date(phase.plannedStart),
+            plannedEnd: new Date(phase.plannedEnd),
           });
         }
       }
@@ -198,6 +269,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
 
   return (
     <div className="flex flex-col h-full">
+      {/* Üst Bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("prev")} disabled={isLoading} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-lg">←</button>
@@ -215,6 +287,10 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
                 {PHASE_LABELS[p]}
               </span>
             ))}
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-400" />
+              Taş Alınacak
+            </span>
           </div>
           <button onClick={() => { setSelectedSchedule(null); setIsModalOpen(true); }} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 transition-colors">
             + İş Programı Ekle
@@ -222,12 +298,14 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
         </div>
       </div>
 
+      {/* Gün Başlıkları */}
       <div className="grid grid-cols-7 mb-1">
         {TR_DAYS.map((d) => (
           <div key={d} className="py-2 text-center text-xs font-medium text-gray-500">{d}</div>
         ))}
       </div>
 
+      {/* Takvim Izgarası */}
       <div className={`grid grid-cols-7 flex-1 border-l border-t rounded-lg overflow-hidden transition-opacity ${isLoading ? "opacity-50" : ""}`}>
         {Array.from({ length: totalCells }, (_, i) => {
           const dayNum = i - firstDayOfWeek + 1;
@@ -235,9 +313,17 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
           const isToday = isCurrentMonth && dayNum === today.getDate();
           const entries = isValid ? getPhaseEntriesForDay(dayNum) : [];
           const tasEntries = isValid ? getTasAlinacakForDay(dayNum) : [];
+          const isDragTarget = dragOver === dayNum;
 
           return (
-            <div key={i} className={`min-h-[100px] border-r border-b p-1 ${!isValid ? "bg-gray-50" : "bg-white hover:bg-gray-50 transition-colors"}`}>
+            <div
+              key={i}
+              className={`min-h-[100px] border-r border-b p-1 transition-colors
+                ${!isValid ? "bg-gray-50" : isDragTarget ? "bg-blue-50 ring-2 ring-inset ring-blue-300" : "bg-white hover:bg-gray-50"}`}
+              onDragOver={isValid ? (e) => handleDragOver(e, dayNum) : undefined}
+              onDragLeave={isValid ? handleDragLeave : undefined}
+              onDrop={isValid ? (e) => handleDrop(e, dayNum) : undefined}
+            >
               {isValid && (
                 <>
                   <div className="mb-1">
@@ -251,8 +337,11 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
                       return (
                         <button
                           key={`${entry.phaseId}-${idx}`}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, entry)}
                           onClick={(e) => handlePhaseClick(e, entry)}
-                          className={`w-full text-left px-1.5 py-0.5 rounded text-xs border flex items-center gap-1 transition-all hover:shadow-sm ${style.bg} ${style.border} ${entry.isCompleted ? "opacity-50" : ""}`}
+                          title="Sürükleyerek taşıyabilirsiniz"
+                          className={`w-full text-left px-1.5 py-0.5 rounded text-xs border flex items-center gap-1 transition-all hover:shadow-sm cursor-grab active:cursor-grabbing ${style.bg} ${style.border} ${entry.isCompleted ? "opacity-50" : ""}`}
                         >
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${entry.isCompleted ? "bg-green-500" : style.dot}`} />
                           <span className={`font-medium flex-shrink-0 ${style.text} ${entry.isCompleted ? "line-through" : ""}`}>
@@ -271,14 +360,22 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
                         key={`tas-${entry.isId}-${idx}`}
                         onClick={(e) => {
                           e.stopPropagation();
+                          setTasAlindi(entry.tasAlindi);
                           setTasPopup({ entry, x: e.clientX, y: e.clientY });
                         }}
                         className="w-full text-left px-1.5 py-0.5 rounded text-xs border flex items-center gap-1 transition-all hover:shadow-sm"
-                        style={{background:'#fff7ed', borderColor:'#fed7aa', color:'#c2410c'}}
+                        style={{
+                          background: entry.tasAlindi ? '#f0fdf4' : '#fff7ed',
+                          borderColor: entry.tasAlindi ? '#86efac' : '#fed7aa',
+                          color: entry.tasAlindi ? '#15803d' : '#c2410c',
+                          opacity: entry.tasAlindi ? 0.6 : 1,
+                        }}
                       >
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-orange-500" />
-                        <span className="font-medium flex-shrink-0">🪨 Taş Alınacak</span>
-                        <span className="truncate text-gray-500">— {entry.musteriAdi}</span>
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${entry.tasAlindi ? 'bg-green-500' : 'bg-orange-500'}`} />
+                        <span className={`font-medium flex-shrink-0 ${entry.tasAlindi ? 'line-through' : ''}`}>
+                          {entry.tasAlindi ? '✓ Taş Alındı' : '🪨 Taş Alınacak'}
+                        </span>
+                        <span className={`truncate text-gray-500 ${entry.tasAlindi ? 'line-through' : ''}`}>— {entry.musteriAdi}</span>
                       </button>
                     ))}
                   </div>
@@ -287,6 +384,11 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
             </div>
           );
         })}
+      </div>
+
+      {/* Sürükleme İpucu */}
+      <div className="mt-2 text-xs text-gray-400 text-center">
+        💡 Fazları sürükleyerek farklı bir güne taşıyabilirsiniz
       </div>
 
       {/* Hızlı Durum Popup */}
@@ -315,7 +417,6 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
               </span>
               Devam Ediyor
             </button>
-
             <button
               onClick={() => handleStatusChange(true)}
               disabled={isPending}
@@ -349,25 +450,51 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
         </div>
       )}
 
-
       {/* Taş Alınacak Popup */}
       {tasPopup && (
         <div
-          className="fixed z-50 bg-white rounded-xl shadow-xl border p-4 w-60"
-          style={{ top: Math.min(tasPopup.y, window.innerHeight - 160), left: Math.min(tasPopup.x, window.innerWidth - 250) }}
+          className="fixed z-50 bg-white rounded-xl shadow-xl border p-4 w-64"
+          style={{ top: Math.min(tasPopup.y, window.innerHeight - 220), left: Math.min(tasPopup.x, window.innerWidth - 270) }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex justify-between items-start mb-2">
-            <div className="text-sm font-semibold text-orange-700">🪨 Taş Alınacak</div>
+          <div className="flex justify-between items-start mb-3">
+            <div className="text-sm font-semibold text-orange-700">🪨 Taş Durumu</div>
             <button onClick={() => setTasPopup(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
           </div>
-          <div className="text-sm text-gray-800 font-medium">{tasPopup.entry.musteriAdi}</div>
-          <div className="text-xs text-gray-500 mt-1">Taş: {tasPopup.entry.tasAdi || '—'}</div>
-          <div className="text-xs text-gray-400 mt-1">
-            Ölçü: {tasPopup.entry.olcuTarihi.toLocaleDateString('tr-TR')}
+
+          <div className="text-sm text-gray-800 font-medium mb-1">{tasPopup.entry.musteriAdi}</div>
+          <div className="text-xs text-gray-500">Taş: <span className="font-medium">{tasPopup.entry.tasAdi || '—'}</span></div>
+          <div className="text-xs text-gray-400 mt-1 mb-3">
+            Ölçü tarihi: {tasPopup.entry.olcuTarihi.toLocaleDateString('tr-TR')}
           </div>
-          <div className="text-xs text-orange-600 mt-2 font-medium">
-            ⚠ Ölçüden 3 iş günü önce
+
+          {/* Alındı Tiki */}
+          <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all mb-4 ${
+            tasAlindi ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50 hover:border-green-300'
+          }`}>
+            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+              tasAlindi ? 'bg-green-500 border-green-500' : 'border-gray-300'
+            }`}>
+              {tasAlindi && <span className="text-white text-xs font-bold">✓</span>}
+            </div>
+            <div>
+              <div className={`text-sm font-medium ${tasAlindi ? 'text-green-700' : 'text-gray-600'}`}>
+                Taş Alındı
+              </div>
+              <div className="text-xs text-gray-400">İşaretlersen takvimde üzeri çizilir</div>
+            </div>
+            <input type="checkbox" className="hidden" checked={tasAlindi} onChange={e => setTasAlindi(e.target.checked)} />
+          </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setTasPopup(null)}
+              className="py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              İptal
+            </button>
+            <button onClick={tasSave} disabled={tasKaydediliyor}
+              className="py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-60">
+              {tasKaydediliyor ? '...' : '💾 Kaydet'}
+            </button>
           </div>
         </div>
       )}
