@@ -158,10 +158,10 @@ export default function AtolyeProfili() {
           <p style={{margin:'0 0 4px', fontSize:'12px', color:'#3b82f6', fontWeight:'500'}}>DAKİKA MALİYETİ</p>
           <p style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#1e40af'}}>{paraGoster(dakikaMaliyeti, 4)}</p>
           </div>
-          <div style={{background:'white', borderRadius:'12px', padding:'20px', border:'1px solid #e5e7eb', textAlign:'center'}}>
-            <p style={{margin:'0 0 4px', fontSize:'13px', color:'#6b7280', fontWeight:'500'}}>GÜNLÜK GİDER (26 İş Günü)</p>
-            <p style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#7c3aed'}}>{paraGoster(gunlukGider)}</p>
-        </div>
+          <div>
+            <p style={{margin:'0 0 4px', fontSize:'12px', color:'#3b82f6', fontWeight:'500'}}>GÜNLÜK GİDER (26 İş Günü)</p>
+            <p style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#1e40af'}}>{paraGoster(gunlukGider)}</p>
+          </div>
       </div>
 
       {/* Logo Yükleme */}
