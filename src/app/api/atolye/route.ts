@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
   const toplamPlaka = (parseInt(veri.aylikPorselenPlaka) || 0) + (parseInt(veri.aylikKuvarsPlaka) || 0) + (parseInt(veri.aylikDogaltasPlaka) || 0)
   const toplamAylikDakika = toplamPlaka * 480
   const dakikaMaliyeti = toplamAylikDakika > 0 ? toplamAylikGider / toplamAylikDakika : 0
+  const gunlukGider = toplamAylikGider / 26
 
   const atolye = await prisma.atolye.upsert({
     where: { userId: kullanici.id },
