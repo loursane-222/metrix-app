@@ -60,6 +60,7 @@ export async function getSchedulesForMonth(year: number, month: number) {
           teklifNo: true,
           musteriAdi: true,
           urunAdi: true,
+          tasDurumu: true,
         },
       },
       phases: { orderBy: { phase: "asc" } },

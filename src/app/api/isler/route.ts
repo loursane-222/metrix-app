@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     adaTezgahMtul, adaTezgahDakika,
     kullanilanKur, karYuzdesi, notlar,
     plakaGenislikCm, plakaUzunlukCm, plakadanAlinanMtul,
-    operasyonlar,
+    operasyonlar, isTarihi,
   } = veri
 
   const dakikaMaliyeti = Number(atolye.dakikaMaliyeti) || 0
@@ -90,11 +90,9 @@ export async function POST(req: NextRequest) {
   const kdvDahilFiyat = satisFiyati + kdvTutari
   const mtulSatisFiyati = toplamMetraj > 0 ? satisFiyati / toplamMetraj : 0
 
-  // Teklif numarası
   const toplamIs = await prisma.is.count({ where: { atolyeId: atolye.id } })
   const teklifNo = teklifNoOlustur(toplamIs + 1)
 
-  // Geçerlilik tarihi
   const teklifGecerlilikTarihi = new Date()
   teklifGecerlilikTarihi.setDate(teklifGecerlilikTarihi.getDate() + teklifGecerlilik)
 
@@ -129,6 +127,7 @@ export async function POST(req: NextRequest) {
       satisFiyati,
       mtulSatisFiyati,
       teklifGecerlilikTarihi,
+      isTarihi: isTarihi ? new Date(isTarihi) : null,
       durum: 'teklif_verildi',
       operasyonlar: {
         create: (operasyonlar || []).map((op: { operasyonTipi: string; makineId?: string; adet: number; birimDakika: number; toplamDakika: number }) => ({

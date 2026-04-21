@@ -26,6 +26,14 @@ interface PhaseEntry {
   allPhases: ScheduleWithIs["phases"];
 }
 
+
+interface TasAlinacakEntry {
+  isId: string;
+  musteriAdi: string;
+  tasAdi: string;
+  olcuTarihi: Date;
+}
+
 interface QuickPopup {
   entry: PhaseEntry;
   x: number;
@@ -46,6 +54,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [popup, setPopup] = useState<QuickPopup | null>(null);
+  const [tasPopup, setTasPopup] = useState<{ entry: TasAlinacakEntry; x: number; y: number } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -58,10 +67,10 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   }, [year, month]);
 
   useEffect(() => {
-    function handleClick() { setPopup(null); }
-    if (popup) document.addEventListener("click", handleClick);
+    function handleClick() { setPopup(null); setTasPopup(null); }
+    if (popup || tasPopup) document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
-  }, [popup]);
+  }, [popup, tasPopup]);
 
   async function refreshSchedules() {
     const res = await fetch(`/api/schedule?year=${year}&month=${month}`);
@@ -116,6 +125,47 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   let firstDayOfWeek = new Date(year, month - 1, 1).getDay();
   firstDayOfWeek = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
   const totalCells = Math.ceil((daysInMonth + firstDayOfWeek) / 7) * 7;
+
+
+  function isBuGunIsGunu(d: Date): boolean {
+    const gun = d.getDay();
+    return gun !== 0 && gun !== 6;
+  }
+
+  function isGunuEkle(baslangic: Date, gun: number): Date {
+    let sayac = 0;
+    const d = new Date(baslangic);
+    while (sayac < gun) {
+      d.setDate(d.getDate() - 1);
+      if (isBuGunIsGunu(d)) sayac++;
+    }
+    return d;
+  }
+
+  function getTasAlinacakForDay(day: number): TasAlinacakEntry[] {
+    const date = new Date(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    const entries: TasAlinacakEntry[] = [];
+    for (const schedule of schedules) {
+      if (!schedule.is) continue;
+      const is = schedule.is as any;
+      if (is.tasDurumu !== 'alinacak') continue;
+      const olcuPhase = schedule.phases.find((p: any) => p.phase === 'OLCU');
+      if (!olcuPhase?.plannedStart) continue;
+      const olcuTarihi = new Date(olcuPhase.plannedStart);
+      const tasAlisTarihi = isGunuEkle(olcuTarihi, 3);
+      tasAlisTarihi.setHours(0, 0, 0, 0);
+      if (tasAlisTarihi.getTime() === date.getTime()) {
+        entries.push({
+          isId: is.id,
+          musteriAdi: is.musteriAdi,
+          tasAdi: is.urunAdi || '',
+          olcuTarihi,
+        });
+      }
+    }
+    return entries;
+  }
 
   function getPhaseEntriesForDay(day: number): PhaseEntry[] {
     const date = new Date(year, month - 1, day);
@@ -184,6 +234,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
           const isValid = dayNum >= 1 && dayNum <= daysInMonth;
           const isToday = isCurrentMonth && dayNum === today.getDate();
           const entries = isValid ? getPhaseEntriesForDay(dayNum) : [];
+          const tasEntries = isValid ? getTasAlinacakForDay(dayNum) : [];
 
           return (
             <div key={i} className={`min-h-[100px] border-r border-b p-1 ${!isValid ? "bg-gray-50" : "bg-white hover:bg-gray-50 transition-colors"}`}>
@@ -215,6 +266,21 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
                     {entries.length > 4 && (
                       <div className="text-xs text-gray-400 text-center py-0.5">+{entries.length - 4} daha</div>
                     )}
+                    {tasEntries.map((entry, idx) => (
+                      <button
+                        key={`tas-${entry.isId}-${idx}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTasPopup({ entry, x: e.clientX, y: e.clientY });
+                        }}
+                        className="w-full text-left px-1.5 py-0.5 rounded text-xs border flex items-center gap-1 transition-all hover:shadow-sm"
+                        style={{background:'#fff7ed', borderColor:'#fed7aa', color:'#c2410c'}}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-orange-500" />
+                        <span className="font-medium flex-shrink-0">🪨 Taş Alınacak</span>
+                        <span className="truncate text-gray-500">— {entry.musteriAdi}</span>
+                      </button>
+                    ))}
                   </div>
                 </>
               )}
@@ -280,6 +346,29 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
               <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
+        </div>
+      )}
+
+
+      {/* Taş Alınacak Popup */}
+      {tasPopup && (
+        <div
+          className="fixed z-50 bg-white rounded-xl shadow-xl border p-4 w-60"
+          style={{ top: Math.min(tasPopup.y, window.innerHeight - 160), left: Math.min(tasPopup.x, window.innerWidth - 250) }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-start mb-2">
+            <div className="text-sm font-semibold text-orange-700">🪨 Taş Alınacak</div>
+            <button onClick={() => setTasPopup(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+          </div>
+          <div className="text-sm text-gray-800 font-medium">{tasPopup.entry.musteriAdi}</div>
+          <div className="text-xs text-gray-500 mt-1">Taş: {tasPopup.entry.tasAdi || '—'}</div>
+          <div className="text-xs text-gray-400 mt-1">
+            Ölçü: {tasPopup.entry.olcuTarihi.toLocaleDateString('tr-TR')}
+          </div>
+          <div className="text-xs text-orange-600 mt-2 font-medium">
+            ⚠ Ölçüden 3 iş günü önce
+          </div>
         </div>
       )}
 

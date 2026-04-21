@@ -44,7 +44,7 @@ export default function YeniIs() {
     tezgahArasiMtul: '', tezgahArasiDakika: '',
     adaTezgahMtul: '', adaTezgahDakika: '',
     kullanilanKur: '', karYuzdesi: '30', notlar: '',
-    plakaGenislikCm: '', plakaUzunlukCm: '', plakadanAlinanMtul: '',
+    plakaGenislikCm: '', plakaUzunlukCm: '', plakadanAlinanMtul: '', isTarihi: '', isTarihi: '',
   })
 
   const [seciliOperasyonlar, setSeciliOperasyonlar] = useState<{ [key: string]: boolean }>({})
@@ -112,6 +112,7 @@ export default function YeniIs() {
           plakaGenislikCm: parseFloat(form.plakaGenislikCm) || 0,
           plakaUzunlukCm: parseFloat(form.plakaUzunlukCm) || 0,
           plakadanAlinanMtul: parseFloat(form.plakadanAlinanMtul) || 0,
+          isTarihi: form.isTarihi || null,
           operasyonlar,
         }),
       })
@@ -179,6 +180,7 @@ export default function YeniIs() {
                 <option>Porselen</option><option>Kuvars</option><option>Doğaltaş</option>
               </select>
             </div>
+            <div><label style={labelStil}>İş Tarihi (isteğe bağlı)</label><input style={inputStil} type="date" value={form.isTarihi} onChange={e => guncelle('isTarihi', e.target.value)} /></div>
           </div>
         </div>
 

@@ -26,7 +26,7 @@ export async function GET() {
   if (!atolye) return NextResponse.json({
     toplamIs: 0, onaylananIs: 0, kaybedilenIs: 0,
     teklifVerilenTutar: 0, onaylananTutar: 0, onaylanmaOrani: 0,
-    toplamCiro: 0, toplamMaliyet: 0, toplamKar: 0
+    toplamCiro: 0, toplamMaliyet: 0, toplamKar: 0, toplamTahsilat: 0
   })
 
   const isler = await prisma.is.findMany({ where: { atolyeId: atolye.id } })
@@ -34,18 +34,17 @@ export async function GET() {
   const toplamIs = isler.length
   const onaylananIs = isler.filter(i => i.durum === 'onaylandi').length
   const kaybedilenIs = isler.filter(i => i.durum === 'kaybedildi').length
-
   const teklifVerilenTutar = isler.reduce((acc, i) => acc + Number(i.satisFiyati), 0)
   const onaylananTutar = isler.filter(i => i.durum === 'onaylandi').reduce((acc, i) => acc + Number(i.satisFiyati), 0)
   const onaylanmaOrani = toplamIs > 0 ? (onaylananIs / toplamIs) * 100 : 0
-
   const toplamCiro = onaylananTutar
   const toplamMaliyet = isler.filter(i => i.durum === 'onaylandi').reduce((acc, i) => acc + Number(i.toplamMaliyet), 0)
   const toplamKar = toplamCiro - toplamMaliyet
+  const toplamTahsilat = isler.reduce((acc, i) => acc + Number(i.tahsilat || 0), 0)
 
   return NextResponse.json({
     toplamIs, onaylananIs, kaybedilenIs,
     teklifVerilenTutar, onaylananTutar, onaylanmaOrani,
-    toplamCiro, toplamMaliyet, toplamKar
+    toplamCiro, toplamMaliyet, toplamKar, toplamTahsilat
   })
 }

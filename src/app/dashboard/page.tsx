@@ -14,6 +14,7 @@ export default function Dashboard() {
     toplamCiro: 0,
     toplamMaliyet: 0,
     toplamKar: 0,
+    toplamTahsilat: 0,
   })
 
   useEffect(() => {
@@ -32,6 +33,8 @@ export default function Dashboard() {
     { baslik: 'TOPLAM CİRO', deger: paraGoster(veri.toplamCiro), renk: '#2563eb' },
     { baslik: 'TOPLAM MALİYET', deger: paraGoster(veri.toplamMaliyet), renk: '#dc2626' },
     { baslik: 'TOPLAM KAR', deger: paraGoster(veri.toplamKar), renk: '#9333ea' },
+    { baslik: 'TAHSİLATLAR TOPLAMI', deger: paraGoster(veri.toplamTahsilat), renk: '#0891b2' },
+    { baslik: 'TAHSİLATLAR TOPLAMI', deger: paraGoster(veri.toplamTahsilat), renk: '#0891b2' },
   ]
 
   return (

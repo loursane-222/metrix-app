@@ -147,6 +147,12 @@ model Is {
   hataliKesimPlaka   Decimal @default(0)
 
   durum  String  @default("teklif_verildi")
+
+  tasDurumu  String?
+
+  isTarihi   DateTime?
+
+  tahsilat   Decimal   @default(0)
   notlar String?
 
   createdAt DateTime @default(now())
