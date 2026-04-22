@@ -44,6 +44,7 @@ export default function DashboardLayout({
     { href: '/dashboard/atolye', label: 'Atölye Profili', icon: '⚙' },
     { href: '/dashboard/yeni-is', label: 'Yeni İş', icon: '+' },
     { href: '/dashboard/isler', label: 'İş Listesi', icon: '≡' },
+    { href: '/dashboard/musteriler', label: 'Müşteriler', icon: '👤' },
     { href: '/dashboard/is-programi', label: 'İş Programı', icon: '📅' },
     { href: '/dashboard/plaka-planlayici', label: 'Plaka Planlayıcı', icon: '▦' },
     { href: '/dashboard/personel', label: 'Personel', icon: '👥' },
@@ -52,7 +53,6 @@ export default function DashboardLayout({
   return (
     <div style={{display:'flex', minHeight:'100vh'}}>
 
-      {/* Mobil üst bar */}
       {mobil && (
         <div style={{position:'fixed', top:0, left:0, right:0, background:'#1e1e2e', padding:'12px 16px', zIndex:100, display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #2e2e3e'}}>
           <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
@@ -71,26 +71,22 @@ export default function DashboardLayout({
         </div>
       )}
 
-      {/* Overlay */}
       {mobil && menuAcik && (
         <div onClick={() => setMenuAcik(false)} style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:98}} />
       )}
 
-      {/* Sol Menü */}
       <div style={{
         width:'240px', background:'#1e1e2e', color:'white', display:'flex', flexDirection:'column',
         flexShrink:0, position:'fixed', height:'100vh', zIndex:99,
         transform: mobil ? (menuAcik ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
         transition:'transform 0.3s ease',
       }}>
-        {/* Metrix Başlık */}
         <div style={{padding:'20px 20px 0', borderBottom:'1px solid #2e2e3e'}}>
           <div style={{display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px'}}>
             <h1 style={{margin:0, fontSize:'20px', fontWeight:'700', color:'#60a5fa'}}>Metrix</h1>
             <span style={{fontSize:'11px', color:'#6b7280', marginTop:'2px'}}>Atölye Yönetimi</span>
           </div>
 
-          {/* Firma Bilgisi */}
           {(atolyeBilgi?.logoUrl || atolyeBilgi?.atolyeAdi) && (
             <div style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px 0 14px'}}>
               {atolyeBilgi.logoUrl && (
@@ -122,7 +118,6 @@ export default function DashboardLayout({
         </div>
       </div>
 
-      {/* İçerik */}
       <div style={{flex:1, marginLeft: mobil ? '0' : '240px', background:'#f9fafb', minHeight:'100vh', paddingTop: mobil ? '56px' : '0'}}>
         {children}
       </div>

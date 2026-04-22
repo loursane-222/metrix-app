@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
   const veri = await req.json()
 
   const {
+    musteriId,
     musteriAdi, urunAdi, malzemeTipi, musteriTipi,
     plakaFiyatiEuro, metrajMtul, birMtulDakika,
     tezgahArasiMtul, tezgahArasiDakika,
@@ -60,30 +61,102 @@ export async function POST(req: NextRequest) {
     kullanilanKur, karYuzdesi, notlar,
     plakaGenislikCm, plakaUzunlukCm, plakadanAlinanMtul,
     operasyonlar, isTarihi,
+    manuelPlakaSayisi,
+
+    ozelIscilik1Mtul, ozelIscilik1Dakika,
+    ozelIscilik2Mtul, ozelIscilik2Dakika,
+    ozelIscilik3Mtul, ozelIscilik3Dakika,
   } = veri
+
+  let bagliMusteriId: string | null = null
+
+  if (musteriId) {
+    const mevcutMusteri = await prisma.musteri.findFirst({
+      where: {
+        id: musteriId,
+        atolyeId: atolye.id
+      }
+    })
+    if (mevcutMusteri) {
+      bagliMusteriId = mevcutMusteri.id
+    }
+  }
+
+  if (!bagliMusteriId && String(musteriAdi || '').trim()) {
+    const aranan = String(musteriAdi || '').trim()
+
+    let mevcutMusteri = await prisma.musteri.findFirst({
+      where: {
+        atolyeId: atolye.id,
+        OR: [
+          { firmaAdi: aranan },
+          { ad: aranan }
+        ]
+      }
+    })
+
+    if (!mevcutMusteri) {
+      mevcutMusteri = await prisma.musteri.create({
+        data: {
+          atolyeId: atolye.id,
+          firmaAdi: '',
+          ad: aranan,
+          soyad: '',
+          telefon: '',
+          email: ''
+        }
+      })
+    }
+
+    bagliMusteriId = mevcutMusteri.id
+  }
 
   const dakikaMaliyeti = Number(atolye.dakikaMaliyeti) || 0
   const gercekPlakaMtul = parseFloat(plakadanAlinanMtul) || Number(atolye.plakaBasinaMtul) || 3.20
   const kdvOrani = Number(atolye.kdvOrani) || 20
   const teklifGecerlilik = Number(atolye.teklifGecerlilik) || 15
 
+  const normalTezgahMtul = parseFloat(metrajMtul) || 0
+  const normalTezgahArasiMtul = parseFloat(tezgahArasiMtul) || 0
+  const normalAdaTezgahMtul = parseFloat(adaTezgahMtul) || 0
+
+  const ozel1Mtul = parseFloat(ozelIscilik1Mtul) || 0
+  const ozel2Mtul = parseFloat(ozelIscilik2Mtul) || 0
+  const ozel3Mtul = parseFloat(ozelIscilik3Mtul) || 0
+
   const toplamMetraj =
-    (parseFloat(metrajMtul) || 0) +
-    (parseFloat(tezgahArasiMtul) || 0) +
-    (parseFloat(adaTezgahMtul) || 0)
+    normalTezgahMtul +
+    normalTezgahArasiMtul +
+    normalAdaTezgahMtul +
+    ozel1Mtul +
+    ozel2Mtul +
+    ozel3Mtul
 
   let toplamSureDakika =
-    (parseFloat(metrajMtul) || 0) * (parseFloat(birMtulDakika) || 0) +
-    (parseFloat(tezgahArasiMtul) || 0) * (parseFloat(tezgahArasiDakika) || 0) +
-    (parseFloat(adaTezgahMtul) || 0) * (parseFloat(adaTezgahDakika) || 0)
+    normalTezgahMtul * (parseFloat(birMtulDakika) || 0) +
+    normalTezgahArasiMtul * (parseFloat(tezgahArasiDakika) || 0) +
+    normalAdaTezgahMtul * (parseFloat(adaTezgahDakika) || 0) +
+    ozel1Mtul * (parseFloat(ozelIscilik1Dakika) || 0) +
+    ozel2Mtul * (parseFloat(ozelIscilik2Dakika) || 0) +
+    ozel3Mtul * (parseFloat(ozelIscilik3Dakika) || 0)
 
   for (const op of operasyonlar || []) {
-    toplamSureDakika += op.toplamDakika
+    toplamSureDakika += Number(op.toplamDakika) || 0
   }
 
   const iscilikMaliyeti = toplamSureDakika * dakikaMaliyeti
-  const kullanilanPlakaSayisi = toplamMetraj / gercekPlakaMtul
-  const malzemeMaliyeti = kullanilanPlakaSayisi * (parseFloat(plakaFiyatiEuro) || 0) * (parseFloat(kullanilanKur) || 0)
+
+  const otomatikPlakaSayisi =
+    gercekPlakaMtul > 0 ? Math.ceil(toplamMetraj / gercekPlakaMtul) : 0
+
+  const kullanilanPlakaSayisi =
+    Number(manuelPlakaSayisi) > 0 ? Number(manuelPlakaSayisi) : otomatikPlakaSayisi
+
+  const malzemeMaliyeti =
+    kullanilanPlakaSayisi *
+    (parseFloat(plakaFiyatiEuro) || 0) *
+    (parseFloat(kullanilanKur) || 0)
+
   const toplamMaliyet = iscilikMaliyeti + malzemeMaliyeti
   const satisFiyati = toplamMaliyet * (1 + (parseFloat(karYuzdesi) || 0) / 100)
   const kdvTutari = satisFiyati * (kdvOrani / 100)
@@ -99,17 +172,18 @@ export async function POST(req: NextRequest) {
   const is = await prisma.is.create({
     data: {
       atolyeId: atolye.id,
+      musteriId: bagliMusteriId,
       teklifNo,
       musteriAdi,
       urunAdi,
       malzemeTipi,
       musteriTipi,
       plakaFiyatiEuro: parseFloat(plakaFiyatiEuro) || 0,
-      metrajMtul: parseFloat(metrajMtul) || 0,
+      metrajMtul: normalTezgahMtul,
       birMtulDakika: parseFloat(birMtulDakika) || 0,
-      tezgahArasiMtul: parseFloat(tezgahArasiMtul) || 0,
+      tezgahArasiMtul: normalTezgahArasiMtul,
       tezgahArasiDakika: parseFloat(tezgahArasiDakika) || 0,
-      adaTezgahMtul: parseFloat(adaTezgahMtul) || 0,
+      adaTezgahMtul: normalAdaTezgahMtul,
       adaTezgahDakika: parseFloat(adaTezgahDakika) || 0,
       kullanilanKur: parseFloat(kullanilanKur) || 0,
       plakaGenislikCm: parseFloat(plakaGenislikCm) || 0,
@@ -157,7 +231,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     is, toplamSureDakika, iscilikMaliyeti, malzemeMaliyeti,
     toplamMaliyet, satisFiyati, kdvTutari, kdvDahilFiyat,
-    mtulSatisFiyati, toplamMetraj, teklifNo,
+    mtulSatisFiyati, toplamMetraj, kullanilanPlakaSayisi, teklifNo,
     teklifGecerlilikTarihi: teklifGecerlilikTarihi.toISOString()
   })
 }

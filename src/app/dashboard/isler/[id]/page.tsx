@@ -9,6 +9,7 @@ import { PlakaPlanlayiciMini, type PlakaHesapSonucu } from '@/components/plaka-p
 const inputStil: React.CSSProperties = { width:'100%', border:'1px solid #d1d5db', borderRadius:'8px', padding:'8px 12px', fontSize:'14px', boxSizing:'border-box' }
 const labelStil: React.CSSProperties = { display:'block', fontSize:'13px', fontWeight:'500', color:'#374151', marginBottom:'4px' }
 const gridStil: React.CSSProperties = { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'16px' }
+const ikiKolonStil: React.CSSProperties = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px' }
 
 type Makine = { id: string; makineAdi: string; dakikalikMaliyet: number }
 type Operasyon = { operasyonTipi: string; makineId: string; adet: number; birimDakika: number; toplamDakika: number }
@@ -35,16 +36,39 @@ export default function IsDuzenle() {
   const [atolyeBilgi, setAtolyeBilgi] = useState<{adi:string;adres:string;telefon:string;email:string;sehir:string;ilce:string;logoUrl:string;kdvOrani:number}>({adi:'',adres:'',telefon:'',email:'',sehir:'',ilce:'',logoUrl:'',kdvOrani:20})
   const [mevcutDurum, setMevcutDurum] = useState('teklif_verildi')
   const [plakaHesap, setPlakaHesap] = useState<PlakaHesapSonucu | null>(null)
-  const [sonuc, setSonuc] = useState<{toplamSureDakika:number;iscilikMaliyeti:number;malzemeMaliyeti:number;toplamMaliyet:number;satisFiyati:number;mtulSatisFiyati:number;toplamMetraj:number;kdvTutari:number;kdvDahilFiyat:number;teklifNo:string;teklifGecerlilikTarihi:string} | null>(null)
+  const [sonuc, setSonuc] = useState<{toplamSureDakika:number;iscilikMaliyeti:number;malzemeMaliyeti:number;toplamMaliyet:number;satisFiyati:number;mtulSatisFiyati:number;toplamMetraj:number;kdvTutari:number;kdvDahilFiyat:number;teklifNo:string;teklifGecerlilikTarihi:string;kullanilanPlakaSayisi:number} | null>(null)
 
   const [form, setForm] = useState({
-    musteriAdi:'', urunAdi:'', malzemeTipi:'Porselen', musteriTipi:'Ev sahibi',
-    plakaFiyatiEuro:'', metrajMtul:'', birMtulDakika:'',
-    tezgahArasiMtul:'', tezgahArasiDakika:'',
-    adaTezgahMtul:'', adaTezgahDakika:'',
-    kullanilanKur:'', karYuzdesi:'30', notlar:'',
-    plakaGenislikCm:'', plakaUzunlukCm:'', plakadanAlinanMtul:'',
-    kirilanTasPlaka:'0', hataliKesimPlaka:'0',
+    musteriAdi:'',
+    urunAdi:'',
+    malzemeTipi:'Porselen',
+    musteriTipi:'Ev sahibi',
+    plakaFiyatiEuro:'',
+    metrajMtul:'',
+    birMtulDakika:'',
+    tezgahArasiMtul:'',
+    tezgahArasiDakika:'',
+    adaTezgahMtul:'',
+    adaTezgahDakika:'',
+    kullanilanKur:'',
+    karYuzdesi:'30',
+    notlar:'',
+    plakaGenislikCm:'',
+    plakaUzunlukCm:'',
+    plakadanAlinanMtul:'',
+    kirilanTasPlaka:'0',
+    hataliKesimPlaka:'0',
+    manuelPlakaSayisi:'',
+
+    ozelIscilik1Mtul:'',
+    ozelIscilik1Dakika:'',
+    ozelIscilik1Aciklama:'',
+    ozelIscilik2Mtul:'',
+    ozelIscilik2Dakika:'',
+    ozelIscilik2Aciklama:'',
+    ozelIscilik3Mtul:'',
+    ozelIscilik3Dakika:'',
+    ozelIscilik3Aciklama:'',
   })
 
   const [seciliOperasyonlar, setSeciliOperasyonlar] = useState<{[key:string]:boolean}>({})
@@ -66,14 +90,25 @@ export default function IsDuzenle() {
         if (atolyeVeri.atolye) {
           const a = atolyeVeri.atolye
           setPlakaBasinaOrtMtul(Number(a.plakaBasinaMtul).toFixed(2))
-          setAtolyeBilgi({adi:a.atolyeAdi||'',adres:a.adres||'',telefon:a.telefon||'',email:a.email||'',sehir:a.sehir||'',ilce:a.ilce||'',logoUrl:a.logoUrl||'',kdvOrani:a.kdvOrani||20})
+          setAtolyeBilgi({
+            adi:a.atolyeAdi||'',
+            adres:a.adres||'',
+            telefon:a.telefon||'',
+            email:a.email||'',
+            sehir:a.sehir||'',
+            ilce:a.ilce||'',
+            logoUrl:a.logoUrl||'',
+            kdvOrani:a.kdvOrani||20
+          })
         }
         if (isVeri.is) {
           const is = isVeri.is
           setMevcutDurum(is.durum)
           setForm({
-            musteriAdi:is.musteriAdi||'', urunAdi:is.urunAdi||'',
-            malzemeTipi:is.malzemeTipi||'Porselen', musteriTipi:is.musteriTipi||'Ev sahibi',
+            musteriAdi:is.musteriAdi||'',
+            urunAdi:is.urunAdi||'',
+            malzemeTipi:is.malzemeTipi||'Porselen',
+            musteriTipi:is.musteriTipi||'Ev sahibi',
             plakaFiyatiEuro:String(Number(is.plakaFiyatiEuro)||''),
             metrajMtul:String(Number(is.metrajMtul)||''),
             birMtulDakika:String(Number(is.birMtulDakika)||''),
@@ -89,28 +124,51 @@ export default function IsDuzenle() {
             plakadanAlinanMtul:String(Number(is.plakadanAlinanMtul)||''),
             kirilanTasPlaka:String(Number(is.kirilanTasPlaka)||'0'),
             hataliKesimPlaka:String(Number(is.hataliKesimPlaka)||'0'),
+            manuelPlakaSayisi:'',
+            ozelIscilik1Mtul:'',
+            ozelIscilik1Dakika:'',
+            ozelIscilik1Aciklama:'',
+            ozelIscilik2Mtul:'',
+            ozelIscilik2Dakika:'',
+            ozelIscilik2Aciklama:'',
+            ozelIscilik3Mtul:'',
+            ozelIscilik3Dakika:'',
+            ozelIscilik3Aciklama:'',
           })
           if (is.operasyonlar) {
             const secili: {[key:string]:boolean} = {}
             const detay: {[key:string]:{makineId:string;adet:string;birimDakika:string}} = {}
             for (const op of is.operasyonlar) {
               secili[op.operasyonTipi] = true
-              detay[op.operasyonTipi] = {makineId:op.makineId||'',adet:String(op.adet),birimDakika:String(op.birimDakika)}
+              detay[op.operasyonTipi] = {
+                makineId:op.makineId||'',
+                adet:String(op.adet),
+                birimDakika:String(op.birimDakika)
+              }
             }
             setSeciliOperasyonlar(secili)
             setOperasyonDetay(detay)
           }
         }
-      } finally { setYukleniyor(false) }
+      } finally {
+        setYukleniyor(false)
+      }
     }
     yukle()
   }, [isId])
 
-  function guncelle(alan: string, deger: string) { setForm(prev => ({...prev, [alan]: deger})) }
+  function guncelle(alan: string, deger: string) {
+    setForm(prev => ({...prev, [alan]: deger}))
+  }
 
   function operasyonToggle(key: string) {
     setSeciliOperasyonlar(prev => ({...prev, [key]: !prev[key]}))
-    if (!operasyonDetay[key]) setOperasyonDetay(prev => ({...prev, [key]: {makineId: makineler[0]?.id||'', adet:'', birimDakika:''}}))
+    if (!operasyonDetay[key]) {
+      setOperasyonDetay(prev => ({
+        ...prev,
+        [key]: {makineId: makineler[0]?.id||'', adet:'', birimDakika:''}
+      }))
+    }
   }
 
   function operasyonGuncelle(key: string, alan: string, deger: string) {
@@ -119,24 +177,51 @@ export default function IsDuzenle() {
 
   const onaylandi = mevcutDurum === 'onaylandi'
 
+  const toplamMetrajHesap =
+    (parseFloat(form.metrajMtul) || 0) +
+    (parseFloat(form.tezgahArasiMtul) || 0) +
+    (parseFloat(form.adaTezgahMtul) || 0) +
+    (parseFloat(form.ozelIscilik1Mtul) || 0) +
+    (parseFloat(form.ozelIscilik2Mtul) || 0) +
+    (parseFloat(form.ozelIscilik3Mtul) || 0)
+
+  const otomatikPlakaSayisi =
+    (parseFloat(form.plakadanAlinanMtul) || 0) > 0
+      ? Math.ceil(toplamMetrajHesap / (parseFloat(form.plakadanAlinanMtul) || 1))
+      : 0
+
+  const gosterilenPlakaSayisi =
+    (parseFloat(form.manuelPlakaSayisi) || 0) > 0
+      ? parseFloat(form.manuelPlakaSayisi)
+      : otomatikPlakaSayisi
+
   async function kaydet(e: React.FormEvent) {
     e.preventDefault()
     setKaydediliyor(true)
     setSonuc(null)
+
     const operasyonlar: Operasyon[] = OPERASYONLAR
       .filter(op => seciliOperasyonlar[op.key])
       .map(op => {
         const detay = operasyonDetay[op.key]
         const adet = parseInt(detay?.adet)||1
         const birimDakika = parseFloat(detay?.birimDakika)||op.varsayilanDakika
-        return {operasyonTipi:op.key, makineId:detay?.makineId||'', adet, birimDakika, toplamDakika:adet*birimDakika}
+        return {
+          operasyonTipi:op.key,
+          makineId:detay?.makineId||'',
+          adet,
+          birimDakika,
+          toplamDakika:adet*birimDakika
+        }
       })
+
     try {
       const yanit = await fetch(`/api/isler/${isId}`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          ...form, onaylandi,
+          ...form,
+          onaylandi,
           plakaFiyatiEuro:parseFloat(form.plakaFiyatiEuro)||0,
           metrajMtul:parseFloat(form.metrajMtul)||0,
           birMtulDakika:parseFloat(form.birMtulDakika)||0,
@@ -151,38 +236,79 @@ export default function IsDuzenle() {
           plakadanAlinanMtul:parseFloat(form.plakadanAlinanMtul)||0,
           kirilanTasPlaka:parseFloat(form.kirilanTasPlaka)||0,
           hataliKesimPlaka:parseFloat(form.hataliKesimPlaka)||0,
+          manuelPlakaSayisi:parseFloat(form.manuelPlakaSayisi)||0,
+
+          ozelIscilik1Mtul:parseFloat(form.ozelIscilik1Mtul)||0,
+          ozelIscilik1Dakika:parseFloat(form.ozelIscilik1Dakika)||0,
+          ozelIscilik2Mtul:parseFloat(form.ozelIscilik2Mtul)||0,
+          ozelIscilik2Dakika:parseFloat(form.ozelIscilik2Dakika)||0,
+          ozelIscilik3Mtul:parseFloat(form.ozelIscilik3Mtul)||0,
+          ozelIscilik3Dakika:parseFloat(form.ozelIscilik3Dakika)||0,
+
           operasyonlar,
         }),
       })
       const veri = await yanit.json()
       if (yanit.ok) setSonuc(veri)
-    } finally { setKaydediliyor(false) }
+    } finally {
+      setKaydediliyor(false)
+    }
   }
 
   async function pdfIndir() {
     if (!sonuc) return
+
+    const odemeKosullari = window.prompt(
+      'Ödeme Koşulları',
+      'Sipariş onayı sonrası ödeme planı ayrıca mutabık kalınacaktır.'
+    )
+    if (odemeKosullari === null) return
+
+    const teslimTarihi = window.prompt(
+      'Teslim Tarihi',
+      'Termin, ölçü ve kesin sipariş onayı sonrası netleşecektir.'
+    )
+    if (teslimTarihi === null) return
+
     setPdfYukleniyor(true)
     try {
       await teklifPdfIndir({
-        teklifNo:sonuc.teklifNo, tarih:new Date().toLocaleDateString('tr-TR'),
+        teklifNo:sonuc.teklifNo,
+        tarih:new Date().toLocaleDateString('tr-TR'),
         gecerlilikTarihi:new Date(sonuc.teklifGecerlilikTarihi).toLocaleDateString('tr-TR'),
-        firma:atolyeBilgi, musteri:{adi:form.musteriAdi, tipi:form.musteriTipi},
+        firma:atolyeBilgi,
+        musteri:{adi:form.musteriAdi, tipi:form.musteriTipi},
+        odemeKosullari,
+        teslimTarihi,
         is:{
-          urunAdi:form.urunAdi, malzemeTipi:form.malzemeTipi,
-          metrajMtul:parseFloat(form.metrajMtul)||0, tezgahArasiMtul:parseFloat(form.tezgahArasiMtul)||0,
-          adaTezgahMtul:parseFloat(form.adaTezgahMtul)||0, toplamMetraj:sonuc.toplamMetraj,
-          plakaGenislikCm:parseFloat(form.plakaGenislikCm)||0, plakaUzunlukCm:parseFloat(form.plakaUzunlukCm)||0,
+          urunAdi:form.urunAdi,
+          malzemeTipi:form.malzemeTipi,
+          metrajMtul:parseFloat(form.metrajMtul)||0,
+          tezgahArasiMtul:parseFloat(form.tezgahArasiMtul)||0,
+          adaTezgahMtul:parseFloat(form.adaTezgahMtul)||0,
+          toplamMetraj:sonuc.toplamMetraj,
+          plakaGenislikCm:parseFloat(form.plakaGenislikCm)||0,
+          plakaUzunlukCm:parseFloat(form.plakaUzunlukCm)||0,
           plakadanAlinanMtul:parseFloat(form.plakadanAlinanMtul)||0,
-          kullanilanPlakaSayisi:sonuc.toplamMetraj/(parseFloat(form.plakadanAlinanMtul)||3.2),
-          plakaFiyatiEuro:parseFloat(form.plakaFiyatiEuro)||0, kullanilanKur:parseFloat(form.kullanilanKur)||0,
-          toplamSureDakika:sonuc.toplamSureDakika, iscilikMaliyeti:sonuc.iscilikMaliyeti,
-          malzemeMaliyeti:sonuc.malzemeMaliyeti, toplamMaliyet:sonuc.toplamMaliyet,
-          karYuzdesi:parseFloat(form.karYuzdesi)||0, satisFiyati:sonuc.satisFiyati,
-          kdvOrani:atolyeBilgi.kdvOrani, kdvTutari:sonuc.kdvTutari, kdvDahilFiyat:sonuc.kdvDahilFiyat,
-          mtulSatisFiyati:sonuc.mtulSatisFiyati, notlar:form.notlar,
+          kullanilanPlakaSayisi:sonuc.kullanilanPlakaSayisi,
+          plakaFiyatiEuro:parseFloat(form.plakaFiyatiEuro)||0,
+          kullanilanKur:parseFloat(form.kullanilanKur)||0,
+          toplamSureDakika:sonuc.toplamSureDakika,
+          iscilikMaliyeti:sonuc.iscilikMaliyeti,
+          malzemeMaliyeti:sonuc.malzemeMaliyeti,
+          toplamMaliyet:sonuc.toplamMaliyet,
+          karYuzdesi:parseFloat(form.karYuzdesi)||0,
+          satisFiyati:sonuc.satisFiyati,
+          kdvOrani:atolyeBilgi.kdvOrani,
+          kdvTutari:sonuc.kdvTutari,
+          kdvDahilFiyat:sonuc.kdvDahilFiyat,
+          mtulSatisFiyati:sonuc.mtulSatisFiyati,
+          notlar:form.notlar,
         },
       })
-    } finally { setPdfYukleniyor(false) }
+    } finally {
+      setPdfYukleniyor(false)
+    }
   }
 
   if (yukleniyor) return <div style={{padding:'32px'}}>Yükleniyor...</div>
@@ -209,6 +335,13 @@ export default function IsDuzenle() {
                 <option>Ev sahibi</option><option>Mimar</option><option>Müteahhit</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <div style={{background:'white', borderRadius:'12px', padding:'24px', border:'1px solid #e5e7eb', marginBottom:'20px'}}>
+          <h3 style={{fontSize:'16px', fontWeight:'600', margin:'0 0 20px', paddingBottom:'12px', borderBottom:'1px solid #f3f4f6'}}>Plaka Bilgileri</h3>
+
+          <div style={gridStil}>
             <div><label style={labelStil}>Ürün Adı</label><input style={inputStil} required value={form.urunAdi} onChange={e => guncelle('urunAdi', e.target.value)} /></div>
             <div><label style={labelStil}>Malzeme Tipi</label>
               <select style={inputStil} value={form.malzemeTipi} onChange={e => guncelle('malzemeTipi', e.target.value)}>
@@ -216,13 +349,13 @@ export default function IsDuzenle() {
               </select>
             </div>
           </div>
-        </div>
 
-        <div style={{background:'white', borderRadius:'12px', padding:'24px', border:'1px solid #e5e7eb', marginBottom:'20px'}}>
-          <h3 style={{fontSize:'16px', fontWeight:'600', margin:'0 0 20px', paddingBottom:'12px', borderBottom:'1px solid #f3f4f6'}}>Plaka Bilgileri</h3>
+          <div style={{height:'16px'}}></div>
+
           <div style={{background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'8px', padding:'10px 14px', marginBottom:'16px', fontSize:'13px', color:'#92400e'}}>
             Atölye ortalaması: <strong>{plakaBasinaOrtMtul} mtül/plaka</strong>
           </div>
+
           <div style={gridStil}>
             <div><label style={labelStil}>Plaka Genişliği (cm)</label><input style={inputStil} type="number" step="0.1" value={form.plakaGenislikCm} onChange={e => guncelle('plakaGenislikCm', e.target.value)} /></div>
             <div><label style={labelStil}>Plaka Uzunluğu (cm)</label><input style={inputStil} type="number" step="0.1" value={form.plakaUzunlukCm} onChange={e => guncelle('plakaUzunlukCm', e.target.value)} /></div>
@@ -230,6 +363,7 @@ export default function IsDuzenle() {
             <div><label style={labelStil}>Plaka Fiyatı (€)</label><input style={inputStil} type="number" step="0.01" required value={form.plakaFiyatiEuro} onChange={e => guncelle('plakaFiyatiEuro', e.target.value)} /></div>
             <div><label style={labelStil}>Güncel Kur (1€ = ? TL)</label><input style={inputStil} type="number" step="0.01" required value={form.kullanilanKur} onChange={e => guncelle('kullanilanKur', e.target.value)} /></div>
           </div>
+
           <PlakaPlanlayiciMini
             plakaEni={form.plakaGenislikCm}
             plakaBoy={form.plakaUzunlukCm}
@@ -255,13 +389,62 @@ export default function IsDuzenle() {
 
         <div style={{background:'white', borderRadius:'12px', padding:'24px', border:'1px solid #e5e7eb', marginBottom:'20px'}}>
           <h3 style={{fontSize:'16px', fontWeight:'600', margin:'0 0 20px', paddingBottom:'12px', borderBottom:'1px solid #f3f4f6'}}>Metraj ve Üretim</h3>
-          <div style={gridStil}>
+
+          <div style={ikiKolonStil}>
             <div><label style={labelStil}>Tezgah (mtül)</label><input style={inputStil} type="number" step="0.01" required value={form.metrajMtul} onChange={e => guncelle('metrajMtul', e.target.value)} /></div>
             <div><label style={labelStil}>Tezgah 1 mtül Üretim Süresi (dk)</label><input style={inputStil} type="number" step="0.1" required value={form.birMtulDakika} onChange={e => guncelle('birMtulDakika', e.target.value)} /></div>
+
             <div><label style={labelStil}>Tezgah Arası (mtül)</label><input style={inputStil} type="number" step="0.01" value={form.tezgahArasiMtul} onChange={e => guncelle('tezgahArasiMtul', e.target.value)} /></div>
             <div><label style={labelStil}>Tezgah Arası 1 mtül Üretim Süresi (dk)</label><input style={inputStil} type="number" step="0.1" value={form.tezgahArasiDakika} onChange={e => guncelle('tezgahArasiDakika', e.target.value)} /></div>
+
             <div><label style={labelStil}>Ada Tezgah (mtül)</label><input style={inputStil} type="number" step="0.01" value={form.adaTezgahMtul} onChange={e => guncelle('adaTezgahMtul', e.target.value)} /></div>
             <div><label style={labelStil}>Ada Tezgah 1 mtül Üretim Süresi (dk)</label><input style={inputStil} type="number" step="0.1" value={form.adaTezgahDakika} onChange={e => guncelle('adaTezgahDakika', e.target.value)} /></div>
+
+            <div><label style={labelStil}>Özel İşçilik 1</label><input style={inputStil} type="number" step="0.01" value={form.ozelIscilik1Mtul} onChange={e => guncelle('ozelIscilik1Mtul', e.target.value)} placeholder="mtül" /></div>
+            <div><label style={labelStil}>İşçilik Detayı 1</label><input style={inputStil} value={form.ozelIscilik1Aciklama} onChange={e => guncelle('ozelIscilik1Aciklama', e.target.value)} placeholder="Açıklama" /></div>
+
+            <div><label style={labelStil}>Özel İşçilik 1 mtül Üretim Süresi (dk)</label><input style={inputStil} type="number" step="0.1" value={form.ozelIscilik1Dakika} onChange={e => guncelle('ozelIscilik1Dakika', e.target.value)} /></div>
+            <div></div>
+
+            <div><label style={labelStil}>Özel İşçilik 2</label><input style={inputStil} type="number" step="0.01" value={form.ozelIscilik2Mtul} onChange={e => guncelle('ozelIscilik2Mtul', e.target.value)} placeholder="mtül" /></div>
+            <div><label style={labelStil}>İşçilik Detayı 2</label><input style={inputStil} value={form.ozelIscilik2Aciklama} onChange={e => guncelle('ozelIscilik2Aciklama', e.target.value)} placeholder="Açıklama" /></div>
+
+            <div><label style={labelStil}>Özel İşçilik 2 mtül Üretim Süresi (dk)</label><input style={inputStil} type="number" step="0.1" value={form.ozelIscilik2Dakika} onChange={e => guncelle('ozelIscilik2Dakika', e.target.value)} placeholder="0" /></div>
+            <div></div>
+
+            <div><label style={labelStil}>Özel İşçilik 3</label><input style={inputStil} type="number" step="0.01" value={form.ozelIscilik3Mtul} onChange={e => guncelle('ozelIscilik3Mtul', e.target.value)} placeholder="mtül" /></div>
+            <div><label style={labelStil}>İşçilik Detayı 3</label><input style={inputStil} value={form.ozelIscilik3Aciklama} onChange={e => guncelle('ozelIscilik3Aciklama', e.target.value)} placeholder="Açıklama" /></div>
+
+            <div><label style={labelStil}>Özel İşçilik 3 mtül Üretim Süresi (dk)</label><input style={inputStil} type="number" step="0.1" value={form.ozelIscilik3Dakika} onChange={e => guncelle('ozelIscilik3Dakika', e.target.value)} placeholder="0" /></div>
+            <div></div>
+          </div>
+
+          <div style={{marginTop:'20px', background:'#f8fafc', border:'1px solid #e5e7eb', borderRadius:'10px', padding:'16px'}}>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'16px'}}>
+              <div>
+                <div style={{fontSize:'12px', color:'#6b7280', marginBottom:'4px'}}>Toplam Mtül</div>
+                <div style={{fontSize:'18px', fontWeight:'700', color:'#111827'}}>{toplamMetrajHesap.toFixed(2)} mtül</div>
+              </div>
+              <div>
+                <div style={{fontSize:'12px', color:'#6b7280', marginBottom:'4px'}}>Otomatik Plaka İhtiyacı</div>
+                <div style={{fontSize:'18px', fontWeight:'700', color:'#111827'}}>{otomatikPlakaSayisi}</div>
+              </div>
+              <div>
+                <label style={labelStil}>Kaç Plaka Ürün Gerekiyor?</label>
+                <input
+                  style={inputStil}
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.manuelPlakaSayisi}
+                  onChange={e => guncelle('manuelPlakaSayisi', e.target.value)}
+                  placeholder={`Otomatik: ${otomatikPlakaSayisi}`}
+                />
+                <div style={{fontSize:'12px', color:'#6b7280', marginTop:'6px'}}>
+                  Boş bırakırsan otomatik hesap kullanılır. Aktif plaka sayısı: <strong>{gosterilenPlakaSayisi}</strong>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -313,7 +496,7 @@ export default function IsDuzenle() {
             {!onaylandi && <button onClick={pdfIndir} disabled={pdfYukleniyor} style={{background:'#dc2626', color:'white', border:'none', borderRadius:'8px', padding:'10px 20px', fontSize:'14px', cursor:'pointer'}}>{pdfYukleniyor?'Hazırlanıyor...':'📄 PDF Teklif İndir'}</button>}
           </div>
           <div style={{background:'#eff6ff', borderRadius:'8px', padding:'12px 16px', marginBottom:'16px', fontSize:'14px', color:'#1e40af'}}>
-            Toplam metraj: <strong>{sonuc.toplamMetraj.toFixed(2)} mtül</strong>
+            Toplam metraj: <strong>{sonuc.toplamMetraj.toFixed(2)} mtül</strong> — Kullanılan plaka: <strong>{sonuc.kullanilanPlakaSayisi}</strong>
           </div>
           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'16px'}}>
             <div style={{background:'white', borderRadius:'8px', padding:'16px', border:'1px solid #bbf7d0'}}>

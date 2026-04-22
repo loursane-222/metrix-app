@@ -13,7 +13,9 @@ async function kullaniciAl() {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
     const { payload } = await jwtVerify(token, secret)
     return payload as { id: string; email: string }
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 async function atolyeAl(userId: string) {
@@ -48,17 +50,59 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json()
   const onaylandi = body.onaylandi === true
 
-  const toplamMetraj = (body.metrajMtul||0) + (body.tezgahArasiMtul||0) + (body.adaTezgahMtul||0)
-  const normalPlakaSayisi = body.plakadanAlinanMtul > 0 ? toplamMetraj / body.plakadanAlinanMtul : 0
-  const ekPlaka = (body.kirilanTasPlaka||0) + (body.hataliKesimPlaka||0)
-  const toplamPlakaSayisi = normalPlakaSayisi + ekPlaka
-  const malzemeMaliyeti = toplamPlakaSayisi * body.plakaFiyatiEuro * body.kullanilanKur
+  let bagliMusteriId = mevcutIs.musteriId || null
+
+  if (body.musteriId) {
+    const mevcutMusteri = await prisma.musteri.findFirst({
+      where: {
+        id: body.musteriId,
+        atolyeId: atolye.id
+      }
+    })
+    if (mevcutMusteri) {
+      bagliMusteriId = mevcutMusteri.id
+    }
+  }
+
+  const normalTezgahMtul = Number(body.metrajMtul || 0)
+  const normalTezgahArasiMtul = Number(body.tezgahArasiMtul || 0)
+  const normalAdaTezgahMtul = Number(body.adaTezgahMtul || 0)
+
+  const ozel1Mtul = Number(body.ozelIscilik1Mtul || 0)
+  const ozel2Mtul = Number(body.ozelIscilik2Mtul || 0)
+  const ozel3Mtul = Number(body.ozelIscilik3Mtul || 0)
+
+  const toplamMetraj =
+    normalTezgahMtul +
+    normalTezgahArasiMtul +
+    normalAdaTezgahMtul +
+    ozel1Mtul +
+    ozel2Mtul +
+    ozel3Mtul
+
+  const otomatikPlakaSayisi =
+    body.plakadanAlinanMtul > 0
+      ? Math.ceil(toplamMetraj / body.plakadanAlinanMtul)
+      : 0
+
+  const ekPlaka = (body.kirilanTasPlaka || 0) + (body.hataliKesimPlaka || 0)
+
+  const toplamPlakaSayisi =
+    Number(body.manuelPlakaSayisi) > 0
+      ? Number(body.manuelPlakaSayisi)
+      : (otomatikPlakaSayisi + ekPlaka)
+
+  const malzemeMaliyeti =
+    toplamPlakaSayisi * body.plakaFiyatiEuro * body.kullanilanKur
 
   const toplamSureDakika =
-    (body.metrajMtul||0) * (body.birMtulDakika||0) +
-    (body.tezgahArasiMtul||0) * (body.tezgahArasiDakika||0) +
-    (body.adaTezgahMtul||0) * (body.adaTezgahDakika||0) +
-    (body.operasyonlar||[]).reduce((acc: number, op: any) => acc + (op.toplamDakika||0), 0)
+    normalTezgahMtul * Number(body.birMtulDakika || 0) +
+    normalTezgahArasiMtul * Number(body.tezgahArasiDakika || 0) +
+    normalAdaTezgahMtul * Number(body.adaTezgahDakika || 0) +
+    ozel1Mtul * Number(body.ozelIscilik1Dakika || 0) +
+    ozel2Mtul * Number(body.ozelIscilik2Dakika || 0) +
+    ozel3Mtul * Number(body.ozelIscilik3Dakika || 0) +
+    (body.operasyonlar || []).reduce((acc: number, op: any) => acc + (op.toplamDakika || 0), 0)
 
   const iscilikMaliyeti = toplamSureDakika * Number(atolye.dakikaMaliyeti)
   const toplamMaliyet = malzemeMaliyeti + iscilikMaliyeti
@@ -69,7 +113,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   let mtulSatisFiyati = Number(mevcutIs.mtulSatisFiyati)
 
   if (!onaylandi) {
-    satisFiyati = toplamMaliyet * (1 + (body.karYuzdesi||0) / 100)
+    satisFiyati = toplamMaliyet * (1 + (body.karYuzdesi || 0) / 100)
     kdvTutari = satisFiyati * (Number(atolye.kdvOrani) / 100)
     kdvDahilFiyat = satisFiyati + kdvTutari
     mtulSatisFiyati = toplamMetraj > 0 ? satisFiyati / toplamMetraj : 0
@@ -80,25 +124,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   await prisma.is.update({
     where: { id },
     data: {
+      musteriId: bagliMusteriId,
       musteriAdi: body.musteriAdi,
       urunAdi: body.urunAdi,
       malzemeTipi: body.malzemeTipi,
       musteriTipi: body.musteriTipi,
       plakaFiyatiEuro: body.plakaFiyatiEuro,
-      metrajMtul: body.metrajMtul,
+      metrajMtul: normalTezgahMtul,
       birMtulDakika: body.birMtulDakika,
-      tezgahArasiMtul: body.tezgahArasiMtul||0,
-      tezgahArasiDakika: body.tezgahArasiDakika||0,
-      adaTezgahMtul: body.adaTezgahMtul||0,
-      adaTezgahDakika: body.adaTezgahDakika||0,
+      tezgahArasiMtul: normalTezgahArasiMtul,
+      tezgahArasiDakika: body.tezgahArasiDakika || 0,
+      adaTezgahMtul: normalAdaTezgahMtul,
+      adaTezgahDakika: body.adaTezgahDakika || 0,
       kullanilanKur: body.kullanilanKur,
       karYuzdesi: body.karYuzdesi,
-      plakaGenislikCm: body.plakaGenislikCm||0,
-      plakaUzunlukCm: body.plakaUzunlukCm||0,
-      plakadanAlinanMtul: body.plakadanAlinanMtul||0,
+      plakaGenislikCm: body.plakaGenislikCm || 0,
+      plakaUzunlukCm: body.plakaUzunlukCm || 0,
+      plakadanAlinanMtul: body.plakadanAlinanMtul || 0,
       kullanilanPlakaSayisi: toplamPlakaSayisi,
-      kirilanTasPlaka: body.kirilanTasPlaka||0,
-      hataliKesimPlaka: body.hataliKesimPlaka||0,
+      kirilanTasPlaka: body.kirilanTasPlaka || 0,
+      hataliKesimPlaka: body.hataliKesimPlaka || 0,
       toplamSureDakika,
       iscilikMaliyeti,
       malzemeMaliyeti,
@@ -109,9 +154,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       mtulSatisFiyati,
       notlar: body.notlar,
       operasyonlar: {
-        create: (body.operasyonlar||[]).map((op: any) => ({
+        create: (body.operasyonlar || []).map((op: any) => ({
           operasyonTipi: op.operasyonTipi,
-          makineId: op.makineId||null,
+          makineId: op.makineId || null,
           adet: op.adet,
           birimDakika: op.birimDakika,
           toplamDakika: op.toplamDakika,
@@ -131,6 +176,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     mtulSatisFiyati,
     kdvTutari,
     kdvDahilFiyat,
+    kullanilanPlakaSayisi: toplamPlakaSayisi,
     teklifGecerlilikTarihi: mevcutIs.teklifGecerlilikTarihi,
   })
 }

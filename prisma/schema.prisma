@@ -8,21 +8,21 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  ad        String   @default("")
-  aktif     Boolean  @default(true)
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String
+  ad            String   @default("")
+  aktif         Boolean  @default(true)
   abonelikBitis DateTime?
-  createdAt DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   atolye Atolye?
 }
 
 model Atolye {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id])
 
   atolyeAdi String @default("")
   sehir     String @default("")
@@ -57,10 +57,11 @@ model Atolye {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  makineler Makine[]
-  araclar   Arac[]
-  isler     Is[]
+  makineler   Makine[]
+  araclar     Arac[]
+  isler       Is[]
   personeller Personel[]
+  musteriler  Musteri[]
 }
 
 model Makine {
@@ -106,10 +107,44 @@ model Arac {
   updatedAt DateTime @updatedAt
 }
 
+model Musteri {
+  id        String   @id @default(cuid())
+  atolyeId  String
+  atolye    Atolye   @relation(fields: [atolyeId], references: [id])
+
+  firmaAdi        String   @default("")
+  ad              String   @default("")
+  soyad           String   @default("")
+  telefon         String   @default("")
+  email           String   @default("")
+  acilisBakiyesi  Decimal  @default(0)
+  bakiyeTipi      String   @default("borc")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  isler       Is[]
+  tahsilatlar Tahsilat[]
+}
+
+model Tahsilat {
+  id        String   @id @default(cuid())
+  musteriId String
+  musteri   Musteri  @relation(fields: [musteriId], references: [id], onDelete: Cascade)
+
+  tarih     DateTime
+  tutar     Decimal  @default(0)
+
+  createdAt DateTime @default(now())
+}
+
 model Is {
   id       String @id @default(cuid())
   atolyeId String
   atolye   Atolye @relation(fields: [atolyeId], references: [id])
+
+  musteriId String?
+  musteri   Musteri? @relation(fields: [musteriId], references: [id])
 
   teklifNo    String @default("")
   musteriAdi  String @default("")
@@ -144,24 +179,24 @@ model Is {
   mtulSatisFiyati  Decimal @default(0)
 
   teklifGecerlilikTarihi DateTime?
-  kirilanTasPlaka    Decimal @default(0)
-  hataliKesimPlaka   Decimal @default(0)
+  kirilanTasPlaka        Decimal @default(0)
+  hataliKesimPlaka       Decimal @default(0)
 
-  durum  String  @default("teklif_verildi")
+  durum String @default("teklif_verildi")
 
-  tasDurumu  String?
+  tasDurumu String?
 
-  isTarihi   DateTime?
+  isTarihi DateTime?
 
-  tahsilat         Decimal   @default(0)
+  tahsilat         Decimal  @default(0)
   onaylanmaTarihi  DateTime?
   kaybedilmeTarihi DateTime?
-  notlar String?
+  notlar           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  operasyonlar IsOperasyon[]
+  operasyonlar  IsOperasyon[]
   workSchedule  WorkSchedule?
 }
 
@@ -181,6 +216,7 @@ model IsOperasyon {
 
   createdAt DateTime @default(now())
 }
+
 enum PhaseType {
   OLCU
   IMALAT
@@ -209,23 +245,23 @@ model SchedulePhase {
   workScheduleId String
   workSchedule   WorkSchedule @relation(fields: [workScheduleId], references: [id], onDelete: Cascade)
 
-  phase          PhaseType
+  phase        PhaseType
+  plannedStart DateTime?
+  plannedEnd   DateTime?
 
-  plannedStart   DateTime?
-  plannedEnd     DateTime?
+  isCompleted  Boolean   @default(false)
+  completedAt  DateTime?
+  completedBy  String?
 
-  isCompleted    Boolean   @default(false)
-  completedAt    DateTime?
-  completedBy    String?
+  isOverridden Boolean   @default(false)
+  overrideNote String?
+  notes        String?
 
-  isOverridden   Boolean   @default(false)
-  overrideNote   String?
-  notes          String?
-
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@unique([workScheduleId, phase])
+
   fazAtamalar FazAtama[]
 
   @@map("schedule_phases")
@@ -243,10 +279,10 @@ model Personel {
   bagliOldugu   Personel?  @relation("PersonelHiyerarsi", fields: [bagliOlduguId], references: [id])
   altPersonel   Personel[] @relation("PersonelHiyerarsi")
 
-  calismaYili   Int     @default(0)
-  telefon       String  @default("")
-  email         String  @default("")
-  aktif         Boolean @default(true)
+  calismaYili Int     @default(0)
+  telefon     String  @default("")
+  email       String  @default("")
+  aktif       Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

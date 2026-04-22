@@ -1,212 +1,239 @@
-export interface TeklifVerisi {
-  teklifNo: string
-  tarih: string
-  gecerlilikTarihi: string
-  firma: {
-    adi: string
-    adres: string
-    telefon: string
-    email: string
-    sehir: string
-    ilce: string
-    logoUrl: string
-  }
-  musteri: {
-    adi: string
-    tipi: string
-  }
-  is: {
-    urunAdi: string
-    malzemeTipi: string
-    metrajMtul: number
-    tezgahArasiMtul: number
-    adaTezgahMtul: number
-    toplamMetraj: number
-    plakaGenislikCm: number
-    plakaUzunlukCm: number
-    plakadanAlinanMtul: number
-    kullanilanPlakaSayisi: number
-    plakaFiyatiEuro: number
-    kullanilanKur: number
-    toplamSureDakika: number
-    iscilikMaliyeti: number
-    malzemeMaliyeti: number
-    toplamMaliyet: number
-    karYuzdesi: number
-    satisFiyati: number
-    kdvOrani: number
-    kdvTutari: number
-    kdvDahilFiyat: number
-    mtulSatisFiyati: number
-    notlar: string
-  }
-}
-
-function para(tutar: number, ondalik = 2): string {
-  return tutar.toLocaleString('tr-TR', {
-    minimumFractionDigits: ondalik,
-    maximumFractionDigits: ondalik,
+function para(n: number) {
+  return (Number(n) || 0).toLocaleString('tr-TR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })
 }
 
-async function urlToBase64(url: string): Promise<string> {
-  try {
-    const response = await fetch(url)
-    const blob = await response.blob()
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return ''
-  }
+function guvenliYazi(v: unknown) {
+  if (v === null || v === undefined) return ''
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
-export async function teklifPdfIndir(veri: TeklifVerisi) {
+export async function teklifPdfIndir(veri: any) {
   const html2pdf = (await import('html2pdf.js')).default
-  
-  // Logo'yu base64'e çevir
-  let logoBase64 = ''
-  if (veri.firma.logoUrl) {
-    const logoUrl = veri.firma.logoUrl.startsWith('http') 
-      ? veri.firma.logoUrl 
-      : window.location.origin + veri.firma.logoUrl
-    logoBase64 = await urlToBase64(logoUrl)
+
+  const element = document.createElement('div')
+
+  const firmaAdi = guvenliYazi(veri?.firma?.adi)
+  const firmaAdres = guvenliYazi(veri?.firma?.adres)
+  const firmaTelefon = guvenliYazi(veri?.firma?.telefon)
+  const firmaEmail = guvenliYazi(veri?.firma?.email)
+  const firmaLogo = guvenliYazi(veri?.firma?.logoUrl)
+
+  const musteriAdi = guvenliYazi(veri?.musteri?.adi)
+
+  const teklifNo = guvenliYazi(veri?.teklifNo)
+  const tarih = guvenliYazi(veri?.tarih)
+  const gecerlilikTarihi = guvenliYazi(veri?.gecerlilikTarihi)
+
+  const urunAdi = guvenliYazi(veri?.is?.urunAdi)
+  const malzemeTipi = guvenliYazi(veri?.is?.malzemeTipi)
+  const notlar = guvenliYazi(veri?.is?.notlar)
+
+  const odemeKosullari = guvenliYazi(
+    veri?.odemeKosullari || 'Sipariş onayı sonrası ödeme planı ayrıca mutabık kalınacaktır.'
+  )
+
+  const teslimTarihi = guvenliYazi(
+    veri?.teslimTarihi || 'Termin, ölçü ve kesin sipariş onayı sonrası netleşecektir.'
+  )
+
+  const tezgahMtul = Number(veri?.is?.metrajMtul || 0)
+  const tezgahArasiMtul = Number(veri?.is?.tezgahArasiMtul || 0)
+  const adaTezgahMtul = Number(veri?.is?.adaTezgahMtul || 0)
+
+  const toplamMetraj = Number(
+    veri?.is?.toplamMetraj || (tezgahMtul + tezgahArasiMtul + adaTezgahMtul)
+  )
+
+  const mtulSatisFiyati = Number(veri?.is?.mtulSatisFiyati || 0)
+  const satisFiyati = Number(veri?.is?.satisFiyati || 0)
+  const kdvTutari = Number(veri?.is?.kdvTutari || 0)
+  const kdvDahilFiyat = Number(veri?.is?.kdvDahilFiyat || 0)
+  const kdvOrani = Number(veri?.is?.kdvOrani || 20)
+
+  function satirOlustur(ad: string, mtul: number) {
+    return `
+      <tr>
+        <td style="border:1px solid #6b7280; padding:8px;">${guvenliYazi(ad)}</td>
+        <td style="border:1px solid #6b7280; padding:8px;">${malzemeTipi || '-'}</td>
+        <td style="border:1px solid #6b7280; padding:8px; text-align:center;">${mtul.toFixed(2)} mtül</td>
+        <td style="border:1px solid #6b7280; padding:8px; text-align:right;">₺${para(mtulSatisFiyati)}</td>
+        <td style="border:1px solid #6b7280; padding:8px; text-align:right;">₺${para(mtul * mtulSatisFiyati)}</td>
+      </tr>
+    `
   }
 
-  const satirlar = []
-  if (veri.is.metrajMtul > 0) {
-    satirlar.push({ tanim: 'Tezgah', miktar: veri.is.metrajMtul })
-  }
-  if (veri.is.tezgahArasiMtul > 0) {
-    satirlar.push({ tanim: 'Tezgah Arası', miktar: veri.is.tezgahArasiMtul })
-  }
-  if (veri.is.adaTezgahMtul > 0) {
-    satirlar.push({ tanim: 'Ada Tezgah', miktar: veri.is.adaTezgahMtul })
+  const tabloSatirlari: string[] = []
+
+  if (tezgahMtul > 0) {
+    tabloSatirlari.push(satirOlustur(`Tezgah - ${urunAdi || 'Ürün'}`, tezgahMtul))
   }
 
-  const birimFiyat = veri.is.toplamMetraj > 0 ? veri.is.satisFiyati / veri.is.toplamMetraj : 0
+  if (tezgahArasiMtul > 0) {
+    tabloSatirlari.push(satirOlustur('Tezgah Arası', tezgahArasiMtul))
+  }
 
-  const satirHtml = satirlar.map((s, i) => `
-    <tr style="background: ${i % 2 === 0 ? '#ffffff' : '#f9fafb'};">
-      <td style="padding: 10px 12px; font-size: 13px;">${s.tanim}</td>
-      <td style="padding: 10px 12px; font-size: 13px;">${veri.is.urunAdi} — ${veri.is.malzemeTipi}</td>
-      <td style="padding: 10px 12px; font-size: 13px; text-align: center;">${veri.is.plakaGenislikCm > 0 ? `${veri.is.plakaGenislikCm}x${veri.is.plakaUzunlukCm} cm` : '—'}</td>
-      <td style="padding: 10px 12px; font-size: 13px; text-align: right;">${para(s.miktar, 2)} mtül</td>
-      <td style="padding: 10px 12px; font-size: 13px; text-align: right;">₺${para(birimFiyat)}</td>
-      <td style="padding: 10px 12px; font-size: 13px; text-align: right; font-weight: 600;">₺${para(birimFiyat * s.miktar)}</td>
-    </tr>
-  `).join('')
+  if (adaTezgahMtul > 0) {
+    tabloSatirlari.push(satirOlustur('Ada Tezgah', adaTezgahMtul))
+  }
 
-  const icerik = `
-    <div style="font-family: Arial, sans-serif; padding: 32px; max-width: 794px; margin: 0 auto; color: #1f2937; font-size: 13px;">
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-        <tr>
-          <td style="width: 50%; vertical-align: top;">
-            ${logoBase64 ? `<img src="${logoBase64}" style="height: 120px; object-fit: contain; margin-bottom: 8px; display: block;" /><br/>` : ''}
-            <strong style="font-size: 16px; color: #111827;">${veri.firma.adi}</strong>
-          </td>
-          <td style="width: 50%; vertical-align: top; text-align: right; font-size: 12px; color: #4b5563; line-height: 1.8;">
-            ${veri.firma.adres ? `${veri.firma.adres}<br/>` : ''}
-            ${veri.firma.sehir ? `${veri.firma.sehir}${veri.firma.ilce ? ' / ' + veri.firma.ilce : ''}<br/>` : ''}
-            ${veri.firma.telefon ? `${veri.firma.telefon}<br/>` : ''}
-            ${veri.firma.email ? `${veri.firma.email}` : ''}
-          </td>
-        </tr>
-      </table>
-      <hr style="border: none; border-top: 2px solid #1e40af; margin-bottom: 20px;" />
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #e5e7eb;">
-        <tr>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; width: 30%;">Teklif Verilen Kuruluş</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb; width: 36%;">${veri.musteri.adi}</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600; width: 16%;">Teklif No</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb; width: 18%; font-weight: 700; color: #1e40af;">${veri.teklifNo}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600;">Müşteri Tipi</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${veri.musteri.tipi}</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600;">Teklif Tarihi</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${veri.tarih}</td>
-        </tr>
-        <tr>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600;">Ürün</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${veri.is.urunAdi}</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb; background: #f9fafb; font-weight: 600;">Geçerlilik Tarihi</td>
-          <td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${veri.gecerlilikTarihi}</td>
-        </tr>
-      </table>
-      <p style="margin: 0 0 20px; line-height: 1.7;">
-        Sayın <strong>${veri.musteri.adi}</strong>,<br/>
-        Yapmış olduğumuz görüşmeler sonucunda hazırlamış olduğumuz fiyat teklifimizi görüşlerinize sunarız.
-      </p>
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
-        <thead>
-          <tr style="background: #1e40af; color: white;">
-            <th style="padding: 10px 12px; text-align: left; font-size: 12px; font-weight: 600;">Kalem</th>
-            <th style="padding: 10px 12px; text-align: left; font-size: 12px; font-weight: 600;">Ürün Adı</th>
-            <th style="padding: 10px 12px; text-align: center; font-size: 12px; font-weight: 600;">Plaka Ölçüsü</th>
-            <th style="padding: 10px 12px; text-align: right; font-size: 12px; font-weight: 600;">Miktar</th>
-            <th style="padding: 10px 12px; text-align: right; font-size: 12px; font-weight: 600;">Birim Fiyat</th>
-            <th style="padding: 10px 12px; text-align: right; font-size: 12px; font-weight: 600;">Toplam</th>
-          </tr>
-        </thead>
-        <tbody>${satirHtml}</tbody>
-      </table>
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-        <tr>
-          <td style="width: 60%;"></td>
-          <td style="width: 40%;">
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb;">
-              <tr style="background: #f9fafb;">
-                <td style="padding: 8px 12px; font-weight: 600; border: 1px solid #e5e7eb;">Alt Toplam</td>
-                <td style="padding: 8px 12px; text-align: right; border: 1px solid #e5e7eb;">₺${para(veri.is.satisFiyati)}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 12px; border: 1px solid #e5e7eb;">KDV %${veri.is.kdvOrani}</td>
-                <td style="padding: 8px 12px; text-align: right; border: 1px solid #e5e7eb;">₺${para(veri.is.kdvTutari)}</td>
-              </tr>
-              <tr style="background: #1e40af; color: white;">
-                <td style="padding: 10px 12px; font-weight: 700; font-size: 14px;">Genel Toplam</td>
-                <td style="padding: 10px 12px; text-align: right; font-weight: 700; font-size: 14px;">₺${para(veri.is.kdvDahilFiyat)}</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-      ${veri.is.notlar ? `
-      <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px 16px; margin-bottom: 20px; background: #f9fafb;">
-        <p style="margin: 0 0 4px; font-weight: 600; font-size: 12px;">Notlar:</p>
-        <p style="margin: 0; font-size: 13px; color: #374151;">${veri.is.notlar}</p>
+  if (tabloSatirlari.length === 0) {
+    tabloSatirlari.push(satirOlustur(urunAdi || 'Ürün / Uygulama', toplamMetraj))
+  }
+
+  element.innerHTML = `
+  <div style="
+    width: 182mm;
+    box-sizing: border-box;
+    background: #ffffff;
+    color: #111827;
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 14mm 12mm 12mm 12mm;
+  ">
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:10px;">
+      <div style="display:flex; align-items:flex-start; gap:14px; max-width:60%;">
+        ${firmaLogo ? `<img src="${firmaLogo}" style="max-height:42px; max-width:140px; object-fit:contain;" />` : ''}
+        <div>
+          <div style="font-size:20px; font-weight:700; line-height:1.2; margin-bottom:4px;">${firmaAdi}</div>
+          <div style="font-size:11px; color:#4b5563; line-height:1.45;">
+            ${firmaAdres || ''}
+          </div>
+        </div>
       </div>
-      ` : ''}
-      <hr style="border: none; border-top: 1px solid #e5e7eb; margin-bottom: 16px;" />
-      <table style="width: 100%; border-collapse: collapse;">
+
+      <div style="text-align:right; font-size:11px; line-height:1.6; color:#111827; max-width:32%;">
+        <div>${firmaTelefon || ''}</div>
+        <div>${firmaEmail || ''}</div>
+      </div>
+    </div>
+
+    <div style="height:3px; background:#1d4ed8; margin:8px 0 16px 0;"></div>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:16px;">
+      <div>
+        <div style="font-size:23px; font-weight:800; letter-spacing:0.2px;">FİYAT TEKLİFİ</div>
+      </div>
+      <div style="text-align:right; font-size:11.5px; line-height:1.7;">
+        <div><strong>No:</strong> ${teklifNo}</div>
+        <div><strong>Tarih:</strong> ${tarih}</div>
+      </div>
+    </div>
+
+    <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:14px;">
+      <tr>
+        <td style="width:30%; border:1px solid #9ca3af; padding:8px; background:#f9fafb;"><strong>Teklif Verilen Kuruluş</strong></td>
+        <td style="width:70%; border:1px solid #9ca3af; padding:8px;">${musteriAdi}</td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #9ca3af; padding:8px; background:#f9fafb;"><strong>İlgili</strong></td>
+        <td style="border:1px solid #9ca3af; padding:8px;">${musteriAdi}</td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #9ca3af; padding:8px; background:#f9fafb;"><strong>Teklif Tarihi</strong></td>
+        <td style="border:1px solid #9ca3af; padding:8px;">${tarih}</td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #9ca3af; padding:8px; background:#f9fafb;"><strong>Geçerlilik Tarihi</strong></td>
+        <td style="border:1px solid #9ca3af; padding:8px;">${gecerlilikTarihi}</td>
+      </tr>
+    </table>
+
+    <div style="font-size:11.5px; line-height:1.6; margin-bottom:12px;">
+      Sayın İlgili,
+    </div>
+    <div style="font-size:11.5px; line-height:1.6; margin-bottom:16px;">
+      Yapmış olduğumuz görüşmeler sonucunda hazırlamış olduğumuz fiyat teklifimizi görüşlerinize sunarız.
+    </div>
+
+    <table style="width:100%; border-collapse:collapse; font-size:11px; margin-bottom:0;">
+      <thead>
+        <tr style="background:#f3f4f6;">
+          <th style="border:1px solid #6b7280; padding:8px; text-align:left;">Ürün / Açıklama</th>
+          <th style="border:1px solid #6b7280; padding:8px; text-align:left;">Malzeme</th>
+          <th style="border:1px solid #6b7280; padding:8px; text-align:center;">Miktar</th>
+          <th style="border:1px solid #6b7280; padding:8px; text-align:right;">Birim Fiyat</th>
+          <th style="border:1px solid #6b7280; padding:8px; text-align:right;">Toplam</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tabloSatirlari.join('')}
+      </tbody>
+    </table>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:0; margin-bottom:18px;">
+      <table style="width:320px; border-collapse:collapse; font-size:11px;">
         <tr>
-          <td style="vertical-align: top; font-size: 12px; color: #6b7280; line-height: 1.8; width: 60%;">
-            Bu teklif <strong>${veri.gecerlilikTarihi}</strong> tarihine kadar geçerlidir.
-          </td>
-          <td style="vertical-align: top; text-align: right; font-size: 13px;">
-            <p style="margin: 0 0 4px; color: #6b7280;">Saygılarımızla,</p>
-            <p style="margin: 0; font-weight: 700; color: #111827;">${veri.firma.adi}</p>
-          </td>
+          <td style="border:1px solid #6b7280; padding:7px; background:#f9fafb;">Alt Toplam</td>
+          <td style="border:1px solid #6b7280; padding:7px; text-align:right;">₺${para(satisFiyati)}</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #6b7280; padding:7px; background:#f9fafb;">KDV %${kdvOrani}</td>
+          <td style="border:1px solid #6b7280; padding:7px; text-align:right;">₺${para(kdvTutari)}</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #6b7280; padding:8px; background:#eef2ff; font-weight:700;">Genel Toplam</td>
+          <td style="border:1px solid #6b7280; padding:8px; text-align:right; background:#eef2ff; font-weight:700;">₺${para(kdvDahilFiyat)}</td>
         </tr>
       </table>
     </div>
+
+    <div style="border:1px solid #6b7280; padding:12px; font-size:10.8px; line-height:1.65;">
+      <div style="margin-bottom:10px;">
+        <strong>Ödeme Koşulları:</strong> ${odemeKosullari}
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <strong>Teslim Tarihi:</strong> ${teslimTarihi}
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <strong>Şartlar ve Koşullar:</strong>
+      </div>
+
+      <div style="margin-bottom:10px; text-align:justify;">
+        Bu teklif belirtilen geçerlilik tarihine kadar geçerlidir. Proje, ölçü, uygulama şekli, malzeme tercihi veya iş kapsamındaki değişiklikler fiyatlara ayrıca yansıtılabilir. Nakliye, montaj, ek paketleme ve sahaya özel ilave talepler, aksi açıkça belirtilmediği sürece bu teklife dahil değildir.
+      </div>
+
+      ${notlar ? `
+      <div style="margin-top:8px;">
+        <strong>Açıklamalar:</strong> ${notlar}
+      </div>
+      ` : ''}
+
+      <div style="margin-top:16px;">
+        Saygılarımızla
+      </div>
+    </div>
+  </div>
   `
 
-  const element = document.createElement('div')
-  element.innerHTML = icerik
-  document.body.appendChild(element)
-
-  const options = {
-    margin: 8,
-    filename: `Teklif-${veri.teklifNo}-${veri.musteri.adi}.pdf`,
-    image: { type: 'jpeg' as const, quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm' as const, format: 'a4', orientation: 'portrait' as const },
-  }
-
-  await html2pdf().set(options).from(element).save()
-  document.body.removeChild(element)
+  await html2pdf()
+    .set({
+      margin: [0, 0, 0, 0],
+      filename: `Teklif-${teklifNo || 'teklif'}.pdf`,
+      image: { type: 'jpeg', quality: 1 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      },
+      jsPDF: {
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+      },
+      pagebreak: {
+        mode: ['avoid-all', 'css', 'legacy'],
+      },
+    })
+    .from(element)
+    .save()
 }
