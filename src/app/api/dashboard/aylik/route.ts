@@ -33,64 +33,74 @@ export async function GET() {
     },
   })
 
+  if (isler.length === 0) return NextResponse.json({ aylar: [] })
+
   const buYil = new Date().getFullYear()
-  const enEskiYil = isler.length > 0
-    ? Math.min(...isler.map(i => new Date(i.createdAt).getFullYear()))
-    : buYil
+  const enEskiYil = Math.min(...isler.map(i => new Date(i.createdAt).getFullYear()))
 
-  const TR_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık']
+  const TR_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
+                     'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık']
 
-  // Her iş için efektif tarihleri hesapla
-  // onaylanmaTarihi null ise createdAt fallback olarak kullan
-  function onayTarihi(i: typeof isler[0]): Date {
-    return i.onaylanmaTarihi ? new Date(i.onaylanmaTarihi) : new Date(i.createdAt)
+  // Bir tarihin hangi yıl/ay'a düştüğünü döndür
+  function ayKey(d: Date) {
+    return { yil: d.getFullYear(), ay: d.getMonth() } // ay: 0-11
   }
-  function kayipTarihi(i: typeof isler[0]): Date {
-    return i.kaybedilmeTarihi ? new Date(i.kaybedilmeTarihi) : new Date(i.createdAt)
+
+  // Her iş için efektif tarihleri belirle
+  function onayAy(i: typeof isler[0]) {
+    return ayKey(new Date(i.onaylanmaTarihi ?? i.createdAt))
+  }
+  function kayipAy(i: typeof isler[0]) {
+    return ayKey(new Date(i.kaybedilmeTarihi ?? i.createdAt))
+  }
+  function olusturmaAy(i: typeof isler[0]) {
+    return ayKey(new Date(i.createdAt))
   }
 
   const sonuclar = []
 
   for (let yil = enEskiYil; yil <= buYil; yil++) {
     for (let ay = 0; ay < 12; ay++) {
-      const ayBaslangic = new Date(yil, ay, 1)
-      const ayBitis = new Date(yil, ay + 1, 0, 23, 59, 59, 999)
 
-      const ayIcinde = (tarih: Date) => tarih >= ayBaslangic && tarih <= ayBitis
+      const eslesir = (k: { yil: number; ay: number }) => k.yil === yil && k.ay === ay
 
       // Bu ayda oluşturulan tüm teklifler
-      const buAyOlusturulan = isler.filter(i => ayIcinde(new Date(i.createdAt)))
+      const buAyOlusturulan = isler.filter(i => eslesir(olusturmaAy(i)))
 
-      // Bu ayda onaylanan işler (onay tarihine göre)
+      // Bu ayda onaylanan işler
       const onaylananlar = isler.filter(i =>
-        i.durum === 'onaylandi' && ayIcinde(onayTarihi(i))
+        i.durum === 'onaylandi' && eslesir(onayAy(i))
       )
 
       // Bu ayda kaybedilen işler
       const kaybedilenler = isler.filter(i =>
-        i.durum === 'kaybedildi' && ayIcinde(kayipTarihi(i))
+        i.durum === 'kaybedildi' && eslesir(kayipAy(i))
       )
 
-      // Bekleyenler: bu ayda oluşturulmuş ve hala teklif_verildi durumunda
+      // Bekleyenler: bu ayda oluşturulmuş ve hala bekliyor
       const bekleyenler = buAyOlusturulan.filter(i => i.durum === 'teklif_verildi')
 
       const toplamTeklif = buAyOlusturulan.length
-      if (toplamTeklif === 0 && onaylananlar.length === 0) continue
+
+      // Hiç veri yoksa bu ayı gösterme
+      if (toplamTeklif === 0 && onaylananlar.length === 0 && kaybedilenler.length === 0) continue
 
       const onaylanmaOrani = toplamTeklif > 0
         ? (onaylananlar.length / toplamTeklif) * 100
         : 0
 
       sonuclar.push({
-        yil, ay: ay + 1, ayAdi: TR_MONTHS[ay],
+        yil,
+        ay: ay + 1,
+        ayAdi: TR_MONTHS[ay],
         toplamTeklif,
-        onaylananTeklif:  onaylananlar.length,
-        bekleyenTeklif:   bekleyenler.length,
-        kaybedilenTeklif: kaybedilenler.length,
+        onaylananTeklif:   onaylananlar.length,
+        bekleyenTeklif:    bekleyenler.length,
+        kaybedilenTeklif:  kaybedilenler.length,
         onaylanmaOrani,
-        toplamTeklifTutari:    buAyOlusturulan.reduce((a, i) => a + Number(i.satisFiyati), 0),
-        onaylananTeklifTutari: onaylananlar.reduce((a, i) => a + Number(i.satisFiyati), 0),
-        kaybedilenTeklifTutari:kaybedilenler.reduce((a, i) => a + Number(i.satisFiyati), 0),
+        toplamTeklifTutari:     buAyOlusturulan.reduce((a, i) => a + Number(i.satisFiyati), 0),
+        onaylananTeklifTutari:  onaylananlar.reduce((a, i) => a + Number(i.satisFiyati), 0),
+        kaybedilenTeklifTutari: kaybedilenler.reduce((a, i) => a + Number(i.satisFiyati), 0),
         toplamTahsilat:  onaylananlar.reduce((a, i) => a + Number(i.tahsilat || 0), 0),
         kirilanTas:      buAyOlusturulan.reduce((a, i) => a + Number(i.kirilanTasPlaka || 0), 0),
         toplamPlaka:     buAyOlusturulan.reduce((a, i) => a + Number(i.kullanilanPlakaSayisi || 0), 0),
