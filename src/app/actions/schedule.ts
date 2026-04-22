@@ -10,21 +10,34 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-async function atolyeIdAl(): Promise<string | null> {
+async function authBilgisiAl(): Promise<{ userId: string | null; atolyeId: string | null }> {
   const cookieStore = await cookies();
   const token = cookieStore.get("metrix-token")?.value;
-  if (!token) return null;
+  if (!token) return { userId: null, atolyeId: null };
+
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "metrix-gizli-anahtar-2024");
+    const secret = new TextEncoder().encode(
+      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
+    );
     const { payload } = await jwtVerify(token, secret);
+
     const user = await prisma.user.findUnique({
       where: { id: (payload as any).id },
       include: { atolye: true },
     });
-    return user?.atolye?.id || null;
+
+    return {
+      userId: user?.id || null,
+      atolyeId: user?.atolye?.id || null,
+    };
   } catch {
-    return null;
+    return { userId: null, atolyeId: null };
   }
+}
+
+async function atolyeIdAl(): Promise<string | null> {
+  const auth = await authBilgisiAl();
+  return auth.atolyeId;
 }
 
 export async function getSchedulesForMonth(year: number, month: number) {
@@ -63,7 +76,23 @@ export async function getSchedulesForMonth(year: number, month: number) {
           tasDurumu: true,
         },
       },
-      phases: { orderBy: { phase: "asc" } },
+      phases: {
+        orderBy: { phase: "asc" },
+        include: {
+          fazAtamalar: {
+            include: {
+              personel: {
+                select: {
+                  id: true,
+                  ad: true,
+                  soyad: true,
+                  gorevi: true,
+                },
+              },
+            },
+          },
+        },
+      },
     },
     orderBy: { startDate: "asc" },
   });
@@ -83,7 +112,6 @@ export async function upsertWorkSchedule(data: {
   const atolyeId = await atolyeIdAl();
   if (!atolyeId) throw new Error("Yetkisiz");
 
-  // Sadece kendi işini güncelleyebilsin
   const is = await prisma.is.findFirst({
     where: { id: data.isId, atolyeId },
   });
@@ -148,8 +176,8 @@ export async function togglePhaseCompletion(data: {
   completedBy?: string;
   overrideNote?: string;
 }) {
-  const atolyeId = await atolyeIdAl();
-  if (!atolyeId) throw new Error("Yetkisiz");
+  const auth = await authBilgisiAl();
+  if (!auth.atolyeId || !auth.userId) throw new Error("Yetkisiz");
 
   const phase = await prisma.schedulePhase.findUnique({
     where: { id: data.schedulePhaseId },
@@ -160,11 +188,34 @@ export async function togglePhaseCompletion(data: {
           is: true,
         },
       },
+      fazAtamalar: {
+        include: {
+          personel: true,
+        },
+      },
     },
   });
 
   if (!phase) throw new Error("Aşama bulunamadı");
-  if (phase.workSchedule.is.atolyeId !== atolyeId) throw new Error("Yetkisiz");
+  if (phase.workSchedule.is.atolyeId !== auth.atolyeId) throw new Error("Yetkisiz");
+
+  const userPersonel = await prisma.personel.findFirst({
+    where: {
+      userId: auth.userId,
+      atolyeId: auth.atolyeId,
+      aktif: true,
+    },
+  });
+
+  if (!userPersonel) {
+    throw new Error("Bu işlem için personel kaydınız bulunmuyor.");
+  }
+
+  const atanmisMi = phase.fazAtamalar.some((a) => a.personelId === userPersonel.id);
+
+  if (!atanmisMi) {
+    throw new Error("Sadece bu faza atanmış personel durumu güncelleyebilir.");
+  }
 
   if (data.isCompleted) {
     const check = canCompletePhase(phase.workSchedule.phases, phase.phase as PhaseType);
@@ -178,7 +229,7 @@ export async function togglePhaseCompletion(data: {
     data: {
       isCompleted: data.isCompleted,
       completedAt: data.isCompleted ? new Date() : null,
-      completedBy: data.isCompleted ? (data.completedBy ?? null) : null,
+      completedBy: data.isCompleted ? userPersonel.id : null,
       isOverridden: !!data.overrideNote,
       overrideNote: data.overrideNote ?? null,
     },
@@ -191,6 +242,7 @@ export async function togglePhaseCompletion(data: {
 export async function searchIsler(q: string) {
   const atolyeId = await atolyeIdAl();
   if (!atolyeId || q.length < 2) return [];
+
   return prisma.is.findMany({
     where: {
       atolyeId,
@@ -223,6 +275,7 @@ export async function movePhase(data: {
     where: { id: data.schedulePhaseId },
     include: { workSchedule: { include: { is: true } } },
   });
+
   if (!phase) throw new Error("Aşama bulunamadı");
   if (phase.workSchedule.is.atolyeId !== atolyeId) throw new Error("Yetkisiz");
 
