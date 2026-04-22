@@ -60,6 +60,7 @@ model Atolye {
   makineler Makine[]
   araclar   Arac[]
   isler     Is[]
+  personeller Personel[]
 }
 
 model Makine {
@@ -225,5 +226,46 @@ model SchedulePhase {
   updatedAt      DateTime  @updatedAt
 
   @@unique([workScheduleId, phase])
+  fazAtamalar FazAtama[]
+
   @@map("schedule_phases")
+}
+
+model Personel {
+  id         String   @id @default(cuid())
+  atolyeId   String
+  atolye     Atolye   @relation(fields: [atolyeId], references: [id])
+
+  ad            String
+  soyad         String
+  gorevi        String
+  bagliOlduguId String?
+  bagliOldugu   Personel?  @relation("PersonelHiyerarsi", fields: [bagliOlduguId], references: [id])
+  altPersonel   Personel[] @relation("PersonelHiyerarsi")
+
+  calismaYili   Int     @default(0)
+  telefon       String  @default("")
+  email         String  @default("")
+  aktif         Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fazAtamalar FazAtama[]
+
+  @@map("personel")
+}
+
+model FazAtama {
+  id              String        @id @default(cuid())
+  schedulePhaseId String
+  schedulePhase   SchedulePhase @relation(fields: [schedulePhaseId], references: [id], onDelete: Cascade)
+
+  personelId String
+  personel   Personel @relation(fields: [personelId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([schedulePhaseId, personelId])
+  @@map("faz_atamalar")
 }

@@ -55,6 +55,7 @@ export interface ScheduleWithIs extends WorkSchedule {
     teklifNo: string;
     musteriAdi: string;
     urunAdi: string;
+    tasDurumu?: string | null;
   };
 }
 

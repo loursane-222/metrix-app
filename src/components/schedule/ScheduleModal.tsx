@@ -12,9 +12,12 @@ interface ScheduleModalProps {
   onSaved: () => void;
 }
 
+type Personel = { id: string; ad: string; soyad: string; gorevi: string }
+type FazAtama = { id: string; personel: Personel }
+
 export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps) {
   const [isPending, startTransition] = useTransition();
-  const [step, setStep] = useState<"is" | "tarihler" | "asamalar">(schedule ? "tarihler" : "is");
+  const [step, setStep] = useState<"is" | "tarihler" | "asamalar" | "atama">(schedule ? "tarihler" : "is");
   const [selectedIs, setSelectedIs] = useState<{id:string;teklifNo:string;musteriAdi:string;urunAdi:string} | null>(
     schedule ? { id: schedule.isId, teklifNo: schedule.is.teklifNo, musteriAdi: schedule.is.musteriAdi, urunAdi: schedule.is.urunAdi } : null
   );
@@ -34,6 +37,11 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
     }))
   );
 
+  // Atama state
+  const [personeller, setPersoneller] = useState<Personel[]>([]);
+  const [fazAtamalar, setFazAtamalar] = useState<Record<string, FazAtama[]>>({});
+  const [atamaYukleniyor, setAtamaYukleniyor] = useState(false);
+
   useEffect(() => {
     if (searchQuery.length < 2) { setSearchResults([]); return; }
     const timer = setTimeout(async () => {
@@ -41,12 +49,57 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
       try {
         const res = await fetch(`/api/isler-ara?q=${encodeURIComponent(searchQuery)}`);
         setSearchResults(await res.json());
-      } finally {
-        setIsSearching(false);
-      }
+      } finally { setIsSearching(false); }
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    fetch('/api/personel').then(r => r.json()).then(v => {
+      if (v.personeller) setPersoneller(v.personeller);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (step === "atama" && schedule) {
+      yukleAtamalar();
+    }
+  }, [step]);
+
+  async function yukleAtamalar() {
+    if (!schedule) return;
+    setAtamaYukleniyor(true);
+    const yeni: Record<string, FazAtama[]> = {};
+    for (const phase of schedule.phases) {
+      const res = await fetch(`/api/faz-atama?schedulePhaseId=${phase.id}`);
+      const v = await res.json();
+      yeni[phase.id] = v.atamalar || [];
+    }
+    setFazAtamalar(yeni);
+    setAtamaYukleniyor(false);
+  }
+
+  async function atamaEkle(schedulePhaseId: string, personelId: string) {
+    const res = await fetch('/api/faz-atama', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schedulePhaseId, personelId })
+    });
+    const v = await res.json();
+    if (v.hata) { alert(v.hata); return; }
+    setFazAtamalar(prev => ({
+      ...prev,
+      [schedulePhaseId]: [...(prev[schedulePhaseId] || []), v.atama]
+    }));
+  }
+
+  async function atamaSil(schedulePhaseId: string, atamaId: string) {
+    await fetch(`/api/faz-atama?id=${atamaId}`, { method: 'DELETE' });
+    setFazAtamalar(prev => ({
+      ...prev,
+      [schedulePhaseId]: prev[schedulePhaseId].filter(a => a.id !== atamaId)
+    }));
+  }
 
   function handleSave() {
     if (!selectedIs) return;
@@ -66,6 +119,17 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
     });
   }
 
+  const adimlar = schedule
+    ? ["is","tarihler","asamalar","atama"] as const
+    : ["is","tarihler","asamalar"] as const;
+
+  const adimEtiket = (s: string) => {
+    if (s === "is") return "1. İş";
+    if (s === "tarihler") return "2. Tarihler";
+    if (s === "asamalar") return "3. Aşamalar";
+    return "4. Personel";
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
@@ -75,29 +139,25 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
         </div>
 
         <div className="flex px-5 pt-4 gap-2">
-          {(["is","tarihler","asamalar"] as const).map((s) => (
-            <button key={s} onClick={() => setStep(s)}
+          {adimlar.map((s) => (
+            <button key={s} onClick={() => setStep(s as any)}
               className={`flex-1 py-1.5 text-xs font-medium rounded-full transition-colors ${step === s ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500"}`}>
-              {s === "is" ? "1. İş" : s === "tarihler" ? "2. Tarihler" : "3. Aşamalar"}
+              {adimEtiket(s)}
             </button>
           ))}
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+          {/* ADIM 1: İş Seç */}
           {step === "is" && (
             <div className="space-y-3">
               <label className="text-sm font-medium">İş Ara</label>
               <div className="relative">
-                <input
-                  className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <input className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Teklif no, müşteri adı veya ürün..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                />
-                {isSearching && (
-                  <div className="absolute right-3 top-3 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                )}
+                  value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} autoFocus />
+                {isSearching && <div className="absolute right-3 top-3 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
               </div>
               {searchResults.length > 0 && (
                 <div className="border rounded-lg divide-y overflow-hidden">
@@ -122,6 +182,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
             </div>
           )}
 
+          {/* ADIM 2: Tarihler */}
           {step === "tarihler" && (
             <div className="space-y-4">
               {selectedIs && (
@@ -150,11 +211,9 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
             </div>
           )}
 
+          {/* ADIM 3: Aşamalar */}
           {step === "asamalar" && (
             <div className="space-y-3">
-              {schedule && (
-                <p className="text-xs text-gray-500">Tamamlandı durumunu aşama satırına tıklayarak değiştirebilirsiniz.</p>
-              )}
               {PHASE_ORDER.map((phase, i) => (
                 <div key={phase} className="border rounded-lg p-3 space-y-2">
                   <div className="flex items-center gap-2">
@@ -183,28 +242,99 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
               ))}
             </div>
           )}
+
+          {/* ADIM 4: Personel Atama */}
+          {step === "atama" && (
+            <div className="space-y-4">
+              {!schedule ? (
+                <p className="text-sm text-gray-500 text-center py-4">Önce iş programını kaydedin, sonra personel atayabilirsiniz.</p>
+              ) : atamaYukleniyor ? (
+                <p className="text-sm text-gray-400 text-center py-4">Yükleniyor...</p>
+              ) : (
+                PHASE_ORDER.map((phase) => {
+                  const phaseObj = schedule.phases.find(p => p.phase === phase);
+                  if (!phaseObj) return null;
+                  const atamalar = fazAtamalar[phaseObj.id] || [];
+                  const atanenIds = atamalar.map(a => a.personel.id);
+                  const atanamaz = atamalar.length >= 5;
+
+                  return (
+                    <div key={phase} className="border rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-sm font-semibold">{PHASE_LABELS[phase]}</span>
+                        <span className="text-xs text-gray-400">{atamalar.length}/5 kişi</span>
+                      </div>
+
+                      {/* Atanan kişiler */}
+                      {atamalar.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {atamalar.map(a => (
+                            <span key={a.id} className="flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2.5 py-0.5 text-xs">
+                              {a.personel.ad} {a.personel.soyad}
+                              <button onClick={() => atamaSil(phaseObj.id, a.id)} className="ml-0.5 text-blue-400 hover:text-red-500 font-bold">×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Atama ekle */}
+                      {!atanamaz && (
+                        <select
+                          className="w-full border rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value=""
+                          onChange={e => { if (e.target.value) atamaEkle(phaseObj.id, e.target.value); }}
+                        >
+                          <option value="">+ Atama Ekle...</option>
+                          {personeller
+                            .filter(p => !atanenIds.includes(p.id))
+                            .map(p => (
+                              <option key={p.id} value={p.id}>{p.ad} {p.soyad} — {p.gorevi}</option>
+                            ))
+                          }
+                        </select>
+                      )}
+                      {atanamaz && <p className="text-xs text-gray-400 text-center">Maksimum 5 kişi atandı.</p>}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
 
         <div className="px-5 py-4 border-t flex items-center justify-between">
           <div>
             {step !== "is" && (
               <button className="px-3 py-2 text-sm rounded-lg border hover:bg-gray-50 transition-colors"
-                onClick={() => setStep(step === "asamalar" ? "tarihler" : "is")}>← Geri</button>
+                onClick={() => {
+                  const simdikiIndex = adimlar.indexOf(step as any);
+                  if (simdikiIndex > 0) setStep(adimlar[simdikiIndex - 1] as any);
+                }}>← Geri</button>
             )}
           </div>
-          {step !== "asamalar" ? (
-            <button className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-              onClick={() => setStep(step === "is" ? "tarihler" : "asamalar")}
-              disabled={step === "is" && !selectedIs}>
-              Devam →
-            </button>
-          ) : (
-            <button className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-              onClick={handleSave} disabled={isPending || !selectedIs}>
-              {isPending && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-              {schedule ? "Güncelle" : "Kaydet"}
-            </button>
-          )}
+          <div className="flex gap-2">
+            {step === "atama" ? (
+              <button className="px-4 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
+                onClick={onSaved}>
+                ✓ Tamamlandı
+              </button>
+            ) : step === "asamalar" ? (
+              <button className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                onClick={handleSave} disabled={isPending || !selectedIs}>
+                {isPending && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {schedule ? "Güncelle" : "Kaydet"}
+              </button>
+            ) : (
+              <button className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                onClick={() => {
+                  const simdikiIndex = adimlar.indexOf(step as any);
+                  if (simdikiIndex < adimlar.length - 1) setStep(adimlar[simdikiIndex + 1] as any);
+                }}
+                disabled={step === "is" && !selectedIs}>
+                Devam →
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
