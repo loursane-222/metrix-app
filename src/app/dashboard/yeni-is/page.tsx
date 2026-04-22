@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 import { teklifPdfIndir } from '@/lib/teklif-pdf'
 import { PlakaPlanlayiciMini, type PlakaHesapSonucu } from '@/components/plaka-planlayici/PlakaPlanlayiciMini'
@@ -25,7 +25,6 @@ const OPERASYONLAR = [
 
 export default function YeniIs() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [makineler, setMakineler] = useState<Makine[]>([])
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [pdfYukleniyor, setPdfYukleniyor] = useState(false)
@@ -107,8 +106,12 @@ export default function YeniIs() {
 
 
   useEffect(() => {
-    const musteriId = searchParams.get('musteriId') || ''
-    const musteriAdi = searchParams.get('musteriAdi') || ''
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    const musteriId = params.get('musteriId') || ''
+    const musteriAdi = params.get('musteriAdi') || ''
+
     if (musteriId || musteriAdi) {
       setForm(prev => ({
         ...prev,
@@ -116,7 +119,7 @@ export default function YeniIs() {
         musteriAdi: musteriAdi || prev.musteriAdi,
       }))
     }
-  }, [searchParams])
+  }, [])
 
   function guncelle(alan: string, deger: string) {
     setForm(prev => ({ ...prev, [alan]: deger }))
