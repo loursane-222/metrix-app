@@ -10,15 +10,20 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-async function authBilgisiAl(): Promise<{ userId: string | null; atolyeId: string | null }> {
+async function authBilgisiAl(): Promise<{
+  userId: string | null;
+  atolyeId: string | null;
+  email: string | null;
+}> {
   const cookieStore = await cookies();
   const token = cookieStore.get("metrix-token")?.value;
-  if (!token) return { userId: null, atolyeId: null };
+  if (!token) return { userId: null, atolyeId: null, email: null };
 
   try {
     const secret = new TextEncoder().encode(
       process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
     );
+
     const { payload } = await jwtVerify(token, secret);
 
     const user = await prisma.user.findUnique({
@@ -29,9 +34,10 @@ async function authBilgisiAl(): Promise<{ userId: string | null; atolyeId: strin
     return {
       userId: user?.id || null,
       atolyeId: user?.atolye?.id || null,
+      email: user?.email || null,
     };
   } catch {
-    return { userId: null, atolyeId: null };
+    return { userId: null, atolyeId: null, email: null };
   }
 }
 
@@ -87,6 +93,7 @@ export async function getSchedulesForMonth(year: number, month: number) {
                   ad: true,
                   soyad: true,
                   gorevi: true,
+                  email: true,
                 },
               },
             },
@@ -199,9 +206,13 @@ export async function togglePhaseCompletion(data: {
   if (!phase) throw new Error("Aşama bulunamadı");
   if (phase.workSchedule.is.atolyeId !== auth.atolyeId) throw new Error("Yetkisiz");
 
+  if (!auth.email) {
+    throw new Error("Kullanıcı e-posta bilgisi bulunamadı.");
+  }
+
   const userPersonel = await prisma.personel.findFirst({
     where: {
-      userId: auth.userId,
+      email: auth.email,
       atolyeId: auth.atolyeId,
       aktif: true,
     },
