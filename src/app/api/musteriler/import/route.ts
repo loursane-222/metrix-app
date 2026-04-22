@@ -51,8 +51,10 @@ export async function POST(req: NextRequest) {
   }
 
   const arrayBuffer = await file.arrayBuffer()
+  const uint8Array = new Uint8Array(arrayBuffer)
+
   const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(Buffer.from(arrayBuffer))
+  await workbook.xlsx.load(uint8Array as any)
 
   const ws = workbook.worksheets[0]
   if (!ws) {
