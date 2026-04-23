@@ -48,8 +48,21 @@ export async function teklifPdfIndir(veri: any) {
   const tezgahArasiMtul = Number(veri?.is?.tezgahArasiMtul || 0)
   const adaTezgahMtul = Number(veri?.is?.adaTezgahMtul || 0)
 
+  const ozel1Mtul = Number(veri?.is?.ozelIscilik1Mtul || 0)
+  const ozel1Dakika = Number(veri?.is?.ozelIscilik1Dakika || 0)
+  const ozel1Aciklama = guvenliYazi(veri?.is?.ozelIscilik1Aciklama || 'Özel İşçilik 1')
+
+  const ozel2Mtul = Number(veri?.is?.ozelIscilik2Mtul || 0)
+  const ozel2Dakika = Number(veri?.is?.ozelIscilik2Dakika || 0)
+  const ozel2Aciklama = guvenliYazi(veri?.is?.ozelIscilik2Aciklama || 'Özel İşçilik 2')
+
+  const ozel3Mtul = Number(veri?.is?.ozelIscilik3Mtul || 0)
+  const ozel3Dakika = Number(veri?.is?.ozelIscilik3Dakika || 0)
+  const ozel3Aciklama = guvenliYazi(veri?.is?.ozelIscilik3Aciklama || 'Özel İşçilik 3')
+
   const toplamMetraj = Number(
-    veri?.is?.toplamMetraj || (tezgahMtul + tezgahArasiMtul + adaTezgahMtul)
+    veri?.is?.toplamMetraj ||
+    (tezgahMtul + tezgahArasiMtul + adaTezgahMtul + ozel1Mtul + ozel2Mtul + ozel3Mtul)
   )
 
   const mtulSatisFiyati = Number(veri?.is?.mtulSatisFiyati || 0)
@@ -84,9 +97,27 @@ export async function teklifPdfIndir(veri: any) {
     tabloSatirlari.push(satirOlustur('Ada Tezgah', adaTezgahMtul))
   }
 
+  if (ozel1Mtul > 0) {
+    tabloSatirlari.push(satirOlustur(ozel1Aciklama, ozel1Mtul))
+  }
+
+  if (ozel2Mtul > 0) {
+    tabloSatirlari.push(satirOlustur(ozel2Aciklama, ozel2Mtul))
+  }
+
+  if (ozel3Mtul > 0) {
+    tabloSatirlari.push(satirOlustur(ozel3Aciklama, ozel3Mtul))
+  }
+
   if (tabloSatirlari.length === 0) {
     tabloSatirlari.push(satirOlustur(urunAdi || 'Ürün / Uygulama', toplamMetraj))
   }
+
+  const ozelIscilikOzeti = [
+    ozel1Mtul > 0 ? `${ozel1Aciklama}: ${ozel1Mtul.toFixed(2)} mtül / ${ozel1Dakika} dk` : '',
+    ozel2Mtul > 0 ? `${ozel2Aciklama}: ${ozel2Mtul.toFixed(2)} mtül / ${ozel2Dakika} dk` : '',
+    ozel3Mtul > 0 ? `${ozel3Aciklama}: ${ozel3Mtul.toFixed(2)} mtül / ${ozel3Dakika} dk` : '',
+  ].filter(Boolean)
 
   element.innerHTML = `
   <div style="
@@ -193,6 +224,13 @@ export async function teklifPdfIndir(veri: any) {
       <div style="margin-bottom:10px;">
         <strong>Teslim Tarihi:</strong> ${teslimTarihi}
       </div>
+
+      ${ozelIscilikOzeti.length > 0 ? `
+      <div style="margin-bottom:10px;">
+        <strong>Özel İşçilikler:</strong><br/>
+        ${ozelIscilikOzeti.map(x => `• ${x}`).join('<br/>')}
+      </div>
+      ` : ''}
 
       <div style="margin-bottom:8px;">
         <strong>Şartlar ve Koşullar:</strong>
