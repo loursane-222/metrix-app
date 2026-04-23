@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { paraGoster, yuzdeGoster } from '@/lib/format'
 
 type IsKaydi = {
@@ -39,6 +39,12 @@ type FormState = {
   email: string
   acilisBakiyesi: string
   bakiyeTipi: string
+}
+
+
+function getQueryParam(key: string) {
+  if (typeof window === 'undefined') return null
+  return new URLSearchParams(window.location.search).get(key)
 }
 
 function cls(...c: Array<string | false | null | undefined>) {
@@ -81,8 +87,7 @@ function formDoldur(m: Musteri): FormState {
 
 export default function MusterilerPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [musteriler, setMusteriler] = useState<Musteri[]>([])
   const [yukleniyor, setYukleniyor] = useState(true)
@@ -123,10 +128,10 @@ export default function MusterilerPage() {
   }, [])
 
   useEffect(() => {
-    if (searchParams.get('yeni') === '1') {
+    if (getQueryParam('yeni') === '1') {
       setYeniMusteriAcik(true)
     }
-  }, [searchParams])
+  }, [])
 
   const ciroSiralamasi = useMemo(() => {
     const sirali = [...musteriler]
