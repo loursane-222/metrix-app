@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useRef } from "react";
+import { useState, useEffect, useTransition, useRef, useMemo } from "react";
 import { ScheduleModal } from "./ScheduleModal";
 import { togglePhaseCompletion, movePhase, updateTasDurumu } from "@/app/actions/schedule";
 import type { ScheduleWithIs } from "@/lib/types/schedule";
@@ -10,10 +10,10 @@ const TR_MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","A
 const TR_DAYS = ["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
 
 const PHASE_STYLES = {
-  OLCU:   { bg: "bg-blue-100",  text: "text-blue-800",  border: "border-blue-300",  dot: "bg-blue-500"  },
-  IMALAT: { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-300", dot: "bg-amber-500" },
-  MONTAJ: { bg: "bg-green-100", text: "text-green-800", border: "border-green-300", dot: "bg-green-500" },
-};
+  OLCU:   { bg: "bg-blue-50",  text: "text-blue-700",  border: "border-blue-200",  dot: "bg-blue-500", chip: "bg-blue-100 text-blue-700 border-blue-200" },
+  IMALAT: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500", chip: "bg-amber-100 text-amber-700 border-amber-200" },
+  MONTAJ: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500", chip: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+} as const;
 
 interface PhaseEntry {
   phaseId: string;
@@ -45,8 +45,6 @@ interface QuickPopup {
 
 interface DayDetailPopup {
   dayNum: number;
-  x: number;
-  y: number;
   entries: PhaseEntry[];
   tasEntries: TasAlinacakEntry[];
 }
@@ -55,6 +53,10 @@ interface WorkCalendarProps {
   initialSchedules: ScheduleWithIs[];
   initialYear: number;
   initialMonth: number;
+}
+
+function cls(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
 }
 
 export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: WorkCalendarProps) {
@@ -77,22 +79,35 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/schedule?year=${year}&month=${month}`);
-      const data = await res.json();
-      setSchedules(data);
+      try {
+        const res = await fetch(`/api/schedule?year=${year}&month=${month}`, {
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          console.warn("İş programı otomatik yenileme başarısız:", res.status);
+          return;
+        }
+
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setSchedules(data);
+        }
+      } catch (error) {
+        console.warn("İş programı otomatik yenileme hatası:", error);
+      }
     }, 30000);
+
     return () => clearInterval(interval);
   }, [year, month]);
 
   useEffect(() => {
     function handleClick() {
       setPopup(null);
-      setTasPopup(null);
-      setDayPopup(null);
     }
-    if (popup || tasPopup || dayPopup) document.addEventListener("click", handleClick);
+    if (popup) document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
-  }, [popup, tasPopup, dayPopup]);
+  }, [popup]);
 
   async function refreshSchedules() {
     const res = await fetch(`/api/schedule?year=${year}&month=${month}`);
@@ -127,11 +142,10 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
 
   function handlePhaseClick(e: React.MouseEvent, entry: PhaseEntry) {
     e.stopPropagation();
-    setDayPopup(null);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setPopup({
       entry,
-      x: Math.min(rect.left, window.innerWidth - 320),
+      x: Math.min(rect.left, window.innerWidth - 360),
       y: rect.bottom + window.scrollY + 8,
     });
   }
@@ -145,13 +159,8 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
     e.stopPropagation();
     setPopup(null);
     setTasPopup(null);
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-
     setDayPopup({
       dayNum,
-      x: Math.min(rect.left, window.innerWidth - 420),
-      y: rect.bottom + window.scrollY + 8,
       entries,
       tasEntries,
     });
@@ -269,10 +278,11 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
       if (!schedule.is) continue;
 
       const is = schedule.is as any;
-      if (is.tasDurumu !== "alinacak" && is.tasDurumu !== "alindi") continue;
-
       const olcuPhase = (schedule.phases as any[]).find((p: any) => p.phase === "OLCU");
       if (!olcuPhase?.plannedStart) continue;
+
+      const urunVarMi = !!(is.urunAdi && String(is.urunAdi).trim());
+      if (!urunVarMi) continue;
 
       const olcuTarihi = new Date(olcuPhase.plannedStart);
       const tasAlisTarihi = isGunuGeriGit(olcuTarihi, 3);
@@ -333,245 +343,282 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   const isCurrentMonth =
     today.getFullYear() === year && today.getMonth() + 1 === month;
 
+  const monthlyStats = useMemo(() => {
+    const phaseEntries = Array.from({ length: daysInMonth }, (_, idx) => getPhaseEntriesForDay(idx + 1)).flat();
+    const tasEntries = Array.from({ length: daysInMonth }, (_, idx) => getTasAlinacakForDay(idx + 1)).flat();
+
+    const tamamlanan = phaseEntries.filter((e) => e.isCompleted).length;
+    const aktif = phaseEntries.filter((e) => !e.isCompleted).length;
+    const personelAtamali = phaseEntries.filter((e) => e.assignedPeople.length > 0).length;
+
+    return {
+      toplamProgram: schedules.length,
+      aktifGörev: aktif,
+      tamamlananGörev: tamamlanan,
+      tasTakibi: tasEntries.length,
+      atamaliGörev: personelAtamali,
+    };
+  }, [schedules, year, month, daysInMonth]);
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate("prev")}
-            disabled={isLoading}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-lg"
-          >
-            ←
-          </button>
+    <div className="space-y-6">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-sm font-medium text-slate-500">Toplam Program</p>
+          <p className="mt-3 text-3xl font-bold text-slate-900">{monthlyStats.toplamProgram}</p>
+        </div>
+        <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-sm font-medium text-blue-600">Aktif Görev</p>
+          <p className="mt-3 text-3xl font-bold text-blue-700">{monthlyStats.aktifGörev}</p>
+        </div>
+        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-sm font-medium text-emerald-600">Tamamlanan</p>
+          <p className="mt-3 text-3xl font-bold text-emerald-700">{monthlyStats.tamamlananGörev}</p>
+        </div>
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-sm font-medium text-amber-600">Taş Takibi</p>
+          <p className="mt-3 text-3xl font-bold text-amber-700">{monthlyStats.tasTakibi}</p>
+        </div>
+        <div className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-sm font-medium text-violet-600">Personel Atamalı</p>
+          <p className="mt-3 text-3xl font-bold text-violet-700">{monthlyStats.atamaliGörev}</p>
+        </div>
+      </section>
 
-          <h2 className="text-lg font-semibold min-w-[160px] text-center">
-            {TR_MONTHS[month - 1]} {year}
-          </h2>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("prev")}
+              disabled={isLoading}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-lg text-slate-700 transition hover:bg-slate-50"
+            >
+              ←
+            </button>
 
-          <button
-            onClick={() => navigate("next")}
-            disabled={isLoading}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-lg"
-          >
-            →
-          </button>
+            <div className="min-w-[190px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
+              <h2 className="text-lg font-bold text-slate-900">
+                {TR_MONTHS[month - 1]} {year}
+              </h2>
+            </div>
 
-          {!isCurrentMonth && (
+            <button
+              onClick={() => navigate("next")}
+              disabled={isLoading}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-lg text-slate-700 transition hover:bg-slate-50"
+            >
+              →
+            </button>
+
+            {!isCurrentMonth && (
+              <button
+                onClick={() => {
+                  setYear(today.getFullYear());
+                  setMonth(today.getMonth() + 1);
+                }}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Bugün
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="hidden md:flex items-center gap-3 text-xs text-slate-500">
+              {PHASE_ORDER.map((p) => (
+                <span key={p} className="flex items-center gap-1.5 rounded-full bg-slate-50 px-3 py-1 border border-slate-200">
+                  <span className={`w-2.5 h-2.5 rounded-full ${PHASE_STYLES[p].dot}`} />
+                  {PHASE_LABELS[p]}
+                </span>
+              ))}
+              <span className="flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1 border border-orange-200 text-orange-700">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-400" />
+                Taş Alınacak
+              </span>
+            </div>
+
             <button
               onClick={() => {
-                setYear(today.getFullYear());
-                setMonth(today.getMonth() + 1);
+                setSelectedSchedule(null);
+                setIsModalOpen(true);
               }}
-              className="text-xs px-2.5 py-1 rounded-full border hover:bg-gray-50"
+              className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(59,130,246,0.22)] transition hover:scale-[1.01]"
             >
-              Bugün
+              + İş Programı Ekle
             </button>
-          )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-3 text-xs text-gray-500">
-            {PHASE_ORDER.map((p) => (
-              <span key={p} className="flex items-center gap-1">
-                <span className={`w-2.5 h-2.5 rounded-full ${PHASE_STYLES[p].dot}`} />
-                {PHASE_LABELS[p]}
-              </span>
-            ))}
-            <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-orange-400" />
-              Taş Alınacak
-            </span>
-          </div>
-
-          <button
-            onClick={() => {
-              setSelectedSchedule(null);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 transition-colors"
-          >
-            + İş Programı Ekle
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-7 mb-1">
-        {TR_DAYS.map((d) => (
-          <div key={d} className="py-2 text-center text-xs font-medium text-gray-500">
-            {d}
-          </div>
-        ))}
-      </div>
-
-      <div
-        className={`grid grid-cols-7 flex-1 border-l border-t rounded-lg overflow-hidden transition-opacity ${
-          isLoading ? "opacity-50" : ""
-        }`}
-      >
-        {Array.from({ length: totalCells }, (_, i) => {
-          const dayNum = i - firstDayOfWeek + 1;
-          const isValid = dayNum >= 1 && dayNum <= daysInMonth;
-          const isToday = isCurrentMonth && dayNum === today.getDate();
-          const entries = isValid ? getPhaseEntriesForDay(dayNum) : [];
-          const tasEntries = isValid ? getTasAlinacakForDay(dayNum) : [];
-          const isDragTarget = dragOver === dayNum;
-
-          return (
-            <div
-              key={i}
-              className={`min-h-[100px] border-r border-b p-1 transition-colors ${
-                !isValid
-                  ? "bg-gray-50"
-                  : isDragTarget
-                  ? "bg-blue-50 ring-2 ring-inset ring-blue-300"
-                  : "bg-white hover:bg-gray-50"
-              }`}
-              onDragOver={isValid ? (e) => handleDragOver(e, dayNum) : undefined}
-              onDragLeave={isValid ? handleDragLeave : undefined}
-              onDrop={isValid ? (e) => handleDrop(e, dayNum) : undefined}
-            >
-              {isValid && (
-                <>
-                  <div className="mb-1">
-                    <button
-                      type="button"
-                      onClick={(e) => handleDayNumberClick(e, dayNum, entries, tasEntries)}
-                      className={`text-xs font-medium w-6 h-6 inline-flex items-center justify-center rounded-full ${
-                        isToday ? "bg-blue-600 text-white" : "text-gray-500 hover:bg-gray-100"
-                      }`}
-                    >
-                      {dayNum}
-                    </button>
-                  </div>
-
-                  <div className="space-y-0.5">
-                    {entries.slice(0, 4).map((entry, idx) => {
-                      const style = PHASE_STYLES[entry.phase];
-                      const personelAdlari = entry.assignedPeople
-                        .slice(0, 2)
-                        .map((p) => p.ad)
-                        .join(", ");
-
-                      return (
-                        <button
-                          key={`${entry.phaseId}-${idx}`}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, entry)}
-                          onClick={(e) => handlePhaseClick(e, entry)}
-                          title="Sürükleyerek taşıyabilirsiniz"
-                          className={`w-full text-left px-1.5 py-0.5 rounded text-xs border transition-all hover:shadow-sm cursor-grab active:cursor-grabbing ${style.bg} ${style.border} ${
-                            entry.isCompleted ? "opacity-50" : ""
-                          }`}
-                        >
-                          <div className="flex items-center gap-1">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                entry.isCompleted ? "bg-green-500" : style.dot
-                              }`}
-                            />
-                            <span
-                              className={`font-medium flex-shrink-0 ${style.text} ${
-                                entry.isCompleted ? "line-through" : ""
-                              }`}
-                            >
-                              {PHASE_LABELS[entry.phase]}
-                            </span>
-                            <span className="truncate text-gray-500">— {entry.musteriAdi}</span>
-                            {entry.isCompleted && (
-                              <span className="ml-auto text-green-600 flex-shrink-0">✓</span>
-                            )}
-                          </div>
-                          {personelAdlari && (
-                            <div className="mt-0.5 text-[10px] text-gray-500 truncate">
-                              👤 {personelAdlari}
-                              {entry.assignedPeople.length > 2 ? ` +${entry.assignedPeople.length - 2}` : ""}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-
-                    {entries.length > 4 && (
-                      <div className="text-xs text-gray-400 text-center py-0.5">
-                        +{entries.length - 4} daha
-                      </div>
-                    )}
-
-                    {tasEntries.map((entry, idx) => (
-                      <button
-                        key={`tas-${entry.isId}-${idx}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTasAlindi(entry.tasAlindi);
-                          setTasPopup({ entry, x: e.clientX, y: e.clientY });
-                        }}
-                        className="w-full text-left px-1.5 py-0.5 rounded text-xs border flex items-center gap-1 transition-all hover:shadow-sm"
-                        style={{
-                          background: entry.tasAlindi ? "#f0fdf4" : "#fff7ed",
-                          borderColor: entry.tasAlindi ? "#86efac" : "#fed7aa",
-                          color: entry.tasAlindi ? "#15803d" : "#c2410c",
-                          opacity: entry.tasAlindi ? 0.6 : 1,
-                        }}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                            entry.tasAlindi ? "bg-green-500" : "bg-orange-500"
-                          }`}
-                        />
-                        <span
-                          className={`font-medium flex-shrink-0 ${
-                            entry.tasAlindi ? "line-through" : ""
-                          }`}
-                        >
-                          {entry.tasAlindi ? "✓ Taş Alındı" : "🪨 Taş Alınacak"}
-                        </span>
-                        <span
-                          className={`truncate text-gray-500 ${
-                            entry.tasAlindi ? "line-through" : ""
-                          }`}
-                        >
-                          — {entry.musteriAdi}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+        <div className="mt-5 grid grid-cols-7 gap-2">
+          {TR_DAYS.map((d) => (
+            <div key={d} className="rounded-2xl bg-slate-50 py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 border border-slate-200">
+              {d}
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
 
-      <div className="mt-2 text-xs text-gray-400 text-center">
-        💡 Fazları sürükleyerek farklı bir güne taşıyabilirsiniz
-      </div>
+        <div className={cls("mt-2 grid grid-cols-7 gap-2 transition-opacity", isLoading && "opacity-50")}>
+          {Array.from({ length: totalCells }, (_, i) => {
+            const dayNum = i - firstDayOfWeek + 1;
+            const isValid = dayNum >= 1 && dayNum <= daysInMonth;
+            const isToday = isCurrentMonth && dayNum === today.getDate();
+            const entries = isValid ? getPhaseEntriesForDay(dayNum) : [];
+            const tasEntries = isValid ? getTasAlinacakForDay(dayNum) : [];
+            const isDragTarget = dragOver === dayNum;
+
+            return (
+              <div
+                key={i}
+                className={cls(
+                  "min-h-[140px] rounded-2xl border p-2 transition-all",
+                  !isValid && "bg-slate-50 border-slate-100",
+                  isValid && !isDragTarget && "bg-white border-slate-200 hover:shadow-sm",
+                  isValid && isDragTarget && "bg-blue-50 border-blue-300 ring-2 ring-blue-200"
+                )}
+                onDragOver={isValid ? (e) => handleDragOver(e, dayNum) : undefined}
+                onDragLeave={isValid ? handleDragLeave : undefined}
+                onDrop={isValid ? (e) => handleDrop(e, dayNum) : undefined}
+              >
+                {isValid && (
+                  <>
+                    <div className="mb-2 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={(e) => handleDayNumberClick(e, dayNum, entries, tasEntries)}
+                        className={cls(
+                          "inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition",
+                          isToday ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        )}
+                      >
+                        {dayNum}
+                      </button>
+
+                      {(entries.length > 0 || tasEntries.length > 0) && (
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">
+                          {entries.length + tasEntries.length} kayıt
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {entries.slice(0, 3).map((entry, idx) => {
+                        const style = PHASE_STYLES[entry.phase];
+                        const personelAdlari = entry.assignedPeople
+                          .slice(0, 2)
+                          .map((p) => p.ad)
+                          .join(", ");
+
+                        return (
+                          <button
+                            key={`${entry.phaseId}-${idx}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, entry)}
+                            onClick={(e) => handlePhaseClick(e, entry)}
+                            title="Sürükleyerek taşıyabilirsiniz"
+                            className={cls(
+                              "w-full rounded-xl border px-2 py-1.5 text-left text-xs transition hover:shadow-sm cursor-grab active:cursor-grabbing",
+                              style.bg,
+                              style.border,
+                              entry.isCompleted && "opacity-55"
+                            )}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span className={cls("w-2 h-2 rounded-full flex-shrink-0", entry.isCompleted ? "bg-emerald-500" : style.dot)} />
+                              <span className={cls("font-semibold", style.text, entry.isCompleted && "line-through")}>
+                                {PHASE_LABELS[entry.phase]}
+                              </span>
+                            </div>
+
+                            <div className={cls("mt-1 truncate text-slate-600", entry.isCompleted && "line-through")}>
+                              {entry.musteriAdi}
+                            </div>
+
+                            {personelAdlari && (
+                              <div className="mt-1 truncate text-[10px] text-slate-500">
+                                👤 {personelAdlari}
+                                {entry.assignedPeople.length > 2 ? ` +${entry.assignedPeople.length - 2}` : ""}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+
+                      {entries.length > 3 && (
+                        <div className="rounded-xl bg-slate-50 px-2 py-1.5 text-center text-[11px] font-medium text-slate-500 border border-slate-200">
+                          +{entries.length - 3} görev daha
+                        </div>
+                      )}
+
+                      {tasEntries.slice(0, 2).map((entry, idx) => (
+                        <button
+                          key={`tas-${entry.isId}-${idx}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTasAlindi(entry.tasAlindi);
+                            setTasPopup({ entry, x: e.clientX, y: e.clientY });
+                          }}
+                          className={cls(
+                            "w-full rounded-xl border px-2 py-1.5 text-left text-xs transition hover:shadow-sm",
+                            entry.tasAlindi
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-700 opacity-60"
+                              : "bg-orange-50 border-orange-200 text-orange-700"
+                          )}
+                        >
+                          <div className="font-semibold">
+                            {entry.tasAlindi ? "✓ Taş Alındı" : "🪨 Taş Alınacak"}
+                          </div>
+                          <div className={cls("mt-1 truncate text-slate-600", entry.tasAlindi && "line-through")}>
+                            {entry.musteriAdi}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 text-center text-xs text-slate-400">
+          Görevleri sürükleyerek farklı güne taşıyabilir, gün numarasına tıklayarak detay panelini açabilirsin.
+        </div>
+      </section>
 
       {popup && (
         <div
-          className="fixed z-[60] bg-white rounded-xl shadow-xl border p-3 w-72"
+          className="fixed z-[60] bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 w-80 max-h-[calc(100vh-40px)] overflow-y-auto"
           style={{
-            top: Math.min(popup.y, window.innerHeight - 320),
-            left: Math.min(popup.x, window.innerWidth - 300),
+            top: Math.min(popup.y, window.innerHeight - 420),
+            left: Math.min(popup.x, window.innerWidth - 340),
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="mb-2 pb-2 border-b">
-            <div className={`text-xs font-semibold ${PHASE_STYLES[popup.entry.phase].text}`}>
+          <div className="mb-3 border-b border-slate-100 pb-3">
+            <span className={cls("inline-flex rounded-full border px-3 py-1 text-xs font-semibold", PHASE_STYLES[popup.entry.phase].chip)}>
               {PHASE_LABELS[popup.entry.phase]}
-            </div>
-            <div className="text-sm font-medium text-gray-800 truncate">
+            </span>
+            <div className="mt-3 text-base font-bold text-slate-900 truncate">
               {popup.entry.musteriAdi}
             </div>
             {popup.entry.teklifNo && (
-              <div className="text-xs text-gray-400">{popup.entry.teklifNo}</div>
+              <div className="text-xs text-slate-400">{popup.entry.teklifNo}</div>
             )}
+            {(popup.entry.schedule.is as any)?.urunAdi && (
+              <div className="mt-1 text-xs text-slate-500">
+                Ürün: {(popup.entry.schedule.is as any).urunAdi}
+              </div>
+            )}
+            <div className="mt-2 text-xs text-slate-500">
+              {popup.entry.plannedStart.toLocaleDateString("tr-TR")} - {popup.entry.plannedEnd.toLocaleDateString("tr-TR")}
+            </div>
+
             {popup.entry.assignedPeople.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
+              <div className="mt-3 flex flex-wrap gap-1.5">
                 {popup.entry.assignedPeople.map((p) => (
                   <span
                     key={p.id}
-                    className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"
+                    className="text-[11px] px-2.5 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200"
                   >
                     👤 {p.ad} {p.soyad}
                   </span>
@@ -580,20 +627,19 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
             )}
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <button
               onClick={() => handleStatusChange(false)}
               disabled={isPending}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={cls(
+                "w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition",
                 !popup.entry.isCompleted
-                  ? "bg-blue-50 text-blue-700 border border-blue-200 font-medium"
-                  : "hover:bg-gray-50 text-gray-600"
-              }`}
+                  ? "bg-blue-50 text-blue-700 border border-blue-200 font-semibold"
+                  : "hover:bg-slate-50 text-slate-600 border border-slate-200"
+              )}
             >
               <span className="w-4 h-4 rounded-full border-2 border-blue-400 flex items-center justify-center flex-shrink-0">
-                {!popup.entry.isCompleted && (
-                  <span className="w-2 h-2 rounded-full bg-blue-400" />
-                )}
+                {!popup.entry.isCompleted && <span className="w-2 h-2 rounded-full bg-blue-400" />}
               </span>
               Devam Ediyor
             </button>
@@ -601,13 +647,14 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
             <button
               onClick={() => handleStatusChange(true)}
               disabled={isPending}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={cls(
+                "w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition",
                 popup.entry.isCompleted
-                  ? "bg-green-50 text-green-700 border border-green-200 font-medium"
-                  : "hover:bg-gray-50 text-gray-600"
-              }`}
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold"
+                  : "hover:bg-slate-50 text-slate-600 border border-slate-200"
+              )}
             >
-              <span className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 text-white text-xs">
+              <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 text-white text-xs">
                 ✓
               </span>
               Tamamlandı
@@ -615,26 +662,26 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
           </div>
 
           {statusError && (
-            <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
               ⚠ {statusError}
             </div>
           )}
 
-          <div className="mt-3 pt-3 border-t">
+          <div className="mt-4 border-t border-slate-100 pt-4">
             <button
               onClick={() => {
                 setSelectedSchedule(popup.entry.schedule);
                 setIsModalOpen(true);
                 setPopup(null);
               }}
-              className="w-full py-2 rounded-lg bg-gray-900 text-white text-sm hover:bg-black transition-colors"
+              className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white transition hover:bg-black"
             >
               Düzenle
             </button>
           </div>
 
           {isPending && (
-            <div className="absolute inset-0 bg-white/70 rounded-xl flex items-center justify-center">
+            <div className="absolute inset-0 bg-white/70 rounded-2xl flex items-center justify-center">
               <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
@@ -642,181 +689,283 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
       )}
 
       {dayPopup && (
-        <div
-          className="fixed z-[55] bg-white rounded-2xl shadow-2xl border p-4 w-[380px] max-h-[70vh] overflow-y-auto"
-          style={{
-            top: Math.min(dayPopup.y, window.innerHeight - 500),
-            left: Math.min(dayPopup.x, window.innerWidth - 400),
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-3 pb-2 border-b">
-            <div>
-              <div className="text-sm font-semibold text-gray-800">
-                {dayPopup.dayNum} {TR_MONTHS[month - 1]} {year}
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onClick={() => setDayPopup(null)}>
+          <div
+            className="w-full max-w-5xl max-h-[88vh] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.24)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">Gün Detayı</p>
+                  <h3 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                    {dayPopup.dayNum} {TR_MONTHS[month - 1]} {year}
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Bu güne planlanan görevler, taş takibi ve atanmış personeller.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setDayPopup(null)}
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
+                >
+                  ✕
+                </button>
               </div>
-              <div className="text-xs text-gray-400">Gün detayları</div>
             </div>
-            <button
-              onClick={() => setDayPopup(null)}
-              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-            >
-              ×
-            </button>
-          </div>
 
-          <div className="space-y-3">
-            {dayPopup.entries.length === 0 && dayPopup.tasEntries.length === 0 && (
-              <div className="text-sm text-gray-400 text-center py-6">
-                Bu gün için kayıt yok.
+            <div className="max-h-[72vh] overflow-y-auto px-6 py-5">
+              <div className="mb-5 grid gap-4 md:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Toplam Görev</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900">{dayPopup.entries.length}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-emerald-600">Tamamlanan</p>
+                  <p className="mt-2 text-2xl font-bold text-emerald-700">
+                    {dayPopup.entries.filter((e) => e.isCompleted).length}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-violet-600">Personelli Görev</p>
+                  <p className="mt-2 text-2xl font-bold text-violet-700">
+                    {dayPopup.entries.filter((e) => e.assignedPeople.length > 0).length}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-amber-600">Taş Takibi</p>
+                  <p className="mt-2 text-2xl font-bold text-amber-700">{dayPopup.tasEntries.length}</p>
+                </div>
               </div>
-            )}
 
-            {dayPopup.entries.map((entry) => {
-              const style = PHASE_STYLES[entry.phase];
-              return (
-                <div key={entry.phaseId} className={`rounded-xl border p-3 ${style.bg} ${style.border}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className={`text-sm font-semibold ${style.text}`}>
-                      {PHASE_LABELS[entry.phase]}
+              <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                <div className="space-y-4">
+                  {dayPopup.entries.length === 0 ? (
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center text-slate-500">
+                      Bu gün için görev kaydı yok.
                     </div>
-                    {entry.isCompleted && (
-                      <span className="text-xs text-green-700 font-medium">✓ Tamamlandı</span>
-                    )}
-                  </div>
+                  ) : (
+                    dayPopup.entries.map((entry) => {
+                      const style = PHASE_STYLES[entry.phase];
+                      const isObj: any = entry.schedule.is;
 
-                  <div className="text-sm text-gray-800 mt-1">{entry.musteriAdi}</div>
-                  {entry.teklifNo && <div className="text-xs text-gray-500">{entry.teklifNo}</div>}
+                      return (
+                        <div key={entry.phaseId} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={cls("inline-flex rounded-full border px-3 py-1 text-xs font-semibold", style.chip)}>
+                                  {PHASE_LABELS[entry.phase]}
+                                </span>
 
-                  <div className="text-xs text-gray-500 mt-2">
-                    {entry.plannedStart.toLocaleDateString("tr-TR")} - {entry.plannedEnd.toLocaleDateString("tr-TR")}
-                  </div>
+                                {entry.isCompleted && (
+                                  <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                    ✓ Tamamlandı
+                                  </span>
+                                )}
 
-                  {entry.schedule.notes && (
-                    <div className="mt-2 text-xs text-gray-700 bg-white/70 rounded-lg p-2 border border-white/60">
-                      📝 {entry.schedule.notes}
-                    </div>
+                                {isObj?.tasDurumu === "alinacak" && (
+                                  <span className="inline-flex rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                                    🪨 Taş Alınacak
+                                  </span>
+                                )}
+
+                                {isObj?.tasDurumu === "alindi" && (
+                                  <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                    🪨 Taş Alındı
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 className="mt-3 text-xl font-bold text-slate-900">{entry.musteriAdi}</h4>
+                              <p className="mt-1 text-sm text-slate-500">
+                                {entry.teklifNo || "Teklif no yok"} {isObj?.urunAdi ? `• ${isObj.urunAdi}` : ""}
+                              </p>
+
+                              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Plan Tarihi</p>
+                                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                                    {entry.plannedStart.toLocaleDateString("tr-TR")} - {entry.plannedEnd.toLocaleDateString("tr-TR")}
+                                  </p>
+                                </div>
+
+                                <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Atanan Personel</p>
+                                  {entry.assignedPeople.length > 0 ? (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {entry.assignedPeople.map((p) => (
+                                        <span
+                                          key={p.id}
+                                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                                        >
+                                          👤 {p.ad} {p.soyad} {p.gorevi ? `• ${p.gorevi}` : ""}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="mt-2 text-sm text-slate-500">Atama yapılmamış</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {entry.schedule.notes && (
+                                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                  <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Not</p>
+                                  <p className="mt-2 text-sm text-slate-700">{entry.schedule.notes}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="w-full shrink-0 lg:w-[180px]">
+                              <button
+                                onClick={() => {
+                                  setSelectedSchedule(entry.schedule);
+                                  setIsModalOpen(true);
+                                  setDayPopup(null);
+                                }}
+                                className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-black"
+                              >
+                                Düzenle
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
+                </div>
 
-                  <div className="mt-2">
-                    <div className="text-[11px] text-gray-500 mb-1">Atanan Personel</div>
-                    {entry.assignedPeople.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {entry.assignedPeople.map((p) => (
-                          <span
-                            key={p.id}
-                            className="text-[10px] px-2 py-0.5 rounded-full bg-white text-gray-700 border"
-                          >
-                            👤 {p.ad} {p.soyad}
-                          </span>
+                <div className="space-y-4">
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h4 className="text-lg font-bold text-slate-900">Taş Takibi</h4>
+
+                    {dayPopup.tasEntries.length === 0 ? (
+                      <p className="mt-3 text-sm text-slate-500">Bu gün için taş takibi yok.</p>
+                    ) : (
+                      <div className="mt-4 space-y-3">
+                        {dayPopup.tasEntries.map((entry, idx) => (
+                          <div key={`${entry.isId}-${idx}`} className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                            <div className="text-sm font-semibold text-orange-700">
+                              {entry.tasAlindi ? "✓ Taş Alındı" : "🪨 Taş Alınacak"}
+                            </div>
+                            <p className="mt-2 text-sm font-medium text-slate-900">{entry.musteriAdi}</p>
+                            <p className="mt-1 text-xs text-slate-500">Taş: {entry.tasAdi || "—"}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Ölçü tarihi: {entry.olcuTarihi.toLocaleDateString("tr-TR")}
+                            </p>
+                          </div>
                         ))}
                       </div>
-                    ) : (
-                      <div className="text-xs text-gray-400">Atama yapılmamış</div>
                     )}
                   </div>
 
-                  <div className="mt-3">
-                    <button
-                      onClick={() => {
-                        setSelectedSchedule(entry.schedule);
-                        setIsModalOpen(true);
-                        setDayPopup(null);
-                      }}
-                      className="w-full py-2 rounded-lg bg-gray-900 text-white text-sm hover:bg-black transition-colors"
-                    >
-                      Düzenle
-                    </button>
+                  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h4 className="text-lg font-bold text-slate-900">Gün İçgörüsü</h4>
+                    <div className="mt-4 space-y-3 text-sm text-slate-600">
+                      <p>
+                        Bu günde <strong>{dayPopup.entries.length}</strong> görev ve <strong>{dayPopup.tasEntries.length}</strong> taş takibi bulunuyor.
+                      </p>
+                      <p>
+                        Personel atamalı görev sayısı <strong>{dayPopup.entries.filter((e) => e.assignedPeople.length > 0).length}</strong>.
+                      </p>
+                      <p>
+                        Tamamlanan görev oranı{" "}
+                        <strong>
+                          {dayPopup.entries.length > 0
+                            ? `%${Math.round((dayPopup.entries.filter((e) => e.isCompleted).length / dayPopup.entries.length) * 100)}`
+                            : "%0"}
+                        </strong>.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-
-            {dayPopup.tasEntries.map((entry, idx) => (
-              <div key={`${entry.isId}-${idx}`} className="rounded-xl border p-3 bg-orange-50 border-orange-200">
-                <div className="text-sm font-semibold text-orange-700">🪨 Taş Alınacak</div>
-                <div className="text-sm text-gray-800 mt-1">{entry.musteriAdi}</div>
-                <div className="text-xs text-gray-500 mt-1">Taş: {entry.tasAdi || "—"}</div>
-                <div className="text-xs text-gray-500">
-                  Ölçü tarihi: {entry.olcuTarihi.toLocaleDateString("tr-TR")}
-                </div>
               </div>
-            ))}
+            </div>
           </div>
         </div>
       )}
 
       {tasPopup && (
         <div
-          className="fixed z-50 bg-white rounded-xl shadow-xl border p-4 w-64"
-          style={{
-            top: Math.min(tasPopup.y, window.innerHeight - 220),
-            left: Math.min(tasPopup.x, window.innerWidth - 270),
-          }}
-          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-[65]"
+          onClick={() => setTasPopup(null)}
         >
-          <div className="flex justify-between items-start mb-3">
-            <div className="text-sm font-semibold text-orange-700">🪨 Taş Durumu</div>
-            <button
-              onClick={() => setTasPopup(null)}
-              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-            >
-              ×
-            </button>
-          </div>
-
-          <div className="text-sm text-gray-800 font-medium mb-1">
-            {tasPopup.entry.musteriAdi}
-          </div>
-          <div className="text-xs text-gray-500">
-            Taş: <span className="font-medium">{tasPopup.entry.tasAdi || "—"}</span>
-          </div>
-          <div className="text-xs text-gray-400 mt-1 mb-3">
-            Ölçü tarihi: {tasPopup.entry.olcuTarihi.toLocaleDateString("tr-TR")}
-          </div>
-
-          <label
-            className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all mb-4 ${
-              tasAlindi
-                ? "border-green-500 bg-green-50"
-                : "border-gray-200 bg-gray-50 hover:border-green-300"
-            }`}
+          <div
+            className="fixed bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 w-72"
+            style={{
+              top: Math.min(tasPopup.y, window.innerHeight - 260),
+              left: Math.min(tasPopup.x, window.innerWidth - 290),
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                tasAlindi ? "bg-green-500 border-green-500" : "border-gray-300"
-              }`}
-            >
-              {tasAlindi && <span className="text-white text-xs font-bold">✓</span>}
-            </div>
-            <div>
-              <div className={`text-sm font-medium ${tasAlindi ? "text-green-700" : "text-gray-600"}`}>
-                Taş Alındı
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-orange-700">🪨 Taş Durumu</div>
+                <div className="mt-1 text-sm font-medium text-slate-900">{tasPopup.entry.musteriAdi}</div>
               </div>
-              <div className="text-xs text-gray-400">İşaretlersen takvimde üzeri çizilir</div>
+              <button
+                onClick={() => setTasPopup(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              >
+                ×
+              </button>
             </div>
-            <input
-              type="checkbox"
-              className="hidden"
-              checked={tasAlindi}
-              onChange={(e) => setTasAlindi(e.target.checked)}
-            />
-          </label>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setTasPopup(null)}
-              className="py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            <div className="text-xs text-slate-500">
+              Taş: <span className="font-medium">{tasPopup.entry.tasAdi || "—"}</span>
+            </div>
+            <div className="text-xs text-slate-400 mt-1 mb-3">
+              Ölçü tarihi: {tasPopup.entry.olcuTarihi.toLocaleDateString("tr-TR")}
+            </div>
+
+            <label
+              onClick={(e) => e.stopPropagation()}
+              className={cls(
+                "mb-4 flex cursor-pointer items-center gap-3 rounded-xl border-2 p-3 transition-all",
+                tasAlindi
+                  ? "border-emerald-500 bg-emerald-50"
+                  : "border-slate-200 bg-slate-50 hover:border-emerald-300"
+              )}
             >
-              İptal
-            </button>
-            <button
-              onClick={tasSave}
-              disabled={tasKaydediliyor}
-              className="py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-60"
-            >
-              {tasKaydediliyor ? "..." : "💾 Kaydet"}
-            </button>
+              <div
+                className={cls(
+                  "w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                  tasAlindi ? "bg-emerald-500 border-emerald-500" : "border-slate-300"
+                )}
+              >
+                {tasAlindi && <span className="text-white text-xs font-bold">✓</span>}
+              </div>
+              <div className="flex-1">
+                <div className={cls("text-sm font-medium", tasAlindi ? "text-emerald-700" : "text-slate-700")}>
+                  Taş Alındı
+                </div>
+                <div className="text-xs text-slate-400">İşaretlersen takvimde üzeri çizilir</div>
+              </div>
+              <input
+                type="checkbox"
+                className="hidden"
+                checked={tasAlindi}
+                onChange={(e) => setTasAlindi(e.target.checked)}
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setTasPopup(null)}
+                className="rounded-xl border border-slate-200 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                onClick={tasSave}
+                disabled={tasKaydediliyor}
+                className="rounded-xl bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-emerald-700 transition-colors disabled:opacity-60"
+              >
+                {tasKaydediliyor ? "..." : "Kaydet"}
+              </button>
+            </div>
           </div>
         </div>
       )}

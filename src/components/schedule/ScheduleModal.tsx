@@ -15,10 +15,40 @@ interface ScheduleModalProps {
 type Personel = { id: string; ad: string; soyad: string; gorevi: string };
 type FazAtama = { id: string; personel: Personel };
 
+type LocalSchedule = {
+  id: string;
+  isId: string;
+  startDate: Date | null;
+  endDate: Date | null;
+  notes: string | null;
+  phases: any[];
+  is: {
+    id: string;
+    teklifNo: string;
+    musteriAdi: string;
+    urunAdi: string;
+  };
+};
+
 export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps) {
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState<"is" | "tarihler" | "asamalar" | "atama">(
     schedule ? "tarihler" : "is"
+  );
+
+  const [currentSchedule, setCurrentSchedule] = useState<LocalSchedule | null>(
+    schedule
+      ? {
+          ...schedule,
+          phases: schedule.phases as any[],
+          is: {
+            id: schedule.is.id,
+            teklifNo: schedule.is.teklifNo,
+            musteriAdi: schedule.is.musteriAdi,
+            urunAdi: schedule.is.urunAdi,
+          },
+        }
+      : null
   );
 
   const [selectedIs, setSelectedIs] = useState<{
@@ -96,28 +126,28 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
   }, []);
 
   useEffect(() => {
-    if (schedule?.phases?.length) {
+    if (currentSchedule?.phases?.length) {
       const baslangicAtamalar: Record<string, FazAtama[]> = {};
-      for (const phase of schedule.phases as any[]) {
+      for (const phase of currentSchedule.phases as any[]) {
         baslangicAtamalar[phase.id] = phase.fazAtamalar || [];
       }
       setFazAtamalar(baslangicAtamalar);
     }
-  }, [schedule]);
+  }, [currentSchedule]);
 
   useEffect(() => {
-    if (step === "atama" && schedule) {
+    if (step === "atama" && currentSchedule) {
       yukleAtamalar();
     }
-  }, [step, schedule]);
+  }, [step, currentSchedule]);
 
   async function yukleAtamalar() {
-    if (!schedule) return;
+    if (!currentSchedule) return;
 
     setAtamaYukleniyor(true);
     const yeni: Record<string, FazAtama[]> = {};
 
-    for (const phase of schedule.phases as any[]) {
+    for (const phase of currentSchedule.phases as any[]) {
       const res = await fetch(`/api/faz-atama?schedulePhaseId=${phase.id}`);
       const v = await res.json();
       yeni[phase.id] = v.atamalar || [];
@@ -164,7 +194,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
     if (!selectedIs) return;
 
     startTransition(async () => {
-      await upsertWorkSchedule({
+      const saved: any = await upsertWorkSchedule({
         isId: selectedIs.id,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
@@ -175,11 +205,29 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
           plannedEnd: phaseDates[phase].end ? new Date(phaseDates[phase].end) : null,
         })),
       });
-      onSaved();
+
+      const normalized: LocalSchedule = {
+        ...saved,
+        phases: saved.phases || [],
+        is: {
+          id: selectedIs.id,
+          teklifNo: selectedIs.teklifNo,
+          musteriAdi: selectedIs.musteriAdi,
+          urunAdi: selectedIs.urunAdi,
+        },
+      };
+
+      setCurrentSchedule(normalized);
+
+      if (!schedule) {
+        setStep("atama");
+      } else {
+        onSaved();
+      }
     });
   }
 
-  const adimlar = schedule
+  const adimlar = currentSchedule
     ? (["is", "tarihler", "asamalar", "atama"] as const)
     : (["is", "tarihler", "asamalar"] as const);
 
@@ -305,10 +353,10 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
                       {i + 1}
                     </span>
                     <span className="text-sm font-medium">{PHASE_LABELS[phase]}</span>
-                    {schedule &&
+                    {currentSchedule &&
                       (() => {
-                        const p = schedule.phases.find((ph) => ph.phase === phase);
-                        return p ? <PhaseBadge phase={p} allPhases={schedule.phases} compact /> : null;
+                        const p = currentSchedule.phases.find((ph: any) => ph.phase === phase);
+                        return p ? <PhaseBadge phase={p} allPhases={currentSchedule.phases} compact /> : null;
                       })()}
                   </div>
 
@@ -351,7 +399,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
 
           {step === "atama" && (
             <div className="space-y-4">
-              {!schedule ? (
+              {!currentSchedule ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
                   Önce iş programını kaydedin. Kaydettikten sonra personel atama ekranı açılır.
                 </div>
@@ -359,7 +407,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
                 <p className="text-sm text-gray-400 text-center py-4">Yükleniyor...</p>
               ) : (
                 PHASE_ORDER.map((phase) => {
-                  const phaseObj = (schedule.phases as any[]).find((p) => p.phase === phase);
+                  const phaseObj = (currentSchedule.phases as any[]).find((p: any) => p.phase === phase);
                   if (!phaseObj) return null;
 
                   const atamalar = fazAtamalar[phaseObj.id] || [];
@@ -454,7 +502,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
                 {isPending && (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 )}
-                {schedule ? "Güncelle" : "Kaydet"}
+                {currentSchedule ? "Güncelle" : "Kaydet ve Personel Ata"}
               </button>
             ) : (
               <button
