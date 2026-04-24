@@ -9,34 +9,55 @@ export async function GET(request: NextRequest) {
   const cookieStore = await cookies()
   const token = cookieStore.get('metrix-token')?.value
   if (!token) return NextResponse.json([])
-  
+
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
     const { payload } = await jwtVerify(token, secret)
+
     const user = await prisma.user.findUnique({
       where: { id: payload.id as string },
-      include: { atolye: true }
+      include: { atolye: true },
     })
+
     if (!user?.atolye) return NextResponse.json([])
 
-    const q = request.nextUrl.searchParams.get("q") ?? ""
-    if (q.length < 2) return NextResponse.json([])
+    const q = request.nextUrl.searchParams.get("q")?.trim() ?? ""
 
     const isler = await prisma.is.findMany({
       where: {
         atolyeId: user.atolye.id,
-        OR: [
-          { teklifNo: { contains: q, mode: 'insensitive' } },
-          { musteriAdi: { contains: q, mode: 'insensitive' } },
-          { urunAdi: { contains: q, mode: 'insensitive' } },
-        ]
+        durum: {
+          in: ["onaylandi", "onaylandı", "onay"],
+        },
+        workSchedule: null,
+        ...(q.length >= 2
+          ? {
+              OR: [
+                { teklifNo: { contains: q, mode: 'insensitive' } },
+                { musteriAdi: { contains: q, mode: 'insensitive' } },
+                { urunAdi: { contains: q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
       },
-      select: { id: true, teklifNo: true, musteriAdi: true, urunAdi: true },
-      take: 10,
-      orderBy: { createdAt: 'desc' }
+      select: {
+        id: true,
+        teklifNo: true,
+        musteriAdi: true,
+        urunAdi: true,
+        metrajMtul: true,
+        toplamSureDakika: true,
+        toplamMaliyet: true,
+        satisFiyati: true,
+        createdAt: true,
+      },
+      take: 20,
+      orderBy: { createdAt: 'desc' },
     })
+
     return NextResponse.json(isler)
-  } catch {
+  } catch (error) {
+    console.error("İş arama hatası:", error)
     return NextResponse.json([])
   }
 }

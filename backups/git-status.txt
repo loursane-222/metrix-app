@@ -1,0 +1,17 @@
+ M prisma/schema.prisma
+ M src/app/actions/schedule.ts
+ M src/app/api/auth/login/route.ts
+ M src/app/api/logo/route.ts
+ M src/app/api/personel/route.ts
+ M src/app/api/schedule/route.ts
+ M src/app/dashboard/personel/page.tsx
+ M src/components/dashboard/Sidebar.tsx
+?? backups/
+?? prisma/migrations/20260424075604_add_menu_permissions/
+?? src/app/api/admin/menu-permissions/
+?? src/app/api/auth/current-user/
+?? src/app/personel/
+?? src/app/yetkisiz/
+?? src/components/PermissionSidebar.tsx
+?? src/lib/menu.ts
+?? src/lib/prisma.ts

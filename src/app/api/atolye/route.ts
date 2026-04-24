@@ -30,8 +30,7 @@ function toplamHesapla(atolye: {
   const makineAmortisman = atolye.makineler.reduce((acc, m) => acc + Number(m.aylikAmortisman), 0)
   const aracMaliyet = atolye.araclar.reduce((acc, a) => acc + Number(a.aylikToplamSabitMaliyet), 0)
   const toplamAylikGider = personelGider + sabitGider + makineAmortisman + aracMaliyet
-  const toplamPlaka = Number(atolye.aylikPorselenPlaka) + Number(atolye.aylikKuvarsPlaka) + Number(atolye.aylikDogaltasPlaka)
-  const toplamAylikDakika = toplamPlaka * 480
+  const toplamAylikDakika = 26 * 8 * 60
   const dakikaMaliyeti = toplamAylikDakika > 0 ? toplamAylikGider / toplamAylikDakika : 0
   const gunlukGider = toplamAylikGider / 26
   return { toplamAylikGider, dakikaMaliyeti, gunlukGider }
@@ -71,8 +70,7 @@ export async function POST(req: NextRequest) {
   const makineAmortisman = makineler.reduce((acc, m) => acc + Number(m.aylikAmortisman), 0)
   const aracMaliyet = araclar.reduce((acc, a) => acc + Number(a.aylikToplamSabitMaliyet), 0)
   const toplamAylikGider = personelGider + sabitGider + makineAmortisman + aracMaliyet
-  const toplamPlaka = (parseInt(veri.aylikPorselenPlaka) || 0) + (parseInt(veri.aylikKuvarsPlaka) || 0) + (parseInt(veri.aylikDogaltasPlaka) || 0)
-  const toplamAylikDakika = toplamPlaka * 480
+  const toplamAylikDakika = 26 * 8 * 60
   const dakikaMaliyeti = toplamAylikDakika > 0 ? toplamAylikGider / toplamAylikDakika : 0
   const gunlukGider = toplamAylikGider / 26
 

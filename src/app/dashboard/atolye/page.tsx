@@ -469,10 +469,18 @@ export default function AtolyeProfili() {
       parseNum(form.aylikKuvarsPlaka) +
       parseNum(form.aylikDogaltasPlaka)
 
-    const toplamDakika = toplamPlaka * 480
+    const calismaGunu = 26
+    const gunlukSaat = 8
+    const toplamDakika = calismaGunu * gunlukSaat * 60
+    const plakaBasinaMtul = parseNum(form.plakaBasinaMtul) || 0
+    const aylikUretimMtul = toplamPlaka * plakaBasinaMtul
+    const dakikalikMtul = toplamDakika > 0 ? aylikUretimMtul / toplamDakika : 0
+    const birMtulDakika = dakikalikMtul > 0 ? 1 / dakikalikMtul : 0
+    const plakaTeorikDakika = toplamPlaka > 0 ? toplamDakika / toplamPlaka : 0
     const toplam = personel + sabit + makineAmortisman + aracMaliyet
     const dakika = toplamDakika > 0 ? toplam / toplamDakika : 0
-    const gunluk = toplam / 26
+    const mtulMaliyeti = aylikUretimMtul > 0 ? toplam / aylikUretimMtul : 0
+    const gunluk = toplam / calismaGunu
 
     return {
       personel,
@@ -481,8 +489,14 @@ export default function AtolyeProfili() {
       aracMaliyet,
       toplamPlaka,
       toplamDakika,
+      plakaBasinaMtul,
+      aylikUretimMtul,
+      dakikalikMtul,
+      birMtulDakika,
+      plakaTeorikDakika,
       toplam,
       dakika,
+      mtulMaliyeti,
       gunluk,
     }
   }, [form, makineler, araclar])
@@ -544,8 +558,10 @@ export default function AtolyeProfili() {
     const plakaBasinaMtul = parseNum(form.plakaBasinaMtul) || 3.2
 
     const kapasite10 = Math.round(hesapOzet.toplamPlaka * 1.1)
-    const dakikaKapasite10 = kapasite10 * 480
+    const dakikaKapasite10 = hesapOzet.toplamDakika
+    const uretimMtul10 = kapasite10 * plakaBasinaMtul
     const dakikaMaliyetKapasite10 = dakikaKapasite10 > 0 ? mevcutToplam / dakikaKapasite10 : 0
+    const mtulMaliyetKapasite10 = uretimMtul10 > 0 ? mevcutToplam / uretimMtul10 : 0
 
     const sabit10DusukToplam = mevcutToplam - (hesapOzet.sabit * 0.10)
     const dakikaMaliyetSabit10 = mevcutDakikaKapasite > 0 ? sabit10DusukToplam / mevcutDakikaKapasite : 0
@@ -560,8 +576,8 @@ export default function AtolyeProfili() {
       {
         tone: 'blue',
         title: 'Kapasiteyi artır',
-        impact: `${paraGoster(mevcutDakika, 4)} → ${paraGoster(dakikaMaliyetKapasite10, 4)}`,
-        desc: `Aylık kapasiteyi yaklaşık %10 artırıp ${kapasite10} plakaya çıkarırsan dakika maliyetin düşer.`,
+        impact: `${paraGoster(hesapOzet.mtulMaliyeti)} → ${paraGoster(mtulMaliyetKapasite10)}`,
+        desc: `Aylık kapasiteyi yaklaşık %10 artırıp ${kapasite10} plakaya çıkarırsan 1 mtül maliyetin düşer.`,
       },
       {
         tone: 'amber',
@@ -682,7 +698,11 @@ export default function AtolyeProfili() {
         <InsightCard title="Personel Gideri" value={paraGoster(hesapOzet.personel)} tone="blue" />
         <InsightCard title="Sabit Gider" value={paraGoster(hesapOzet.sabit)} tone="slate" />
         <InsightCard title="Makine + Araç Yükü" value={paraGoster(hesapOzet.makineAmortisman + hesapOzet.aracMaliyet)} tone="violet" />
-        <InsightCard title="Toplam Üretim Dakikası" value={`${Math.round(hesapOzet.toplamDakika).toLocaleString('tr-TR')} dk`} tone="emerald" />
+        <InsightCard title="Aktif Çalışma Dakikası" value={`${Math.round(hesapOzet.toplamDakika).toLocaleString('tr-TR')} dk`} tone="emerald" sub="26 gün × 8 saat × 60 dk" />
+        <InsightCard title="Aylık Üretim Mtül" value={`${hesapOzet.aylikUretimMtul.toFixed(2)} mtül`} tone="blue" sub={`${Math.round(hesapOzet.toplamPlaka)} plaka × ${hesapOzet.plakaBasinaMtul.toFixed(2)} mtül`} />
+        <InsightCard title="Dakikalık Üretim" value={`${hesapOzet.dakikalikMtul.toFixed(4)} mtül/dk`} tone="violet" sub="Dakikada teorik mtül çıktısı" />
+        <InsightCard title="1 Mtül Süresi" value={`${hesapOzet.birMtulDakika.toFixed(1)} dk`} tone="amber" sub={`1 plaka ≈ ${hesapOzet.plakaTeorikDakika.toFixed(1)} dk`} />
+        <InsightCard title="1 Mtül Maliyeti" value={paraGoster(hesapOzet.mtulMaliyeti)} tone="rose" sub="Aylık gider / aylık mtül üretimi" />
       </section>
 
       <div
@@ -856,7 +876,7 @@ export default function AtolyeProfili() {
           </div>
         </SectionCard>
 
-        <SectionCard title="Aylık kapasite" desc="Backend dakika maliyetini mevcut mantıkta toplam plaka × 480 dakika üzerinden hesaplıyor. Bu yüzden buradaki kapasite rakamı çok kritik.">
+        <SectionCard title="Aylık kapasite" desc="Kapasite artık plaka → mtül dönüşümüyle okunur. Sistem 26 gün × 8 saat = 12.480 aktif çalışma dakikasını baz alır.">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Field label="Porselen Plaka (adet/ay)">
               <Input type="number" value={form.aylikPorselenPlaka} onChange={(e) => guncelle('aylikPorselenPlaka', e.target.value)} />
@@ -1119,3 +1139,8 @@ export default function AtolyeProfili() {
     </div>
   )
 }
+
+
+
+
+

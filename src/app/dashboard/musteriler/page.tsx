@@ -129,8 +129,26 @@ const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (getQueryParam('yeni') === '1') {
+      setYeniMusteriForm(bosForm())
       setYeniMusteriAcik(true)
     }
+
+    function yeniMusteriLinkiniYakala(e: MouseEvent) {
+      const target = e.target as HTMLElement | null
+      const link = target?.closest('a') as HTMLAnchorElement | null
+      if (!link) return
+
+      const href = link.getAttribute('href') || ''
+      if (!href.includes('/dashboard/musteriler?yeni=1')) return
+
+      e.preventDefault()
+      setYeniMusteriForm(bosForm())
+      setYeniMusteriAcik(true)
+      window.history.replaceState(null, '', '/dashboard/musteriler?yeni=1')
+    }
+
+    document.addEventListener('click', yeniMusteriLinkiniYakala)
+    return () => document.removeEventListener('click', yeniMusteriLinkiniYakala)
   }, [])
 
   const ciroSiralamasi = useMemo(() => {
@@ -150,18 +168,31 @@ const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const filtrelenmisMusteriler = useMemo(() => {
     const q = arama.trim().toLocaleLowerCase('tr-TR')
-    if (!q) return musteriler
 
-    return musteriler.filter(m => {
-      const alan = [
-        m.firmaAdi,
-        m.ad,
-        m.soyad,
-        m.telefon,
-        m.email
-      ].join(' ').toLocaleLowerCase('tr-TR')
+    const liste = q
+      ? musteriler.filter(m => {
+          const alan = [
+            m.firmaAdi,
+            m.ad,
+            m.soyad,
+            m.telefon,
+            typeof (m as any).email === 'string' ? (m as any).email : ''
+          ].join(' ').toLocaleLowerCase('tr-TR')
 
-      return alan.includes(q)
+          return alan.includes(q)
+        })
+      : musteriler
+
+    return [...liste].sort((a, b) => {
+      const ciroA = a.isler.filter(i => i.durum === 'onaylandi').reduce((x, i) => x + Number(i.satisFiyati || 0), 0)
+      const ciroB = b.isler.filter(i => i.durum === 'onaylandi').reduce((x, i) => x + Number(i.satisFiyati || 0), 0)
+
+      if (ciroB !== ciroA) return ciroB - ciroA
+
+      const adA = (a.firmaAdi || `${a.ad || ''} ${a.soyad || ''}`).trim()
+      const adB = (b.firmaAdi || `${b.ad || ''} ${b.soyad || ''}`).trim()
+
+      return adA.localeCompare(adB, 'tr')
     })
   }, [arama, musteriler])
 
@@ -320,7 +351,10 @@ const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   function yeniMusteriModalKapat() {
     setYeniMusteriAcik(false)
-    router.replace('/dashboard/musteriler')
+    setYeniMusteriForm(bosForm())
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', '/dashboard/musteriler')
+    }
   }
 
   if (yukleniyor) {
@@ -343,7 +377,7 @@ const fileInputRef = useRef<HTMLInputElement | null>(null)
                 Müşterilerini yönet, ciroyu büyüt
               </h2>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
-                Tüm müşteriler, teklif geçmişi, tahsilatlar, dönüşüm performansı ve ciro sıralaması tek ekranda.
+                Müşteriler ciro performansına göre sıralanır; eşit ciroda alfabetik düzen kullanılır.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -386,8 +420,8 @@ const fileInputRef = useRef<HTMLInputElement | null>(null)
               </div>
 
               <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Toplam Teklif</p>
-                <p className="mt-3 text-2xl font-bold">{genelOzet.teklif}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Toplam Alacak</p>
+                <p className="mt-3 text-2xl font-bold">{paraGoster(Math.max(0, genelOzet.acikBakiye))}</p>
               </div>
 
               <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
@@ -430,7 +464,7 @@ const fileInputRef = useRef<HTMLInputElement | null>(null)
         </div>
       </section>
 
-      <section className="grid gap-4">
+      <section className="grid gap-3">
         {filtrelenmisMusteriler.map((m) => {
           const toplamTeklifAdeti = m.isler.length
           const onaylananlar = m.isler.filter(i => i.durum === 'onaylandi')
@@ -447,167 +481,99 @@ const fileInputRef = useRef<HTMLInputElement | null>(null)
           const onaylananAdet = onaylananlar.length
           const kaybedilenAdet = kaybedilenler.length
           const bekleyenAdet = bekleyenler.length
-
           const onayYuzdesi = toplamTeklifAdeti > 0 ? (onaylananAdet / toplamTeklifAdeti) * 100 : 0
-          const kayipYuzdesi = toplamTeklifAdeti > 0 ? (kaybedilenAdet / toplamTeklifAdeti) * 100 : 0
           const sira = ciroSiralamasi.get(m.id) || 0
+          const email = typeof (m as any).email === 'string' ? (m as any).email : ''
+          const iletisim = [m.telefon, email].filter(Boolean).join(' • ')
 
           return (
             <div
               key={m.id}
-              className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
+              className="rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.055)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_44px_rgba(15,23,42,0.09)]"
             >
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="text-2xl font-bold tracking-tight text-slate-900">
+              <div className="grid gap-4 xl:grid-cols-[1fr_170px] xl:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="truncate text-xl font-black tracking-tight text-slate-950">
                       {tamAd(m)}
                     </h3>
 
-                    <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
-                      #{sira} ciro sırası
+                    <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700">
+                      #{sira} ciro
                     </span>
 
                     <span className={cls(
-                      'rounded-full px-3 py-1 text-xs font-semibold',
-                      m.bakiyeTipi === 'alacak'
+                      'rounded-full px-2.5 py-1 text-[11px] font-bold',
+                      netBakiye > 0
+                        ? 'border border-rose-200 bg-rose-50 text-rose-700'
+                        : netBakiye < 0
                         ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                        : 'border border-rose-200 bg-rose-50 text-rose-700'
+                        : 'border border-slate-200 bg-slate-50 text-slate-600'
                     )}>
-                      Açılış: {acilisBakiyeYazisi(m)}
+                      {bakiyeDurumu}
                     </span>
                   </div>
 
-                  <p className="mt-2 text-sm text-slate-500">
-                    {m.telefon || 'Telefon yok'} {m.email ? `• ${m.email}` : ''}
+                  <p className="mt-1 text-xs font-medium text-slate-500">
+                    {iletisim || 'Telefon / e-posta bilgisi yok'}
                   </p>
 
-                  <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-slate-500">Satış Pipeline</p>
-                          <h4 className="mt-1 text-xl font-bold text-slate-900">Teklif performansı</h4>
-                        </div>
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 border border-slate-200">
-                          {yuzdeGoster(onayYuzdesi)} onay
-                        </span>
-                      </div>
-
-                      <div className="mt-5 grid grid-cols-4 gap-3">
-                        <div className="rounded-2xl bg-white p-4">
-                          <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Toplam</p>
-                          <p className="mt-2 text-2xl font-bold text-slate-900">{toplamTeklifAdeti}</p>
-                        </div>
-
-                        <div className="rounded-2xl bg-emerald-50 p-4">
-                          <p className="text-xs uppercase tracking-[0.12em] text-emerald-600">Onay</p>
-                          <p className="mt-2 text-2xl font-bold text-emerald-700">{onaylananAdet}</p>
-                          <p className="mt-1 text-xs text-emerald-700/80">{yuzdeGoster(onayYuzdesi)}</p>
-                        </div>
-
-                        <div className="rounded-2xl bg-amber-50 p-4">
-                          <p className="text-xs uppercase tracking-[0.12em] text-amber-600">Bekleyen</p>
-                          <p className="mt-2 text-2xl font-bold text-amber-700">{bekleyenAdet}</p>
-                        </div>
-
-                        <div className="rounded-2xl bg-rose-50 p-4">
-                          <p className="text-xs uppercase tracking-[0.12em] text-rose-600">Kayıp</p>
-                          <p className="mt-2 text-2xl font-bold text-rose-700">{kaybedilenAdet}</p>
-                          <p className="mt-1 text-xs text-rose-700/80">{yuzdeGoster(kayipYuzdesi)}</p>
-                        </div>
-                      </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.1fr_1.2fr]">
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">Onaylı Ciro</p>
+                      <p className="mt-1 text-lg font-black text-blue-800">{paraGoster(onaylananToplam)}</p>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-slate-500">Finans</p>
-                          <h4 className="mt-1 text-xl font-bold text-slate-900">Müşteri bakiyesi</h4>
-                        </div>
-                      </div>
+                    <div className="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-500">Tahsilat</p>
+                      <p className="mt-1 text-lg font-black text-cyan-800">{paraGoster(toplamTahsilat)}</p>
+                    </div>
 
-                      <div className="mt-5 grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl bg-blue-50 p-4">
-                          <p className="text-xs uppercase tracking-[0.12em] text-blue-600">Onaylı Ciro</p>
-                          <p className="mt-2 text-lg font-bold text-blue-700">{paraGoster(onaylananToplam)}</p>
-                        </div>
+                    <div className={cls(
+                      'rounded-2xl border px-4 py-3',
+                      netBakiye > 0
+                        ? 'border-rose-100 bg-rose-50'
+                        : netBakiye < 0
+                        ? 'border-emerald-100 bg-emerald-50'
+                        : 'border-slate-200 bg-slate-50'
+                    )}>
+                      <p className={cls(
+                        'text-[10px] font-black uppercase tracking-[0.14em]',
+                        netBakiye > 0 ? 'text-rose-500' : netBakiye < 0 ? 'text-emerald-500' : 'text-slate-400'
+                      )}>
+                        Açık Bakiye
+                      </p>
+                      <p className={cls(
+                        'mt-1 text-lg font-black',
+                        netBakiye > 0 ? 'text-rose-800' : netBakiye < 0 ? 'text-emerald-800' : 'text-slate-800'
+                      )}>
+                        {paraGoster(Math.abs(netBakiye))}
+                      </p>
+                    </div>
 
-                        <div className="rounded-2xl bg-cyan-50 p-4">
-                          <p className="text-xs uppercase tracking-[0.12em] text-cyan-600">Tahsilat</p>
-                          <p className="mt-2 text-lg font-bold text-cyan-700">{paraGoster(toplamTahsilat)}</p>
-                        </div>
-
-                        <div className={cls(
-                          'rounded-2xl p-4 col-span-2',
-                          netBakiye > 0
-                            ? 'bg-rose-50'
-                            : netBakiye < 0
-                            ? 'bg-emerald-50'
-                            : 'bg-white'
-                        )}>
-                          <p className={cls(
-                            'text-xs font-semibold uppercase tracking-[0.12em]',
-                            netBakiye > 0
-                              ? 'text-rose-600'
-                              : netBakiye < 0
-                              ? 'text-emerald-600'
-                              : 'text-slate-500'
-                          )}>
-                            Açık Bakiye
-                          </p>
-                          <p className={cls(
-                            'mt-2 text-2xl font-bold',
-                            netBakiye > 0
-                              ? 'text-rose-700'
-                              : netBakiye < 0
-                              ? 'text-emerald-700'
-                              : 'text-slate-700'
-                          )}>
-                            {paraGoster(Math.abs(netBakiye))}
-                          </p>
-                          <p className={cls(
-                            'mt-1 text-sm font-semibold',
-                            netBakiye > 0
-                              ? 'text-rose-700/80'
-                              : netBakiye < 0
-                              ? 'text-emerald-700/80'
-                              : 'text-slate-500'
-                          )}>
-                            {bakiyeDurumu}
-                          </p>
-                        </div>
-                      </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Pipeline</p>
+                      <p className="mt-1 text-sm font-black text-slate-900">
+                        {toplamTeklifAdeti} teklif · %{onayYuzdesi.toFixed(0)} onay
+                      </p>
+                      <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                        {onaylananAdet} onay · {bekleyenAdet} bekleyen · {kaybedilenAdet} kayıp
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex w-full shrink-0 flex-wrap gap-3 xl:w-[200px] xl:flex-col">
-                  <button
-                    onClick={() => teklifVer(m)}
-                    className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(59,130,246,0.22)] transition hover:scale-[1.01]"
-                  >
+                <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
+                  <button onClick={() => teklifVer(m)} className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_10px_22px_rgba(59,130,246,0.20)] transition hover:scale-[1.01]">
                     Teklif Ver
                   </button>
-
-                  <button
-                    onClick={() => setTahsilatPopup(m)}
-                    className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                  >
-                    Tahsilat Gir
+                  <button onClick={() => setTahsilatPopup(m)} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 transition hover:bg-emerald-100">
+                    Tahsilat
                   </button>
-
-                  <button
-                    onClick={() => duzenleAc(m)}
-                    className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
-                  >
+                  <button onClick={() => duzenleAc(m)} className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-black text-amber-700 transition hover:bg-amber-100">
                     Düzenle
                   </button>
-
-                  <button
-                    onClick={() => detayAc(m)}
-                    className="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
-                  >
+                  <button onClick={() => detayAc(m)} className="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-200">
                     Detay
                   </button>
                 </div>

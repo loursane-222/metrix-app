@@ -49,17 +49,21 @@ interface DayDetailPopup {
   tasEntries: TasAlinacakEntry[];
 }
 
+type CalendarFilter = "ALL" | "OLCU" | "IMALAT" | "MONTAJ" | "TAS" | "GECIKEN";
+type CalendarRange = "ALL" | "TODAY" | "WEEK";
+
 interface WorkCalendarProps {
   initialSchedules: ScheduleWithIs[];
   initialYear: number;
   initialMonth: number;
+  initialFilter?: CalendarFilter;
 }
 
 function cls(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: WorkCalendarProps) {
+export function WorkCalendar({ initialSchedules, initialYear, initialMonth, initialFilter = "ALL" }: WorkCalendarProps) {
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
   const [schedules, setSchedules] = useState<ScheduleWithIs[]>(initialSchedules);
@@ -73,9 +77,15 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   const [tasKaydediliyor, setTasKaydediliyor] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<CalendarFilter>(initialFilter);
+  const [activeRange, setActiveRange] = useState<CalendarRange>("ALL");
 
   const dragEntry = useRef<PhaseEntry | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+
+  useEffect(() => {
+    setActiveFilter(initialFilter);
+  }, [initialFilter]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -278,13 +288,18 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
       if (!schedule.is) continue;
 
       const is = schedule.is as any;
-      const olcuPhase = (schedule.phases as any[]).find((p: any) => p.phase === "OLCU");
+      const phases = (schedule.phases || []) as any[];
+
+      // Sadece "taş alınacak" seçilmiş işler takvime otomatik düşer
+      if (is.tasDurumu !== "alinacak") continue;
+
+      const olcuPhase = phases.find((p: any) => p.phase === "OLCU");
       if (!olcuPhase?.plannedStart) continue;
 
-      const urunVarMi = !!(is.urunAdi && String(is.urunAdi).trim());
-      if (!urunVarMi) continue;
-
+      const tasAdi = is.urunAdi || is.malzemeTipi || "Taş";
       const olcuTarihi = new Date(olcuPhase.plannedStart);
+
+      // Ölçü tarihinden 3 iş günü önce otomatik taş takip tarihi
       const tasAlisTarihi = isGunuGeriGit(olcuTarihi, 3);
       tasAlisTarihi.setHours(0, 0, 0, 0);
 
@@ -292,7 +307,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
         entries.push({
           isId: is.id,
           musteriAdi: is.musteriAdi,
-          tasAdi: is.urunAdi || "",
+          tasAdi,
           olcuTarihi,
           tasAlindi: is.tasDurumu === "alindi",
         });
@@ -343,6 +358,42 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   const isCurrentMonth =
     today.getFullYear() === year && today.getMonth() + 1 === month;
 
+  const visibleCalendarCells = useMemo(() => {
+    if (activeRange === "TODAY") {
+      const dayNum = isCurrentMonth ? today.getDate() : -1;
+      return [{ key: "today", dayNum, isValid: dayNum >= 1 && dayNum <= daysInMonth }];
+    }
+
+    if (activeRange === "WEEK") {
+      const refDate = isCurrentMonth ? today : new Date(year, month - 1, 1);
+      const weekDay = refDate.getDay() === 0 ? 7 : refDate.getDay();
+      const monday = new Date(refDate);
+      monday.setDate(refDate.getDate() - weekDay + 1);
+      monday.setHours(0, 0, 0, 0);
+
+      return Array.from({ length: 7 }, (_, idx) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + idx);
+        const sameMonth = d.getFullYear() === year && d.getMonth() + 1 === month;
+        const dayNum = sameMonth ? d.getDate() : -1;
+        return { key: `week-${idx}`, dayNum, isValid: sameMonth && dayNum >= 1 && dayNum <= daysInMonth };
+      });
+    }
+
+    return Array.from({ length: totalCells }, (_, i) => {
+      const dayNum = i - firstDayOfWeek + 1;
+      return { key: `month-${i}`, dayNum, isValid: dayNum >= 1 && dayNum <= daysInMonth };
+    });
+  }, [activeRange, isCurrentMonth, today, year, month, daysInMonth, totalCells, firstDayOfWeek]);
+
+  const calendarGridClass =
+    activeRange === "TODAY" ? "grid grid-cols-1 gap-2" : "grid grid-cols-7 gap-2";
+
+  const calendarDayHeaders =
+    activeRange === "TODAY"
+      ? [TR_DAYS[((isCurrentMonth ? today.getDay() : new Date(year, month - 1, 1).getDay()) + 6) % 7]]
+      : TR_DAYS;
+
   const monthlyStats = useMemo(() => {
     const phaseEntries = Array.from({ length: daysInMonth }, (_, idx) => getPhaseEntriesForDay(idx + 1)).flat();
     const tasEntries = Array.from({ length: daysInMonth }, (_, idx) => getTasAlinacakForDay(idx + 1)).flat();
@@ -363,29 +414,64 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-          <p className="text-sm font-medium text-slate-500">Toplam Program</p>
-          <p className="mt-3 text-3xl font-bold text-slate-900">{monthlyStats.toplamProgram}</p>
+        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Program</p>
+          <p className="mt-0.5 text-lg font-black text-slate-900">{monthlyStats.toplamProgram}</p>
         </div>
-        <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-          <p className="text-sm font-medium text-blue-600">Aktif Görev</p>
-          <p className="mt-3 text-3xl font-bold text-blue-700">{monthlyStats.aktifGörev}</p>
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">Aktif</p>
+          <p className="mt-0.5 text-lg font-black text-blue-700">{monthlyStats.aktifGörev}</p>
         </div>
-        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-          <p className="text-sm font-medium text-emerald-600">Tamamlanan</p>
-          <p className="mt-3 text-3xl font-bold text-emerald-700">{monthlyStats.tamamlananGörev}</p>
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">Tamamlanan</p>
+          <p className="mt-0.5 text-lg font-black text-emerald-700">{monthlyStats.tamamlananGörev}</p>
         </div>
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-          <p className="text-sm font-medium text-amber-600">Taş Takibi</p>
-          <p className="mt-3 text-3xl font-bold text-amber-700">{monthlyStats.tasTakibi}</p>
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-500">Taş</p>
+          <p className="mt-0.5 text-lg font-black text-amber-700">{monthlyStats.tasTakibi}</p>
         </div>
-        <div className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-          <p className="text-sm font-medium text-violet-600">Personel Atamalı</p>
-          <p className="mt-3 text-3xl font-bold text-violet-700">{monthlyStats.atamaliGörev}</p>
+        <div className="rounded-2xl border border-violet-100 bg-violet-50 px-3 py-2 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-500">Atamalı</p>
+          <p className="mt-0.5 text-lg font-black text-violet-700">{monthlyStats.atamaliGörev}</p>
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+      <section className="rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Takvim Görünümü</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">
+              {activeRange === "ALL" ? "Aylık Görünüm" : activeRange === "TODAY" ? "Günlük Görünüm" : "Haftalık Görünüm"}
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveRange("ALL")}
+              className={cls("rounded-2xl px-4 py-2.5 text-sm font-bold transition", activeRange === "ALL" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}
+            >
+              Tümü
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveRange("TODAY")}
+              className={cls("rounded-2xl px-4 py-2.5 text-sm font-bold transition", activeRange === "TODAY" ? "bg-blue-600 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}
+            >
+              Bugün
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveRange("WEEK")}
+              className={cls("rounded-2xl px-4 py-2.5 text-sm font-bold transition", activeRange === "WEEK" ? "bg-violet-600 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}
+            >
+              Bu Hafta
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -398,7 +484,11 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
 
             <div className="min-w-[190px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
               <h2 className="text-lg font-bold text-slate-900">
-                {TR_MONTHS[month - 1]} {year}
+                {activeRange === "TODAY"
+                  ? `Bugün · ${today.toLocaleDateString("tr-TR")}`
+                  : activeRange === "WEEK"
+                    ? `Bu Hafta · ${TR_MONTHS[month - 1]} ${year}`
+                    : `${TR_MONTHS[month - 1]} ${year}`}
               </h2>
             </div>
 
@@ -449,18 +539,18 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-7 gap-2">
-          {TR_DAYS.map((d) => (
+        <div className={cls("mt-5", calendarGridClass)}>
+          {calendarDayHeaders.map((d) => (
             <div key={d} className="rounded-2xl bg-slate-50 py-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 border border-slate-200">
               {d}
             </div>
           ))}
         </div>
 
-        <div className={cls("mt-2 grid grid-cols-7 gap-2 transition-opacity", isLoading && "opacity-50")}>
-          {Array.from({ length: totalCells }, (_, i) => {
-            const dayNum = i - firstDayOfWeek + 1;
-            const isValid = dayNum >= 1 && dayNum <= daysInMonth;
+        <div className={cls("mt-2 transition-opacity", calendarGridClass, isLoading && "opacity-50")}>
+          {visibleCalendarCells.map((cell) => {
+            const dayNum = cell.dayNum;
+            const isValid = cell.isValid;
             const isToday = isCurrentMonth && dayNum === today.getDate();
             const entries = isValid ? getPhaseEntriesForDay(dayNum) : [];
             const tasEntries = isValid ? getTasAlinacakForDay(dayNum) : [];
@@ -468,9 +558,9 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
 
             return (
               <div
-                key={i}
+                key={cell.key}
                 className={cls(
-                  "min-h-[140px] rounded-2xl border p-2 transition-all",
+                  activeRange === "TODAY" ? "min-h-[360px] rounded-2xl border p-3 transition-all" : "min-h-[140px] rounded-2xl border p-2 transition-all",
                   !isValid && "bg-slate-50 border-slate-100",
                   isValid && !isDragTarget && "bg-white border-slate-200 hover:shadow-sm",
                   isValid && isDragTarget && "bg-blue-50 border-blue-300 ring-2 ring-blue-200"
@@ -751,7 +841,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
                       const isObj: any = entry.schedule.is;
 
                       return (
-                        <div key={entry.phaseId} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div key={entry.phaseId} className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
                           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
@@ -838,7 +928,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
                 </div>
 
                 <div className="space-y-4">
-                  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
                     <h4 className="text-lg font-bold text-slate-900">Taş Takibi</h4>
 
                     {dayPopup.tasEntries.length === 0 ? (
@@ -861,7 +951,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth }: Wo
                     )}
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
                     <h4 className="text-lg font-bold text-slate-900">Gün İçgörüsü</h4>
                     <div className="mt-4 space-y-3 text-sm text-slate-600">
                       <p>

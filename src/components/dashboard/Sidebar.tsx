@@ -32,21 +32,45 @@ export default function Sidebar() {
   const [stats, setStats] = useState<SidebarStats | null>(null);
 
   useEffect(() => {
-    fetch("/api/atolye", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => setAtolye(data?.atolye || null))
-      .catch(() => setAtolye(null));
+    function atolyeGetir() {
+      fetch("/api/atolye", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((data) => setAtolye(data?.atolye || null))
+        .catch(() => setAtolye(null));
+    }
 
-    fetch("/api/dashboard", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) =>
-        setStats({
-          toplamIs: Number(data?.toplamIs || 0),
-          onaylananIs: Number(data?.onaylananIs || 0),
-          bekleyenIs: Number(data?.bekleyenIs || 0),
-        })
-      )
-      .catch(() => setStats(null));
+    function ozetGetir() {
+      fetch("/api/dashboard", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((data) =>
+          setStats({
+            toplamIs: Number(data?.toplamIs || 0),
+            onaylananIs: Number(data?.onaylananIs || 0),
+            bekleyenIs: Number(data?.bekleyenIs || 0),
+          })
+        )
+        .catch(() => setStats(null));
+    }
+
+    atolyeGetir();
+    ozetGetir();
+
+    const interval = window.setInterval(ozetGetir, 5000);
+
+    function aktifOluncaYenile() {
+      if (document.visibilityState === "visible") {
+        ozetGetir();
+      }
+    }
+
+    window.addEventListener("focus", ozetGetir);
+    document.addEventListener("visibilitychange", aktifOluncaYenile);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", ozetGetir);
+      document.removeEventListener("visibilitychange", aktifOluncaYenile);
+    };
   }, []);
 
   async function logout() {

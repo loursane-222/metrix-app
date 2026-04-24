@@ -69,6 +69,92 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<typeof selectedIs[]>([]);
+  async function fetchOnayliProgramsizIsler(q = "") {
+    try {
+      const res = await fetch(`/api/isler-ara?q=${encodeURIComponent(q)}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      setSearchResults(Array.isArray(data) ? data : []);
+    } catch {
+      setSearchResults([]);
+    }
+  }
+
+  function isBusinessDay(date: Date) {
+    const day = date.getDay();
+    return day !== 0 && day !== 6;
+  }
+
+  function addBusinessDays(startDate: Date, days: number) {
+    const d = new Date(startDate);
+    let added = 0;
+
+    while (added < days) {
+      d.setDate(d.getDate() + 1);
+      if (isBusinessDay(d)) added++;
+    }
+
+    return d;
+  }
+
+  function toInputDate(date: Date) {
+    return date.toISOString().split("T")[0];
+  }
+
+  function getSelectedIsAnalysis(is: any) {
+    const mtul = Number(is?.metrajMtul || 0);
+    const toplamDakika = Number(is?.toplamSureDakika || 0);
+    const satis = Number(is?.satisFiyati || 0);
+    const maliyet = Number(is?.toplamMaliyet || 0);
+    const kar = satis - maliyet;
+    const karOrani = satis > 0 ? (kar / satis) * 100 : 0;
+    const gunlukDakika = 8 * 60;
+    const tahminiGun = toplamDakika > 0 ? Math.max(1, Math.ceil(toplamDakika / gunlukDakika)) : 1;
+    const kapasiteOrani = toplamDakika > 0 ? Math.min(100, (toplamDakika / gunlukDakika) * 100) : 0;
+
+    return {
+      mtul,
+      toplamDakika,
+      tahminiGun,
+      kapasiteOrani,
+      satis,
+      maliyet,
+      kar,
+      karOrani,
+    };
+  }
+
+  function applySmartScheduleSuggestion(is: any) {
+    const analiz = getSelectedIsAnalysis(is);
+    const today = new Date();
+    const startBase = isBusinessDay(today) ? today : addBusinessDays(today, 1);
+
+    const olcuStart = startBase;
+    const olcuEnd = olcuStart;
+
+    const imalatStart = addBusinessDays(olcuEnd, 1);
+    const imalatEnd = addBusinessDays(imalatStart, Math.max(0, analiz.tahminiGun - 1));
+
+    const montajStart = addBusinessDays(imalatEnd, 1);
+    const montajEnd = montajStart;
+
+    setPhaseDates({
+      OLCU: {
+        start: toInputDate(olcuStart),
+        end: toInputDate(olcuEnd),
+      },
+      IMALAT: {
+        start: toInputDate(imalatStart),
+        end: toInputDate(imalatEnd),
+      },
+      MONTAJ: {
+        start: toInputDate(montajStart),
+        end: toInputDate(montajEnd),
+      },
+    });
+  }
+
   const [isSearching, setIsSearching] = useState(false);
 
   const [startDate] = useState(
@@ -107,8 +193,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/isler-ara?q=${encodeURIComponent(searchQuery)}`);
-        setSearchResults(await res.json());
+        await fetchOnayliProgramsizIsler(searchQuery);
       } finally {
         setIsSearching(false);
       }
@@ -275,6 +360,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
                   placeholder="Teklif no, müşteri adı veya ürün..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => fetchOnayliProgramsizIsler(searchQuery)}
                   autoFocus
                 />
                 {isSearching && (
@@ -289,16 +375,28 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
                       o && (
                         <button
                           key={o.id}
-                          className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors"
+                          className="w-full text-left rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:border-blue-300 hover:bg-blue-50 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)]"
                           onClick={() => {
                             setSelectedIs(o);
+                            applySmartScheduleSuggestion(o);
                             setStep("tarihler");
                           }}
                         >
-                          <div className="font-medium text-sm">{o.teklifNo || "(Teklif no yok)"}</div>
-                          <div className="text-xs text-gray-500">
-                            {o.musteriAdi} — {o.urunAdi}
+                          <div className="flex items-center justify-between">
+  <div>
+    <div className="text-sm font-black text-slate-900">{o.teklifNo || "(Teklif no yok)"}</div>
+    <div className="mt-1 text-xs font-medium text-slate-500">{o.musteriAdi} — {o.urunAdi}
                           </div>
+  </div>
+  <div className="text-right">
+    <div className="text-xs font-bold text-blue-600">
+      {o.metrajMtul ? Number(o.metrajMtul).toFixed(1) + " mtül" : ""}
+    </div>
+    <div className="text-xs text-slate-400">
+      {o.satisFiyati ? "₺ " + Number(o.satisFiyati).toLocaleString("tr-TR") : ""}
+    </div>
+  </div>
+</div>
                         </button>
                       )
                   )}
@@ -306,17 +404,68 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
               )}
 
               {selectedIs && (
-                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{selectedIs.teklifNo}</div>
-                    <div className="text-xs text-gray-500">{selectedIs.musteriAdi}</div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                    <div className="flex-1">
+                      <div className="text-sm font-black text-blue-950">{selectedIs.teklifNo}</div>
+                      <div className="mt-1 text-xs font-semibold text-blue-700">{selectedIs.musteriAdi}</div>
+                      <div className="mt-0.5 text-xs text-blue-500">{selectedIs.urunAdi}</div>
+                    </div>
+                    <button
+                      className="rounded-xl border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                      onClick={() => setSelectedIs(null)}
+                    >
+                      Değiştir
+                    </button>
                   </div>
-                  <button
-                    className="text-xs text-gray-400 hover:text-gray-600"
-                    onClick={() => setSelectedIs(null)}
-                  >
-                    Değiştir
-                  </button>
+
+                  {(() => {
+                    const analiz = getSelectedIsAnalysis(selectedIs as any);
+
+                    return (
+                      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Akıllı Plan Önerisi</p>
+                            <h4 className="mt-1 text-base font-black text-slate-900">Bu iş takvime otomatik yerleştirildi</h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => applySmartScheduleSuggestion(selectedIs)}
+                            className="rounded-2xl bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                          >
+                            Tekrar Öner
+                          </button>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          <div className="rounded-2xl bg-slate-50 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Metraj</p>
+                            <p className="mt-1 text-lg font-black text-slate-900">{analiz.mtul.toFixed(2)} mtül</p>
+                          </div>
+
+                          <div className="rounded-2xl bg-blue-50 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-500">Süre</p>
+                            <p className="mt-1 text-lg font-black text-blue-800">{Math.round(analiz.toplamDakika)} dk</p>
+                          </div>
+
+                          <div className="rounded-2xl bg-amber-50 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-500">Kapasite</p>
+                            <p className="mt-1 text-lg font-black text-amber-800">%{analiz.kapasiteOrani.toFixed(0)}</p>
+                          </div>
+
+                          <div className="rounded-2xl bg-emerald-50 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-500">Tahmini Blok</p>
+                            <p className="mt-1 text-lg font-black text-emerald-800">{analiz.tahminiGun} gün</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-xs font-semibold text-slate-600">
+                          Ölçü bugün/ilk iş gününe, imalat sonraki iş günlerine, montaj ise imalattan sonraki ilk iş gününe önerildi.
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

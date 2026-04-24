@@ -915,100 +915,240 @@ export default function YeniIs() {
         )}
 
         {step === 5 && (
-          <SectionCard title="Sonuç ve teklif çıktısı" desc="Teklifi hesapla, sonucu doğrula ve PDF çıktısını indir.">
+          <SectionCard title="Premium teklif sonucu" desc="Kârlılık, fiyat ve operasyon kararını tek ekranda gör.">
             {!sonuc ? (
               <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
                 <p className="text-lg font-semibold text-slate-900">Henüz sonuç oluşmadı</p>
                 <p className="mt-2 text-sm text-slate-500">
-                  Alttaki butonla hesaplamayı çalıştır. Sonuç oluşunca maliyet, satış ve PDF alanları burada görünür.
+                  Alttaki butonla hesaplamayı çalıştır. Sonuç oluşunca kâr, maliyet, fiyat ve kapasite analizi burada görünür.
                 </p>
               </div>
             ) : (
-              <div className="space-y-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between rounded-3xl bg-emerald-50 p-5 border border-emerald-200">
-                  <div>
-                    <h4 className="text-xl font-bold text-emerald-800">Hesaplama tamamlandı</h4>
-                    <p className="mt-1 text-sm text-emerald-700">
-                      Teklif No: <strong>{sonuc.teklifNo}</strong> — Geçerlilik: <strong>{new Date(sonuc.teklifGecerlilikTarihi).toLocaleDateString('tr-TR')}</strong>
-                    </p>
-                  </div>
+              <div className="space-y-6">
+                {(() => {
+                  const netKar = sonuc.satisFiyati - sonuc.toplamMaliyet
+                  const karOrani = sonuc.satisFiyati > 0 ? (netKar / sonuc.satisFiyati) * 100 : 0
+                  const tahminiGun = Math.max(0.1, sonuc.toplamSureDakika / 480)
+                  const kapasite = Math.min(999, (sonuc.toplamSureDakika / 480) * 100)
+                  const karYorumu =
+                    karOrani >= 40
+                      ? 'Yüksek kârlı iş'
+                      : karOrani >= 25
+                        ? 'Sağlıklı kâr seviyesi'
+                        : karOrani >= 10
+                          ? 'Dikkatli fiyatlandır'
+                          : 'Düşük marj uyarısı'
 
-                  <button
-                    type="button"
-                    onClick={pdfModalAc}
-                    disabled={pdfYukleniyor}
-                    className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-70"
-                  >
-                    {pdfYukleniyor ? 'Hazırlanıyor...' : '📄 PDF Teklif İndir'}
-                  </button>
-                </div>
+                  return (
+                    <>
+                      <div className="overflow-hidden rounded-[32px] border border-emerald-200 bg-gradient-to-br from-slate-950 via-emerald-950 to-emerald-700 text-white shadow-[0_24px_70px_rgba(15,23,42,0.20)]">
+                        <div className="grid gap-6 p-6 lg:grid-cols-[1.35fr_0.9fr] lg:p-8">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">
+                              Kârlılık Karar Paneli
+                            </p>
+                            <h4 className="mt-3 text-3xl font-black tracking-tight lg:text-4xl">
+                              Bu işten net kazanç
+                            </h4>
+                            <p className="mt-3 text-5xl font-black tracking-tight">
+                              {paraGoster(netKar)}
+                            </p>
+                            <div className="mt-5 flex flex-wrap gap-3">
+                              <span className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold">
+                                Kâr oranı %{karOrani.toFixed(1)}
+                              </span>
+                              <span className="rounded-full border border-emerald-300/30 bg-emerald-300/15 px-4 py-2 text-sm font-semibold text-emerald-100">
+                                {karYorumu}
+                              </span>
+                              <span className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold">
+                                Teklif No: {sonuc.teklifNo}
+                              </span>
+                            </div>
+                          </div>
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
-                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Toplam Süre</p>
-                    <p className="mt-2 text-xl font-bold text-slate-900">
-                      {Math.floor(sonuc.toplamSureDakika / 60) > 0 ? `${Math.floor(sonuc.toplamSureDakika / 60)} sa ` : ''}{Math.round(sonuc.toplamSureDakika % 60)} dk
-                    </p>
-                  </div>
+                          <div className="grid gap-3">
+                            <div className="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
+                              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100">Müşteriye Sunulan</p>
+                              <p className="mt-2 text-2xl font-black">{paraGoster(sonuc.kdvDahilFiyat)}</p>
+                              <p className="mt-1 text-xs text-emerald-100">KDV dahil genel toplam</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={pdfModalAc}
+                              disabled={pdfYukleniyor}
+                              className="rounded-3xl bg-white px-5 py-4 text-sm font-black text-emerald-800 transition hover:scale-[1.01] disabled:opacity-70"
+                            >
+                              {pdfYukleniyor ? 'Hazırlanıyor...' : '📄 Premium PDF Teklif İndir'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
-                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">İşçilik Maliyeti</p>
-                    <p className="mt-2 text-xl font-bold text-slate-900">{paraGoster(sonuc.iscilikMaliyeti)}</p>
-                  </div>
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-rose-500">Toplam Maliyet</p>
+                          <p className="mt-3 text-2xl font-black text-rose-700">{paraGoster(sonuc.toplamMaliyet)}</p>
+                        </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
-                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Malzeme Maliyeti</p>
-                    <p className="mt-2 text-xl font-bold text-slate-900">{paraGoster(sonuc.malzemeMaliyeti)}</p>
-                  </div>
+                        <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-500">Satış Fiyatı</p>
+                          <p className="mt-3 text-2xl font-black text-blue-700">{paraGoster(sonuc.satisFiyati)}</p>
+                          <p className="mt-1 text-xs text-blue-500">KDV hariç</p>
+                        </div>
 
-                  <div className="rounded-2xl bg-rose-50 p-4 border border-rose-200">
-                    <p className="text-xs uppercase tracking-[0.12em] text-rose-600">Toplam Maliyet</p>
-                    <p className="mt-2 text-xl font-bold text-rose-700">{paraGoster(sonuc.toplamMaliyet)}</p>
-                  </div>
+                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">KDV</p>
+                          <p className="mt-3 text-2xl font-black text-slate-900">{paraGoster(sonuc.kdvTutari)}</p>
+                          <p className="mt-1 text-xs text-slate-500">%{atolyeBilgi.kdvOrani}</p>
+                        </div>
 
-                  <div className="rounded-2xl bg-blue-50 p-4 border border-blue-200">
-                    <p className="text-xs uppercase tracking-[0.12em] text-blue-600">Satış Fiyatı (KDV Hariç)</p>
-                    <p className="mt-2 text-xl font-bold text-blue-700">{paraGoster(sonuc.satisFiyati)}</p>
-                  </div>
+                        <div className="rounded-3xl border border-indigo-900 bg-indigo-950 p-5 text-white">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-200">Genel Toplam</p>
+                          <p className="mt-3 text-2xl font-black">{paraGoster(sonuc.kdvDahilFiyat)}</p>
+                          <p className="mt-1 text-xs text-indigo-200">KDV dahil</p>
+                        </div>
+                      </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200">
-                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">KDV (%{atolyeBilgi.kdvOrani})</p>
-                    <p className="mt-2 text-xl font-bold text-slate-900">{paraGoster(sonuc.kdvTutari)}</p>
-                  </div>
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Toplam Süre</p>
+                          <p className="mt-3 text-xl font-black text-slate-900">
+                            {Math.floor(sonuc.toplamSureDakika / 60) > 0 ? `${Math.floor(sonuc.toplamSureDakika / 60)} sa ` : ''}{Math.round(sonuc.toplamSureDakika % 60)} dk
+                          </p>
+                        </div>
 
-                  <div className="rounded-2xl bg-indigo-900 p-4 border border-indigo-950">
-                    <p className="text-xs uppercase tracking-[0.12em] text-indigo-200">Genel Toplam (KDV Dahil)</p>
-                    <p className="mt-2 text-xl font-bold text-white">{paraGoster(sonuc.kdvDahilFiyat)}</p>
-                  </div>
+                        <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-5">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-600">Tahmini İş Yükü</p>
+                          <p className="mt-3 text-xl font-black text-emerald-800">{tahminiGun.toFixed(1)} iş günü</p>
+                        </div>
 
-                  <div className="rounded-2xl bg-violet-50 p-4 border border-violet-200">
-                    <p className="text-xs uppercase tracking-[0.12em] text-violet-600">Mtül Satış Fiyatı</p>
-                    <p className="mt-2 text-xl font-bold text-violet-700">{paraGoster(sonuc.mtulSatisFiyati)}</p>
-                  </div>
-                </div>
+                        <div className="rounded-3xl border border-violet-100 bg-violet-50 p-5">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-600">Günlük Kapasite</p>
+                          <p className="mt-3 text-xl font-black text-violet-800">%{kapasite.toFixed(0)}</p>
+                        </div>
 
-                <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200 text-sm text-slate-700">
-                  Toplam metraj: <strong>{sonuc.toplamMetraj.toFixed(2)} mtül</strong> — Kullanılan plaka: <strong>{sonuc.kullanilanPlakaSayisi}</strong>
-                </div>
+                        <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Mtül Satış</p>
+                          <p className="mt-3 text-xl font-black text-slate-900">{paraGoster(sonuc.mtulSatisFiyati)}</p>
+                        </div>
+                      </div>
 
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={pdfModalAc}
-                    disabled={pdfYukleniyor}
-                    className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-70"
-                  >
-                    {pdfYukleniyor ? 'Hazırlanıyor...' : '📄 PDF Teklif İndir'}
-                  </button>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Metraj</p>
+                          <p className="mt-2 text-lg font-black text-slate-900">{sonuc.toplamMetraj.toFixed(2)} mtül</p>
+                        </div>
 
-                  <button
-                    type="button"
-                    onClick={() => router.push('/dashboard/isler')}
-                    className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                  >
-                    İş Listesine Git →
-                  </button>
-                </div>
+                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Kullanılan Plaka</p>
+                          <p className="mt-2 text-lg font-black text-slate-900">{sonuc.kullanilanPlakaSayisi}</p>
+                        </div>
+
+                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Geçerlilik</p>
+                          <p className="mt-2 text-lg font-black text-slate-900">
+                            {new Date(sonuc.teklifGecerlilikTarihi).toLocaleDateString('tr-TR')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
+                        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-950 to-slate-800 p-5 text-white">
+                          <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-300">Fiyat Karar Motoru</p>
+                          <h4 className="mt-2 text-2xl font-black tracking-tight">Bu fiyatla işi almak mantıklı mı?</h4>
+                        </div>
+
+                        {(() => {
+                          const netKar = sonuc.satisFiyati - sonuc.toplamMaliyet
+                          const karOrani = sonuc.satisFiyati > 0 ? (netKar / sonuc.satisFiyati) * 100 : 0
+
+                          const basabasFiyat = sonuc.toplamMaliyet
+                          const hedef30Fiyat = sonuc.toplamMaliyet / 0.70
+                          const hedef40Fiyat = sonuc.toplamMaliyet / 0.60
+
+                          const durum =
+                            karOrani >= 40
+                              ? {
+                                  baslik: 'Çok güçlü fiyat',
+                                  aciklama: 'Bu iş yüksek kârlı görünüyor. İndirim alanın var ama gereksiz indirim yapma.',
+                                  className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                                }
+                              : karOrani >= 30
+                                ? {
+                                    baslik: 'Sağlıklı fiyat',
+                                    aciklama: 'Bu fiyat operasyonel olarak güvenli. Kâr seviyesi dengeli.',
+                                    className: 'border-blue-200 bg-blue-50 text-blue-800',
+                                  }
+                                : karOrani >= 20
+                                  ? {
+                                      baslik: 'Sınırda fiyat',
+                                      aciklama: 'Kâr var ama riskli. Fire, gecikme veya ek işçilik bu işi zayıflatabilir.',
+                                      className: 'border-amber-200 bg-amber-50 text-amber-800',
+                                    }
+                                  : {
+                                      baslik: 'Düşük marj uyarısı',
+                                      aciklama: 'Bu fiyatla işi almak riskli. Satış fiyatını yükseltmen gerekir.',
+                                      className: 'border-rose-200 bg-rose-50 text-rose-800',
+                                    }
+
+                          return (
+                            <div className="p-5">
+                              <div className="grid gap-4 md:grid-cols-4">
+                                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Başabaş</p>
+                                  <p className="mt-2 text-xl font-black text-slate-900">{paraGoster(basabasFiyat)}</p>
+                                  <p className="mt-1 text-xs text-slate-500">Zarar etmeme noktası</p>
+                                </div>
+
+                                <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5">
+                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-500">Min. Sağlıklı</p>
+                                  <p className="mt-2 text-xl font-black text-blue-800">{paraGoster(hedef30Fiyat)}</p>
+                                  <p className="mt-1 text-xs text-blue-500">Hedef %30 kâr</p>
+                                </div>
+
+                                <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-5">
+                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-500">İdeal Fiyat</p>
+                                  <p className="mt-2 text-xl font-black text-emerald-800">{paraGoster(hedef40Fiyat)}</p>
+                                  <p className="mt-1 text-xs text-emerald-500">Hedef %40 kâr</p>
+                                </div>
+
+                                <div className="rounded-3xl border border-violet-100 bg-violet-50 p-5">
+                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-500">Mevcut Kâr</p>
+                                  <p className="mt-2 text-xl font-black text-violet-800">%{karOrani.toFixed(1)}</p>
+                                  <p className="mt-1 text-xs text-violet-500">{paraGoster(netKar)} net</p>
+                                </div>
+                              </div>
+
+                              <div className={`mt-4 rounded-3xl border p-5 ${durum.className}`}>
+                                <p className="text-lg font-black">{durum.baslik}</p>
+                                <p className="mt-1 text-sm font-semibold opacity-80">{durum.aciklama}</p>
+                              </div>
+                            </div>
+                          )
+                        })()}
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={pdfModalAc}
+                          disabled={pdfYukleniyor}
+                          className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-70"
+                        >
+                          {pdfYukleniyor ? 'Hazırlanıyor...' : '📄 PDF Teklif İndir'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => router.push('/dashboard/isler')}
+                          className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                        >
+                          İş Listesine Git →
+                        </button>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
             )}
           </SectionCard>
