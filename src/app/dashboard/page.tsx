@@ -23,6 +23,7 @@ type DashboardData = {
   toplamMaliyet: number;
   toplamKar: number;
   toplamTahsilat: number;
+  bekleyenIs: number;
 };
 
 type MonthlySummaryData = {
@@ -86,7 +87,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <HeroBanner />
+      <HeroBanner
+        onaylananTutar={data.onaylananTutar}
+        toplamKar={data.toplamKar}
+        onaylanmaOrani={data.onaylanmaOrani}
+        toplamTahsilat={data.toplamTahsilat}
+        bekleyenIs={data.bekleyenIs}
+        onaylananIs={data.onaylananIs}
+      />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard

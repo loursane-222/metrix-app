@@ -1,6 +1,32 @@
 import Card from "@/components/ui/Card";
+import { paraGoster } from "@/lib/format";
 
-export default function HeroBanner() {
+type HeroBannerProps = {
+  onaylananTutar: number;
+  toplamKar: number;
+  onaylanmaOrani: number;
+  toplamTahsilat: number;
+  bekleyenIs: number;
+  onaylananIs: number;
+};
+
+function yuzdeGoster(value: number) {
+  return `%${Number(value || 0).toLocaleString("tr-TR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}`;
+}
+
+export default function HeroBanner({
+  onaylananTutar,
+  toplamKar,
+  onaylanmaOrani,
+  toplamTahsilat,
+  bekleyenIs,
+  onaylananIs,
+}: HeroBannerProps) {
+  const tahsilatOdagiGerekli = toplamTahsilat < onaylananTutar;
+
   return (
     <Card className="overflow-hidden">
       <div className="relative bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.35),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(124,58,237,0.35),_transparent_35%),linear-gradient(135deg,#0f172a_0%,#111827_45%,#1e1b4b_100%)] p-7 text-white">
@@ -22,13 +48,13 @@ export default function HeroBanner() {
 
             <div className="mt-6 flex flex-wrap gap-3">
               <span className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium">
-                11 teklif takip bekliyor
+                {bekleyenIs} teklif takip bekliyor
               </span>
               <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-200">
-                4 iş onaylandı
+                {onaylananIs} iş onaylandı
               </span>
               <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-sm font-medium text-amber-200">
-                Tahsilat odağı gerekli
+                {tahsilatOdagiGerekli ? "Tahsilat odağı gerekli" : "Tahsilat dengesi iyi"}
               </span>
             </div>
           </div>
@@ -36,19 +62,19 @@ export default function HeroBanner() {
           <div className="grid grid-cols-2 gap-4">
             <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Onaylanan Tutar</p>
-              <p className="mt-3 text-2xl font-bold">₺596.409</p>
+              <p className="mt-3 text-2xl font-bold">{paraGoster(onaylananTutar)}</p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Toplam Kar</p>
-              <p className="mt-3 text-2xl font-bold">₺199.927</p>
+              <p className="mt-3 text-2xl font-bold">{paraGoster(toplamKar)}</p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Onay Oranı</p>
-              <p className="mt-3 text-2xl font-bold">%26,7</p>
+              <p className="mt-3 text-2xl font-bold">{yuzdeGoster(onaylanmaOrani)}</p>
             </div>
             <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Tahsilat</p>
-              <p className="mt-3 text-2xl font-bold">₺150.000</p>
+              <p className="mt-3 text-2xl font-bold">{paraGoster(toplamTahsilat)}</p>
             </div>
           </div>
         </div>

@@ -9,6 +9,12 @@ type Atolye = {
   logoUrl?: string;
 };
 
+type SidebarStats = {
+  toplamIs: number;
+  onaylananIs: number;
+  bekleyenIs: number;
+};
+
 const menuItems = [
   { href: "/dashboard", label: "Dashboard", badge: "Genel Bakış" },
   { href: "/dashboard/isler", label: "İşler", badge: "Teklifler" },
@@ -23,12 +29,24 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [atolye, setAtolye] = useState<Atolye | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [stats, setStats] = useState<SidebarStats | null>(null);
 
   useEffect(() => {
     fetch("/api/atolye", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setAtolye(data?.atolye || null))
       .catch(() => setAtolye(null));
+
+    fetch("/api/dashboard", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) =>
+        setStats({
+          toplamIs: Number(data?.toplamIs || 0),
+          onaylananIs: Number(data?.onaylananIs || 0),
+          bekleyenIs: Number(data?.bekleyenIs || 0),
+        })
+      )
+      .catch(() => setStats(null));
   }, []);
 
   async function logout() {
@@ -81,9 +99,11 @@ export default function Sidebar() {
 
         <div className="mt-3 rounded-xl bg-gradient-to-br from-blue-500/20 via-violet-500/20 to-fuchsia-500/20 p-3">
           <p className="text-xs text-slate-300">Bugünün Özeti</p>
-          <p className="mt-1 text-xl font-bold leading-none">15 aktif teklif</p>
+          <p className="mt-1 text-xl font-bold leading-none">
+            {stats?.toplamIs ?? 0} aktif teklif
+          </p>
           <p className="mt-2 text-xs leading-snug text-slate-300">
-            4 onay, 11 takip bekliyor
+            {stats?.onaylananIs ?? 0} onay, {stats?.bekleyenIs ?? 0} takip bekliyor
           </p>
         </div>
       </div>
