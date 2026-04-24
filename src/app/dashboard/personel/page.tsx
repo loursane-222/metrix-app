@@ -68,7 +68,7 @@ function Field({
     <div>
       <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
       {children}
-      {hint && <p className="mt-2 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 hidden text-xs text-slate-500 sm:block">{hint}</p>}
     </div>
   )
 }
@@ -521,33 +521,33 @@ export default function PersonelSayfasi() {
                   </button>
                 </div>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Performans</p>
-                    <p className={cls('mt-2 text-2xl font-bold', performansRenk(p.performansNotu))}>
+                <div className="mt-4 grid grid-cols-4 gap-2">
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-4">
+                    <p className="truncate text-[9px] uppercase tracking-[0.10em] text-slate-400 sm:text-[11px] sm:tracking-[0.12em]">Performans</p>
+                    <p className={cls('mt-1 text-lg font-bold sm:mt-2 sm:text-2xl', performansRenk(p.performansNotu))}>
                       {p.performansNotu !== null ? `%${p.performansNotu}` : '—'}
                     </p>
-                    <p className={cls('mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold', performansBadge(p.performansNotu))}>
+                    <p className={cls('mt-1 hidden rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:inline-flex', performansBadge(p.performansNotu))}>
                       {performansEtiket(p.performansNotu)}
                     </p>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Toplam Görev</p>
-                    <p className="mt-2 text-2xl font-bold text-slate-900">{p.toplamGorev || 0}</p>
-                    <p className="mt-2 text-xs text-slate-500">Aktif yük ve geçmiş atamalar</p>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-4">
+                    <p className="truncate text-[9px] uppercase tracking-[0.10em] text-slate-400 sm:text-[11px] sm:tracking-[0.12em]">Toplam Görev</p>
+                    <p className="mt-1 text-lg font-bold text-slate-900 sm:mt-2 sm:text-2xl">{p.toplamGorev || 0}</p>
+                    <p className="mt-1 hidden text-xs text-slate-500 sm:block">Aktif yük ve geçmiş atamalar</p>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Tamamlanan</p>
-                    <p className="mt-2 text-2xl font-bold text-emerald-600">{p.tamamlananGorev || 0}</p>
-                    <p className="mt-2 text-xs text-slate-500">Kapanan görev sayısı</p>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-4">
+                    <p className="truncate text-[9px] uppercase tracking-[0.10em] text-slate-400 sm:text-[11px] sm:tracking-[0.12em]">Tamamlanan</p>
+                    <p className="mt-1 text-lg font-bold text-emerald-600 sm:mt-2 sm:text-2xl">{p.tamamlananGorev || 0}</p>
+                    <p className="mt-1 hidden text-xs text-slate-500 sm:block">Kapanan görev sayısı</p>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Zamanında</p>
-                    <p className="mt-2 text-2xl font-bold text-violet-600">%{zamanindaOran}</p>
-                    <p className="mt-2 text-xs text-slate-500">Termin disiplini</p>
+                  <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-4">
+                    <p className="truncate text-[9px] uppercase tracking-[0.10em] text-slate-400 sm:text-[11px] sm:tracking-[0.12em]">Zamanında</p>
+                    <p className="mt-1 text-lg font-bold text-violet-600 sm:mt-2 sm:text-2xl">%{zamanindaOran}</p>
+                    <p className="mt-1 hidden text-xs text-slate-500 sm:block">Termin disiplini</p>
                   </div>
                 </div>
               </div>
