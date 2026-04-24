@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
+
+const prisma = new PrismaClient();
 
 async function kullaniciAl() {
   const cookieStore = await cookies();
@@ -9,7 +11,9 @@ async function kullaniciAl() {
   if (!token) return null;
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "metrix-gizli-anahtar-2024");
+    const secret = new TextEncoder().encode(
+      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
+    );
     const { payload } = await jwtVerify(token, secret);
     return payload as { id: string };
   } catch {
@@ -20,6 +24,7 @@ async function kullaniciAl() {
 export async function GET() {
   try {
     const kullanici = await kullaniciAl();
+
     if (!kullanici) {
       return NextResponse.json({ hata: "Yetkisiz" }, { status: 401 });
     }
@@ -51,30 +56,54 @@ export async function GET() {
     const toplamIs = isler.length;
 
     const onaylananlar = isler.filter((i) =>
-      ["onaylandi", "onaylandı", "onay"].includes(String(i.durum || "").toLowerCase())
+      ["onaylandi", "onaylandı", "onay"].includes(
+        String(i.durum || "").toLowerCase()
+      )
     );
 
     const kaybedilenler = isler.filter((i) =>
-      ["kaybedildi", "kayip", "kayıp"].includes(String(i.durum || "").toLowerCase())
+      ["kaybedildi", "kayip", "kayıp"].includes(
+        String(i.durum || "").toLowerCase()
+      )
     );
 
-    const bekleyenler = isler.filter((i) =>
-      !["onaylandi", "onaylandı", "onay", "kaybedildi", "kayip", "kayıp"].includes(String(i.durum || "").toLowerCase())
+    const bekleyenler = isler.filter(
+      (i) =>
+        !["onaylandi", "onaylandı", "onay", "kaybedildi", "kayip", "kayıp"].includes(
+          String(i.durum || "").toLowerCase()
+        )
     );
 
-    const teklifVerilenTutar = isler.reduce((a, i) => a + Number(i.satisFiyati || 0), 0);
-    const onaylananTutar = onaylananlar.reduce((a, i) => a + Number(i.satisFiyati || 0), 0);
+    const teklifVerilenTutar = isler.reduce(
+      (a, i) => a + Number(i.satisFiyati || 0),
+      0
+    );
+
+    const onaylananTutar = onaylananlar.reduce(
+      (a, i) => a + Number(i.satisFiyati || 0),
+      0
+    );
 
     const toplamCiro = onaylananTutar;
-    const toplamMaliyet = onaylananlar.reduce((a, i) => a + Number(i.toplamMaliyet || 0), 0);
+
+    const toplamMaliyet = onaylananlar.reduce(
+      (a, i) => a + Number(i.toplamMaliyet || 0),
+      0
+    );
+
     const toplamKar = toplamCiro - toplamMaliyet;
-    const toplamTahsilat = isler.reduce((a, i) => a + Number(i.tahsilat || 0), 0);
+
+    const toplamTahsilat = isler.reduce(
+      (a, i) => a + Number(i.tahsilat || 0),
+      0
+    );
 
     const onaylananIs = onaylananlar.length;
     const kaybedilenIs = kaybedilenler.length;
     const bekleyenIs = bekleyenler.length;
 
-    const onaylanmaOrani = toplamIs > 0 ? (onaylananIs / toplamIs) * 100 : 0;
+    const onaylanmaOrani =
+      toplamIs > 0 ? (onaylananIs / toplamIs) * 100 : 0;
 
     return NextResponse.json({
       toplamIs,
@@ -91,6 +120,9 @@ export async function GET() {
     });
   } catch (err) {
     console.error("Dashboard API Hata:", err);
-    return NextResponse.json({ hata: "Dashboard verisi alınamadı" }, { status: 500 });
+    return NextResponse.json(
+      { hata: "Dashboard verisi alınamadı" },
+      { status: 500 }
+    );
   }
 }
