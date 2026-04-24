@@ -390,10 +390,10 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
   </div>
   <div className="text-right">
     <div className="text-xs font-bold text-blue-600">
-      {o.metrajMtul ? Number(o.metrajMtul).toFixed(1) + " mtül" : ""}
+      {(o as any).metrajMtul ? Number((o as any).metrajMtul).toFixed(1) + " mtül" : ""}
     </div>
     <div className="text-xs text-slate-400">
-      {o.satisFiyati ? "₺ " + Number(o.satisFiyati).toLocaleString("tr-TR") : ""}
+      {(o as any).satisFiyati ? "₺ " + Number((o as any).satisFiyati).toLocaleString("tr-TR") : ""}
     </div>
   </div>
 </div>
