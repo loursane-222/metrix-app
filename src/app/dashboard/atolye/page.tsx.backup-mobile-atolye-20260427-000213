@@ -115,8 +115,6 @@ export default function AtolyePage() {
   const [yeniGider, setYeniGider] = useState({ giderAdi: '', tutar: '' })
   const [mesaj, setMesaj] = useState('')
   const [logoYukleniyor, setLogoYukleniyor] = useState(false)
-  const [mobileSolOpen, setMobileSolOpen] = useState(false)
-  const [mobileSagOpen, setMobileSagOpen] = useState(false)
 
   const [yeniMakine, setYeniMakine] = useState({
     makineAdi: '',
@@ -365,40 +363,10 @@ export default function AtolyePage() {
   }
 
   return (
-    <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] text-white p-2 md:h-screen md:overflow-hidden md:p-3">
-      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:grid-cols-[270px_minmax(0,1fr)_290px]">
+    <div className="h-screen overflow-hidden bg-[#030712] text-white p-3">
+      <div className="grid h-full grid-cols-[270px_minmax(0,1fr)_290px] gap-3">
 
-        <button
-          onClick={() => setMobileSolOpen(true)}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] left-4 z-[120] rounded-2xl bg-slate-800 px-5 py-4 text-sm font-bold shadow-2xl md:hidden"
-        >
-          Atölye
-        </button>
-
-        <button
-          onClick={() => setMobileSagOpen(true)}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] right-4 z-[120] rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-2xl md:hidden"
-        >
-          Karar
-        </button>
-
-        {(mobileSolOpen || mobileSagOpen) && (
-          <div
-            onClick={() => {
-              setMobileSolOpen(false)
-              setMobileSagOpen(false)
-            }}
-            className="fixed inset-0 z-[130] bg-black/60 md:hidden"
-          />
-        )}
-
-        <aside className={`fixed left-0 top-0 z-[140] h-[100dvh] w-[88vw] max-w-[360px] overflow-y-auto rounded-r-3xl border-r border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-auto md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:p-3 md:overflow-hidden md:flex md:flex-col ${mobileSolOpen ? "translate-x-0" : "-translate-x-full"}`}>
-          <button
-            onClick={() => setMobileSolOpen(false)}
-            className="mb-4 w-full rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden"
-          >
-            Kapat
-          </button>
+        <aside className="rounded-3xl border border-slate-800 bg-[#0B1120] p-3 overflow-hidden flex flex-col">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Metrix</p>
           <h1 className="mt-2 text-2xl font-semibold">Atölye</h1>
 
@@ -465,11 +433,11 @@ export default function AtolyePage() {
           </div>
         </aside>
 
-        <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-28 pt-[104px] md:p-5 md:overflow-hidden">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] p-5 overflow-hidden">
+          <div className="flex items-start justify-between">
             <div>
               <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Maliyet Motoru</p>
-              <h2 className="mt-2 text-2xl font-semibold leading-tight md:text-3xl">Atölye Kârlılık Paneli</h2>
+              <h2 className="mt-2 text-3xl font-semibold">Atölye Kârlılık Paneli</h2>
             </div>
 
             <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${hesap.durumTone}`}>
@@ -484,7 +452,7 @@ export default function AtolyePage() {
             <Kpi label="Mtül Maliyeti" value={tl(hesap.mtulMaliyet)} tone="text-cyan-300" />
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="mt-5 grid grid-cols-[1.2fr_0.8fr] gap-4">
             <section className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
               <p className="text-sm text-slate-400">Üretim Modeli</p>
 
@@ -508,7 +476,7 @@ export default function AtolyePage() {
                   <div style={{ width: `${hesap.oranArac}%` }} className="bg-violet-500" />
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+                <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
                   <Break label="Personel" value={pct(hesap.oranPersonel)} color="bg-blue-500" />
                   <Break label="Sabit" value={pct(hesap.oranSabit)} color="bg-emerald-500" />
                   <Break label="Makine" value={pct(hesap.oranMakine)} color="bg-amber-500" />
@@ -532,7 +500,7 @@ export default function AtolyePage() {
             </section>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="mt-4 grid grid-cols-4 gap-3">
             <SmallStat label="Personel" value={tl(hesap.personel)} />
             <SmallStat label="Sabit Gider" value={tl(hesap.sabit)} />
             <SmallStat label="Makine Amort." value={tl(hesap.makine)} />
@@ -540,13 +508,7 @@ export default function AtolyePage() {
           </div>
         </main>
 
-        <aside className={`fixed right-0 top-0 z-[140] h-[100dvh] w-[88vw] max-w-[360px] overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-auto md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:overflow-hidden md:flex md:flex-col ${mobileSagOpen ? "translate-x-0" : "translate-x-full"}`}>
-          <button
-            onClick={() => setMobileSagOpen(false)}
-            className="mb-4 w-full rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden"
-          >
-            Kapat
-          </button>
+        <aside className="rounded-3xl border border-slate-800 bg-[#0B1120] p-4 overflow-hidden flex flex-col">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Karar Paneli</p>
           <h2 className="mt-1 text-lg font-semibold">Canlı Özet</h2>
 
@@ -683,7 +645,7 @@ function Input({ label, value, onChange, type = "text" }: any) {
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500"
+        className="h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500"
       />
     </label>
   )
@@ -702,7 +664,7 @@ function Kpi({ label, value, tone = 'text-white' }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
       <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-2 break-words text-lg font-semibold leading-tight tabular-nums md:text-xl ${tone}`}>{value}</p>
+      <p className={`mt-2 text-xl font-semibold ${tone}`}>{value}</p>
     </div>
   )
 }
@@ -712,7 +674,7 @@ function ModelCard({ label, value, sub, compact = false }: any) {
     <div className="min-w-0 rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
       <p className="text-xs text-slate-400">{label}</p>
       <div className="mt-3 flex items-end gap-2">
-        <p className={`${compact ? 'text-[22px] md:text-[26px]' : 'text-[24px] md:text-[30px]'} break-words font-semibold leading-none tracking-tight tabular-nums`}>
+        <p className={`${compact ? 'text-[26px]' : 'text-[30px]'} font-semibold leading-none tracking-tight tabular-nums`}>
           {value}
         </p>
         <p className="pb-1 text-xs text-slate-500 whitespace-nowrap">{sub}</p>
@@ -754,7 +716,7 @@ function SmallStat({ label, value }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
       <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-2 break-words font-semibold leading-tight tabular-nums">{value}</p>
+      <p className="mt-2 font-semibold">{value}</p>
     </div>
   )
 }
@@ -763,7 +725,7 @@ function RightCard({ label, value }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
       <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-1 break-words text-lg font-semibold leading-tight tabular-nums">{value}</p>
+      <p className="mt-1 text-lg font-semibold">{value}</p>
     </div>
   )
 }
@@ -771,7 +733,7 @@ function RightCard({ label, value }: any) {
 function Modal({ title, children, onClose }: any) {
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-3xl border border-slate-800 bg-[#0B1120] p-5 md:p-6 text-white shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-xl rounded-3xl border border-slate-800 bg-[#0B1120] p-6 text-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-xl font-semibold">{title}</h2>
           <button onClick={onClose} className="rounded-xl border border-slate-700 px-3 py-1 text-slate-300">Kapat</button>

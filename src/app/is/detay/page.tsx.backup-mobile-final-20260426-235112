@@ -149,10 +149,10 @@ function IsDetayContent() {
       : "Belirsiz";
 
   return (
-    <div className="min-h-[100dvh] bg-[#030712] text-white px-4 py-6 md:p-6 flex flex-col gap-6 overflow-x-hidden">
-      <div className="flex justify-between items-start gap-4">
+    <div className="min-h-screen bg-[#030712] text-white p-6 flex flex-col gap-6">
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl leading-tight break-words">{data.musteriAdi}</h1>
+          <h1 className="text-2xl">{data.musteriAdi}</h1>
           <p className="text-slate-400">{data.teklifNo}</p>
         </div>
 
@@ -167,24 +167,24 @@ function IsDetayContent() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#0B1120] p-4 rounded-xl border border-slate-800">
           <p className="text-xs text-slate-400">Maliyet</p>
-          <p className="text-lg md:text-xl break-words leading-tight">{maliyet.toLocaleString("tr-TR")} ₺</p>
+          <p className="text-xl">{maliyet.toLocaleString("tr-TR")} ₺</p>
         </div>
 
         <div className="bg-[#0B1120] p-4 rounded-xl border border-slate-800">
           <p className="text-xs text-slate-400">Satış</p>
-          <p className="text-lg md:text-xl break-words leading-tight text-emerald-400">{fiyat.toLocaleString("tr-TR")} ₺</p>
+          <p className="text-xl text-emerald-400">{fiyat.toLocaleString("tr-TR")} ₺</p>
         </div>
 
         <div className="bg-[#0B1120] p-4 rounded-xl border border-slate-800">
           <p className="text-xs text-slate-400">Kâr</p>
-          <p className="text-lg md:text-xl break-words leading-tight text-yellow-400">
+          <p className="text-xl text-yellow-400">
             {kar.toLocaleString("tr-TR")} ₺ (%{karYuzde.toFixed(1)})
           </p>
         </div>
 
         <div className="bg-[#0B1120] p-4 rounded-xl border border-slate-800">
           <p className="text-xs text-slate-400">Taş Durumu</p>
-          <p className={`text-lg md:text-xl break-words leading-tight ${
+          <p className={`text-xl ${
             data.tasDurumu === "alinacak"
               ? "text-amber-400"
               : data.tasDurumu === "stokta" || data.tasDurumu === "alindi"
@@ -207,7 +207,7 @@ function IsDetayContent() {
           className="w-full"
         />
 
-        <div className="text-center text-3xl md:text-2xl mt-4 text-emerald-400 break-words">
+        <div className="text-center text-2xl mt-4 text-emerald-400">
           {fiyat.toLocaleString("tr-TR")} ₺
         </div>
 
@@ -249,11 +249,11 @@ function IsDetayContent() {
         💾 Revize Fiyatı Kaydet
       </button>
 
-      <div className="mt-auto grid grid-cols-1 md:grid-cols-3 gap-3 pb-28 md:pb-0">
+      <div className="mt-auto grid grid-cols-3 gap-3">
         <button
           disabled={saving}
           onClick={() => durumGuncelle("teklif_verildi")}
-          className={`rounded-xl py-4 text-lg font-semibold ${
+          className={`rounded-xl py-4 text-lg ${
             data.durum === "teklif_verildi"
               ? "bg-amber-600"
               : "bg-slate-700 hover:bg-slate-600"
@@ -265,7 +265,7 @@ function IsDetayContent() {
         <button
           disabled={saving}
           onClick={() => setTasPopup(true)}
-          className={`rounded-xl py-4 text-lg font-semibold ${
+          className={`rounded-xl py-4 text-lg ${
             data.durum === "onaylandi"
               ? "bg-emerald-600"
               : "bg-slate-700 hover:bg-slate-600"
@@ -277,7 +277,7 @@ function IsDetayContent() {
         <button
           disabled={saving}
           onClick={() => durumGuncelle("kaybedildi")}
-          className={`rounded-xl py-4 text-lg font-semibold ${
+          className={`rounded-xl py-4 text-lg ${
             data.durum === "kaybedildi"
               ? "bg-red-600"
               : "bg-slate-700 hover:bg-slate-600"

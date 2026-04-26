@@ -74,8 +74,6 @@ export default function PersonelSayfasi() {
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [yetki, setYetki] = useState<Yetki>(BOS_YETKI)
   const [yetkiKaydediliyor, setYetkiKaydediliyor] = useState(false)
-  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
-  const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
 
   const [form, setForm] = useState({
     ad: '',
@@ -243,10 +241,10 @@ export default function PersonelSayfasi() {
   const aktifZamaninda = aktif ? oran(aktif.zamanindaTamamlanan || 0, aktif.tamamlananGorev || 0) : 0
 
   return (
-    <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 text-white md:h-screen md:overflow-hidden md:p-3">
-      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:grid-cols-[310px_minmax(0,1fr)_310px]">
+    <div className="h-screen overflow-hidden bg-[#030712] p-3 text-white">
+      <div className="grid h-full grid-cols-[310px_minmax(0,1fr)_310px] gap-3">
 
-        <aside className={`flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-4 pt-[104px] md:pt-4 ${mobileView === "list" ? "flex" : "hidden md:flex"}`}>
+        <aside className="flex flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-4">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Ekip Radarı</p>
           <h1 className="mt-2 text-2xl font-semibold">Personel</h1>
 
@@ -277,7 +275,7 @@ export default function PersonelSayfasi() {
             {filtreli.map((p) => (
               <button
                 key={p.id}
-                onClick={() => { setAktif(p); setMobileView('detail') }}
+                onClick={() => setAktif(p)}
                 className={cls(
                   'w-full rounded-2xl border p-3 text-left transition',
                   aktif?.id === p.id ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-800 bg-[#111827] hover:bg-slate-800'
@@ -298,29 +296,15 @@ export default function PersonelSayfasi() {
           </div>
         </aside>
 
-        <main className={`rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-28 pt-[104px] md:p-5 md:overflow-hidden ${mobileView === "detail" ? "block overflow-y-auto" : "hidden md:block"}`}>
+        <main className="overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-5">
           {!aktif ? (
             <div className="flex h-full items-center justify-center text-slate-500">Personel yok.</div>
           ) : (
             <div className="flex h-full flex-col">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div className="flex items-center justify-between gap-3 md:hidden">
-                  <button
-                    onClick={() => { setMobileView('list'); setMobilePanelOpen(false) }}
-                    className="rounded-xl border border-slate-700 bg-[#111827] px-4 py-3 text-sm font-semibold"
-                  >
-                    ← Personel
-                  </button>
-                  <button
-                    onClick={() => setMobilePanelOpen(true)}
-                    className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold"
-                  >
-                    Aksiyon
-                  </button>
-                </div>
+              <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Seçili Personel</p>
-                  <h2 className="mt-2 break-words text-2xl font-semibold leading-tight md:text-3xl">{aktif.ad} {aktif.soyad}</h2>
+                  <h2 className="mt-2 text-3xl font-semibold">{aktif.ad} {aktif.soyad}</h2>
                   <p className="mt-1 text-sm text-slate-400">
                     {aktif.gorevi} · {aktif.calismaYili || 0} yıl kıdem
                   </p>
@@ -331,14 +315,14 @@ export default function PersonelSayfasi() {
                 </span>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="mt-5 grid grid-cols-4 gap-3">
                 <Kpi label="Performans" value={aktif.performansNotu === null ? '-' : `%${aktif.performansNotu}`} tone="text-emerald-300" />
                 <Kpi label="Tamamlama" value={`%${aktifOran}`} tone="text-blue-300" />
                 <Kpi label="Zamanında" value={`%${aktifZamaninda}`} tone="text-violet-300" />
                 <Kpi label="Toplam Görev" value={aktif.toplamGorev || 0} />
               </div>
 
-              <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_0.82fr]">
+              <div className="mt-5 grid grid-cols-[1fr_0.82fr] gap-4">
                 <section className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
                   <p className="text-sm text-slate-400">Performans Paneli</p>
 
@@ -386,13 +370,7 @@ export default function PersonelSayfasi() {
           )}
         </main>
 
-        <aside className={`fixed right-0 top-0 z-[180] h-[100dvh] w-[86vw] max-w-[380px] flex-col overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-auto md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:flex md:overflow-hidden ${mobilePanelOpen ? "translate-x-0" : "translate-x-full"}`}>
-          <button
-            onClick={() => setMobilePanelOpen(false)}
-            className="mb-4 rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden"
-          >
-            Kapat
-          </button>
+        <aside className="flex flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-4">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Kontrol Paneli</p>
           <h2 className="mt-2 text-xl font-semibold">Yetki & Aksiyon</h2>
 
@@ -443,17 +421,9 @@ export default function PersonelSayfasi() {
         </aside>
       </div>
 
-      {/* PERSONEL_MOBILE_BACKDROP */}
-      {mobilePanelOpen && (
-        <div
-          onClick={() => setMobilePanelOpen(false)}
-          className="fixed inset-0 z-[170] bg-black/60 md:hidden"
-        />
-      )}
-
       {formAcik && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4" onClick={() => setFormAcik(false)}>
-          <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-800 bg-[#0B1120] p-5 md:p-6 text-white shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-800 bg-[#0B1120] p-6 text-white shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <p className="text-xs tracking-[0.22em] text-slate-500 uppercase">Personel</p>
@@ -462,7 +432,7 @@ export default function PersonelSayfasi() {
               <button onClick={() => setFormAcik(false)} className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">Kapat</button>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3">
               <Input label="Ad" value={form.ad} onChange={v => setForm({ ...form, ad: v })} />
               <Input label="Soyad" value={form.soyad} onChange={v => setForm({ ...form, soyad: v })} />
 
@@ -529,7 +499,7 @@ function Kpi({ label, value, tone = 'text-white' }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
       <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-2 break-words text-lg font-semibold leading-tight tabular-nums md:text-xl ${tone}`}>{value}</p>
+      <p className={`mt-2 text-xl font-semibold ${tone}`}>{value}</p>
     </div>
   )
 }
@@ -570,7 +540,7 @@ function Bar({ label, value }: any) {
 function Toggle({ label, value, onChange }: any) {
   return (
     <button onClick={() => onChange(!value)} className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-[#111827] p-3 text-left">
-      <span className="min-w-0 pr-3 text-sm text-slate-300">{label}</span>
+      <span className="text-sm text-slate-300">{label}</span>
       <span className={cls('h-6 w-11 rounded-full p-1 transition', value ? 'bg-emerald-600' : 'bg-slate-700')}>
         <span className={cls('block h-4 w-4 rounded-full bg-white transition', value ? 'translate-x-5' : 'translate-x-0')} />
       </span>

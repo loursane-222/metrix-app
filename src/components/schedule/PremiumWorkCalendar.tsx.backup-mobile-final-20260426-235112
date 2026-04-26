@@ -274,11 +274,11 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
     : DAYS;
 
   return (
-    <div className="min-h-[100dvh] grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_270px] gap-3 bg-[#030712] text-white">
+    <div className="h-full grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_270px] gap-3 bg-[#030712] text-white">
       {/* OPERASYON_MOBILE_BUTTON */}
       <button
         onClick={() => setOperationOpen(true)}
-        className="md:hidden fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+92px)] z-50 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-2xl"
+        className="md:hidden fixed top-3 right-3 z-50 bg-blue-600 px-4 py-2 rounded-xl text-sm font-semibold shadow-lg"
       >
         Operasyon
       </button>
@@ -291,15 +291,15 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
         />
       )}
 
-      <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] p-2 md:p-3 overflow-x-hidden">
+      <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] p-2 md:p-3 overflow-hidden">
         <div className="h-full rounded-[1.35rem] bg-white text-slate-900 p-3 flex flex-col overflow-hidden">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Takvim Görünümü</p>
               <h1 className="text-xl font-black">{range === "MONTH" ? "Aylık Görünüm" : range === "TODAY" ? "Bugün" : "Bu Hafta"}</h1>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 w-full md:w-auto md:flex md:items-center">
+            <div className="flex items-center gap-2">
               <button onClick={() => setRange("MONTH")} className={cls("rounded-xl px-4 py-2 text-sm font-bold border", range === "MONTH" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200")}>
                 Tümü
               </button>
@@ -309,23 +309,23 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
               <button onClick={() => setRange("WEEK")} className={cls("rounded-xl px-4 py-2 text-sm font-bold border", range === "WEEK" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-700 border-slate-200")}>
                 Bu Hafta
               </button>
-              <a href="/dashboard/is-programi?tam=1" className="hidden md:inline-flex rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
+              <a href="/dashboard/is-programi?tam=1" className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
                 Tam Sayfa
               </a>
             </div>
           </div>
 
-          <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-3 flex-1 min-h-0 flex flex-col overflow-x-auto overflow-y-visible">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
-              <div className="grid grid-cols-[44px_1fr_44px] gap-2 w-full md:w-auto md:flex md:items-center">
+          <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
                 <button onClick={() => navigate("prev")} disabled={loading} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">←</button>
-                <div className="min-w-0 md:min-w-[180px] rounded-xl border border-slate-200 bg-slate-50 px-3 md:px-4 py-2 text-center font-black">
+                <div className="min-w-[180px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-center font-black">
                   {MONTHS[month - 1]} {year}
                 </div>
                 <button onClick={() => navigate("next")} disabled={loading} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">→</button>
               </div>
 
-              <div className="hidden md:flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs">
                 <Legend color="bg-blue-500" label="Ölçü" />
                 <Legend color="bg-amber-500" label="İmalat" />
                 <Legend color="bg-emerald-500" label="Montaj" />
@@ -336,7 +336,7 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
               </div>
             </div>
 
-            <div className={cls("grid gap-2 mb-2 min-w-[760px] md:min-w-0", range === "TODAY" ? "grid-cols-1" : "grid-cols-7")}>
+            <div className={cls("grid gap-1 mb-1", range === "TODAY" ? "grid-cols-1" : "grid-cols-7")}>
               {visibleHeaders.map((d) => (
                 <div key={d} className="h-7 rounded-lg bg-slate-100 flex items-center justify-center text-[11px] font-black tracking-[0.12em] text-slate-500">
                   {d}
@@ -344,7 +344,7 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
               ))}
             </div>
 
-            <div className={cls("grid gap-2 flex-1 min-h-0 min-w-[760px] md:min-w-0", range === "TODAY" ? "grid-cols-1" : "grid-cols-7")}>
+            <div className={cls("grid gap-1 flex-1 min-h-0", range === "TODAY" ? "grid-cols-1" : "grid-cols-7")}>
               {cells.map((cell) => {
                 const items = cell.valid ? entriesForDay(cell.day) : [];
                 const isToday = cell.valid && today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === cell.day;
@@ -355,7 +355,7 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => cell.valid && onDrop(cell.day)}
                     className={cls(
-                      "rounded-2xl border p-2 md:p-1.5 min-h-[118px] md:min-h-0 overflow-hidden bg-white",
+                      "rounded-xl border p-1.5 overflow-hidden bg-white",
                       cell.valid ? "border-slate-200" : "border-slate-100 bg-slate-50",
                       isToday && "ring-2 ring-blue-500"
                     )}
@@ -401,7 +401,7 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
                                 openEdit(x.schedule);
                               }}
                               className={cls(
-                                "w-full min-h-8 md:h-6 rounded-lg border px-2 py-1 md:px-1.5 text-left text-[12px] md:text-[11px] leading-tight flex items-center gap-1 overflow-hidden",
+                                "w-full h-6 rounded-md border px-1.5 text-left text-[11px] leading-none flex items-center gap-1 overflow-hidden",
                                 PHASE_STYLE[x.phase] || "border-slate-200 bg-slate-50 text-slate-700",
                                 x.completed && "opacity-60 line-through"
                               )}
