@@ -27,216 +27,6 @@ export default function IslerPage() {
     alert("Teklif linki kopyalandı.")
   }
 
-  // METRIX_SALES_AI_HELPERS
-  
-
-function formatMusteriAdi(ad: string) {
-  if (!ad) return "Sayın Müşteri"
-
-  return "Sayın " + ad
-    .toLowerCase()
-    .split(" ")
-    .map(k => k.charAt(0).toUpperCase() + k.slice(1))
-    .join(" ")
-}
-
-function teklifTakipDurumu(i: any) {
-    if (!i) {
-      return {
-        seviye: "boş",
-        baslik: "İş seçilmedi",
-        metin: "",
-        renk: "text-slate-400",
-        skor: 0,
-        etiket: "Boş",
-        aksiyon: "İş seç",
-        barColor: "#64748b",
-      }
-    }
-
-    const goruntulenme = Number(i.teklifGoruntulenmeSayisi || 0)
-    const onaylandi = i.durum === "onaylandi"
-    const simdi = Date.now()
-    const created = i.createdAt ? new Date(i.createdAt).getTime() : simdi
-    const sonBakis = i.teklifSonGoruntulenmeTarihi ? new Date(i.teklifSonGoruntulenmeTarihi).getTime() : null
-    const teklifYasiSaat = (simdi - created) / 1000 / 60 / 60
-    const son24SaatteBakildi = sonBakis ? (simdi - sonBakis) / 1000 / 60 / 60 <= 24 : false
-
-    if (onaylandi) {
-      return {
-        seviye: "onay",
-        baslik: "Teklif onaylandı",
-        metin: "Bu iş artık satış sonrası operasyon akışında.",
-        renk: "text-emerald-300",
-        skor: 5,
-        etiket: "Kapandı",
-        aksiyon: "Operasyona al",
-        barColor: "#10b981",
-      }
-    }
-
-    if (goruntulenme === 0) {
-      if (teklifYasiSaat >= 72) {
-        return {
-          seviye: "72s",
-          baslik: "72 saattir açılmadı",
-          metin: "Bu teklif soğuyor. Telefonla arama veya güçlü takip mesajı gerekli.",
-          renk: "text-red-300",
-          skor: 0,
-          etiket: "Soğuk",
-          aksiyon: "Ara veya yeniden gönder",
-          barColor: "#ef4444",
-        }
-      }
-
-      if (teklifYasiSaat >= 48) {
-        return {
-          seviye: "48s",
-          baslik: "48 saattir açılmadı",
-          metin: "İkinci takip mesajı zamanı. Müşteri henüz reaksiyon vermedi.",
-          renk: "text-amber-300",
-          skor: 1,
-          etiket: "Zayıf",
-          aksiyon: "Takip mesajı gönder",
-          barColor: "#f59e0b",
-        }
-      }
-
-      if (teklifYasiSaat >= 24) {
-        return {
-          seviye: "24s",
-          baslik: "24 saattir açılmadı",
-          metin: "Nazik hatırlatma mesajı gönderilebilir.",
-          renk: "text-blue-300",
-          skor: 1,
-          etiket: "Beklemede",
-          aksiyon: "Nazik hatırlat",
-          barColor: "#3b82f6",
-        }
-      }
-
-      return {
-        seviye: "bekle",
-        baslik: "Teklif beklemede",
-        metin: "Henüz takip için erken. İlk reaksiyonu bekle.",
-        renk: "text-slate-300",
-        skor: 0,
-        etiket: "Yeni",
-        aksiyon: "Bekle",
-        barColor: "#64748b",
-      }
-    }
-
-    let skor = 1
-    if (goruntulenme >= 2) skor = 2
-    if (son24SaatteBakildi) skor = Math.max(skor, 3)
-    if (goruntulenme >= 3) skor = Math.max(skor, 4)
-    if (goruntulenme >= 5 || (goruntulenme >= 3 && son24SaatteBakildi)) skor = 5
-
-    if (skor >= 5) {
-      return {
-        seviye: "sıcak",
-        baslik: "Çok sıcak müşteri",
-        metin: "Müşteri teklife tekrar tekrar bakmış. Bu müşteri karar aşamasında olabilir.",
-        renk: "text-red-300",
-        skor,
-        etiket: "Ara hemen",
-        aksiyon: "Hemen ara",
-        barColor: "#ef4444",
-      }
-    }
-
-    if (skor >= 4) {
-      return {
-        seviye: "sıcak",
-        baslik: "Sıcak müşteri",
-        metin: "Teklif birkaç kez incelenmiş. Fiyat, termin veya ödeme koşulu konuşulmalı.",
-        renk: "text-orange-300",
-        skor,
-        etiket: "Sıcak",
-        aksiyon: "Bugün dönüş yap",
-        barColor: "#f97316",
-      }
-    }
-
-    if (skor >= 3) {
-      return {
-        seviye: "bakıldı",
-        baslik: "Müşteri teklife baktı",
-        metin: "Son 24 saat içinde teklif açılmış. Takip için doğru zamandasın.",
-        renk: "text-blue-300",
-        skor,
-        etiket: "Aktif",
-        aksiyon: "Takip et",
-        barColor: "#3b82f6",
-      }
-    }
-
-    if (skor >= 2) {
-      return {
-        seviye: "ilgili",
-        baslik: "İlgili müşteri",
-        metin: "Teklif tekrar incelenmiş. Karar süreci başlamış olabilir.",
-        renk: "text-amber-300",
-        skor,
-        etiket: "Isınıyor",
-        aksiyon: "Mesaj gönder",
-        barColor: "#f59e0b",
-      }
-    }
-
-    return {
-      seviye: "bakıldı",
-      baslik: "Müşteri teklife baktı",
-      metin: "Teklif bir kez açılmış. Çok erken ama takip fırsatı doğdu.",
-      renk: "text-blue-300",
-      skor,
-      etiket: "Baktı",
-      aksiyon: "Kısa takip",
-      barColor: "#60a5fa",
-    }
-  }
-
-  async function aktifTakipMesajiKopyala() {
-    if (!aktifIs) return
-
-    const link = aktifTeklifLinki()
-    const takip = teklifTakipDurumu(aktifIs)
-    const ad = formatMusteriAdi(aktifIs.musteriAdi)
-    const urun = aktifIs.urunAdi || "teklif"
-
-    let mesaj = ""
-
-    if (aktifIs.durum === "onaylandi") {
-      mesaj = `${ad}, teklif onayınız için teşekkür ederiz. ${urun} uygulamanız için üretim/planlama sürecini başlatıyoruz. Gelişmeleri size ayrıca ileteceğiz.`
-    } else if (takip.skor >= 5) {
-      mesaj = `${ad}, teklifinizi birkaç kez incelediğinizi gördüm. Büyük ihtimalle karar aşamasındasınız. İsterseniz fiyat, termin veya uygulama detayını hızlıca netleştirip süreci bugün planlayabiliriz.\n\nTeklif linki:\n${link}`
-    } else if (takip.skor === 4) {
-      mesaj = `${ad}, teklifinizi tekrar incelediğinizi gördüm. Aklınıza takılan fiyat, ödeme, termin veya uygulama detayı varsa hemen yardımcı olayım. Uygunsa bugün kısa bir görüşmeyle netleştirebiliriz.\n\nTeklif linki:\n${link}`
-    } else if (takip.skor === 3) {
-      mesaj = `${ad}, teklifimizi incelediğinizi gördüm. Uygulama detayları, teslim süresi veya fiyatla ilgili sormak istediğiniz bir konu varsa hemen yardımcı olabilirim.\n\nTeklif linki:\n${link}`
-    } else if (takip.skor === 2) {
-      mesaj = `${ad}, teklifimizi tekrar paylaşmak istedim. İnceleme fırsatınız olduysa, aklınıza takılan bir detay varsa memnuniyetle yardımcı olurum.\n\nTeklif linki:\n${link}`
-    } else if (takip.seviye === "24s") {
-      mesaj = `${ad}, teklifimizi dün iletmiştim. Uygunsa aşağıdaki linkten inceleyebilirsiniz. Sorunuz olursa hızlıca yardımcı olurum.\n\n${link}`
-    } else if (takip.seviye === "48s") {
-      mesaj = `${ad}, teklifimizle ilgili karar sürecinizde destek olmamı ister misiniz? Fiyat, ürün veya termin konusunda revize gerekiyorsa birlikte netleştirebiliriz.\n\n${link}`
-    } else if (takip.seviye === "72s") {
-      mesaj = `${ad}, teklifimizin hâlâ geçerli olduğunu hatırlatmak isterim. Dilerseniz fiyat/termin tarafını hızlıca revize edip size en uygun hale getirebiliriz.\n\n${link}`
-    } else {
-      mesaj = `${ad}, teklifinizi aşağıdaki linkten inceleyip onaylayabilirsiniz. Herhangi bir sorunuz olursa memnuniyetle yardımcı olurum.\n\n${link}`
-    }
-
-    await navigator.clipboard.writeText(mesaj)
-    alert("Akıllı takip mesajı kopyalandı.")
-  }
-
-  function aktifRevizeEt() {
-    if (!aktifIs?.id) return
-    router.push(`/is/detay?id=${aktifIs.id}`)
-  }
-
-
   const [isler, setIsler] = useState<any[]>([])
   const [aktifIs, setAktifIs] = useState<any | null>(null)
   const [plakaAcik, setPlakaAcik] = useState(false)
@@ -360,13 +150,7 @@ function teklifTakipDurumu(i: any) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Seçili İş</p>
-                <div className="mt-2 flex items-center gap-3">
-                  <h2 className="text-2xl">{aktifIs.musteriAdi}</h2>
-                  {/* METRIX_VERSION_BADGE */}
-                  <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-300">
-                    v{Number(aktifIs.versiyon || 1)}
-                  </span>
-                </div>
+                <h2 className="text-2xl mt-2">{aktifIs.musteriAdi}</h2>
 
                 <div className="mt-2 flex items-center gap-3">
                   <p className="text-slate-400 text-sm">{aktifIs.urunAdi}</p>
@@ -400,59 +184,6 @@ function teklifTakipDurumu(i: any) {
                 <p className="text-lg mt-2 text-blue-400">%{aktifKarYuzde.toFixed(1)}</p>
               </div>
             </div>
-
-
-            {/* METRIX_SALES_AI_ALERT_FORCE */}
-            {aktifIs && (
-              <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
-                {(() => {
-                  const takip = teklifTakipDurumu(aktifIs)
-                  return (
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Satış Takip Uyarısı</p>
-                        <p className={`mt-2 text-xl font-black ${takip.renk}`}>{takip.baslik}</p>
-                        <p className="mt-2 text-sm text-slate-400">{takip.metin}</p>
-
-                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Sıcaklık Skoru</p>
-                            <p className={`text-sm font-black ${takip.renk}`}>{takip.skor}/5 · {takip.etiket}</p>
-                          </div>
-
-                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, takip.skor * 20))}%`,
-                                backgroundColor: takip.barColor,
-                              }}
-                            />
-                          </div>
-
-                          <p className="mt-2 text-xs text-slate-400">Önerilen aksiyon: <b>{takip.aksiyon}</b></p>
-                        </div>
-                        <p className="mt-2 text-xs text-slate-500">
-                          Görüntülenme: {Number(aktifIs.teklifGoruntulenmeSayisi || 0)} kez
-                          {aktifIs.teklifSonGoruntulenmeTarihi
-                            ? ` · Son bakış: ${new Date(aktifIs.teklifSonGoruntulenmeTarihi).toLocaleString("tr-TR")}`
-                            : " · Henüz açılmadı"}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={aktifTakipMesajiKopyala}
-                        className="shrink-0 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold hover:bg-slate-700"
-                      >
-                        Akıllı Takip Mesajı Kopyala
-                      </button>
-                    </div>
-                  )
-                })()}
-              </div>
-            )}
-
-
 
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
@@ -503,6 +234,16 @@ function teklifTakipDurumu(i: any) {
               <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
                 <p className="text-xs text-slate-400">Tahsilat</p>
                 <p className="mt-2 text-xl text-cyan-400">{paraGoster(Number(aktifIs.tahsilat || 0))}</p>
+              </div>
+
+              <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
+                <p className="text-xs text-slate-400">Teklif Görüntülenme</p>
+                <p className="mt-2 text-xl text-emerald-300">{Number(aktifIs.teklifGoruntulenmeSayisi || 0)} kez</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {aktifIs.teklifSonGoruntulenmeTarihi
+                    ? new Date(aktifIs.teklifSonGoruntulenmeTarihi).toLocaleString("tr-TR")
+                    : "Henüz açılmadı"}
+                </p>
               </div>
             </div>
 
@@ -581,22 +322,6 @@ function teklifTakipDurumu(i: any) {
           className="w-full rounded-2xl bg-slate-800 px-5 py-4 text-white font-bold hover:bg-slate-700 disabled:opacity-40"
         >
           🔗 Linki Kopyala
-        </button>
-
-        <button
-          onClick={aktifRevizeEt}
-          disabled={!aktifIs}
-          className="w-full rounded-2xl bg-purple-600 px-5 py-4 text-white font-bold hover:bg-purple-500 disabled:opacity-40"
-        >
-          ✏️ Revize Teklif
-        </button>
-
-        <button
-          onClick={aktifTakipMesajiKopyala}
-          disabled={!aktifIs?.teklifNo}
-          className="w-full rounded-2xl bg-amber-600 px-5 py-4 text-white font-bold hover:bg-amber-500 disabled:opacity-40"
-        >
-          ⏱ Akıllı Takip Mesajı Kopyala
         </button>
       </div>
 

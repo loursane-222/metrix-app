@@ -75,6 +75,39 @@ function IsDetayContent() {
     );
   }
 
+
+  async function revizeFiyatiKaydet() {
+    if (!data?.id) return alert("İş bulunamadı.")
+
+    try {
+      const bazBirim = Number(fiyat || 0) / Math.max(Number(data.metrajMtul || 0), 1)
+
+      const res = await fetch(`/api/isler/${data.id}/fiyat`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tezgahBirimFiyatOverride: bazBirim,
+          tezgahArasiBirimFiyatOverride: bazBirim * 0.75,
+          adaBirimFiyatOverride: bazBirim * 1.5,
+        }),
+      })
+
+      const raw = await res.text()
+      let json: any = {}
+      try { json = raw ? JSON.parse(raw) : {} } catch { json = { hata: raw } }
+
+      if (!res.ok) {
+        alert(json?.hata || "Revize fiyat kaydedilemedi.")
+        return
+      }
+
+      alert("Revize fiyat kaydedildi. Online teklif ve PDF güncellendi.")
+      
+    } catch (e: any) {
+      alert(e?.message || "Revize fiyat kaydedilemedi.")
+    }
+  }
+
   if (!data) {
     return (
       <div className="min-h-screen bg-[#030712] text-white p-10">
@@ -203,6 +236,16 @@ function IsDetayContent() {
       <div className={`text-center text-lg font-semibold ${fiyatRenk}`}>
         {fiyatMesaji}
       </div>
+
+
+      {/* REVIZE_FIYAT_KAYDET_BUTONU */}
+      <button
+        onClick={revizeFiyatiKaydet}
+        disabled={saving}
+        className="w-full rounded-xl bg-emerald-600 px-5 py-4 text-lg font-bold text-white hover:bg-emerald-500 disabled:bg-slate-700"
+      >
+        💾 Revize Fiyatı Kaydet
+      </button>
 
       <div className="mt-auto grid grid-cols-3 gap-3">
         <button

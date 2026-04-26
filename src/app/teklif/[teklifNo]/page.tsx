@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+export const dynamic = "force-dynamic";
+
 function para(v: any) {
   return Number(v || 0).toLocaleString("tr-TR", {
     minimumFractionDigits: 2,
@@ -33,6 +35,15 @@ export default async function Page({ params }: any) {
       </main>
     );
   }
+
+  await prisma.is.update({
+    where: { id: is.id },
+    data: {
+      teklifGoruntulenmeSayisi: { increment: 1 },
+      teklifIlkGoruntulenmeTarihi: is.teklifIlkGoruntulenmeTarihi || new Date(),
+      teklifSonGoruntulenmeTarihi: new Date(),
+    },
+  });
 
   const atolye: any = is.atolye;
   const tel = telTemizle(atolye?.telefon || "");

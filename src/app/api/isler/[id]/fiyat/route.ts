@@ -76,6 +76,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         kdvDahilFiyat,
         mtulSatisFiyati,
         karYuzdesi,
+        versiyon: { increment: 1 },
       },
     })
 

@@ -140,6 +140,7 @@ model Tahsilat {
 }
 
 model Is {
+  versiyon Int @default(1)
   id       String @id @default(cuid())
   atolyeId String
   atolye   Atolye @relation(fields: [atolyeId], references: [id])
@@ -184,6 +185,10 @@ model Is {
   adaBirimFiyatOverride         Decimal @default(0)
 
   teklifGecerlilikTarihi DateTime?
+
+  teklifGoruntulenmeSayisi Int @default(0)
+  teklifIlkGoruntulenmeTarihi DateTime?
+  teklifSonGoruntulenmeTarihi DateTime?
   kirilanTasPlaka        Decimal @default(0)
   hataliKesimPlaka       Decimal @default(0)
 
