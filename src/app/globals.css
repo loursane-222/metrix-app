@@ -19,3 +19,63 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ===== MOBILE FIX FINAL ===== */
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 120;
+  background: #030712;
+  backdrop-filter: blur(6px);
+}
+
+.mobile-action-btn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: 12px;
+  z-index: 140;
+}
+
+.mobile-calendar-container {
+  padding: 12px;
+}
+
+.mobile-calendar-grid {
+  gap: 6px !important;
+}
+
+.mobile-calendar-day {
+  min-height: 90px !important;
+  padding: 6px !important;
+  font-size: 12px;
+}
+
+.mobile-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mobile-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-back-btn {
+  position: relative;
+  z-index: 130;
+}
+
+.mobile-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===== END ===== */
+
