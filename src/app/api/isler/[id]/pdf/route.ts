@@ -1,0 +1,245 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
+import QRCode from 'qrcode'
+
+const prisma = new PrismaClient()
+
+function para(v: any) {
+  return Number(v || 0).toLocaleString('tr-TR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + ' ₺'
+}
+
+function temiz(v: any) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function telTemizle(v: string) {
+  const r = String(v || '').replace(/\D/g, '')
+  if (!r) return ''
+  if (r.startsWith('90')) return r
+  if (r.startsWith('0')) return '9' + r
+  return '90' + r
+}
+
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params
+
+    const is = await prisma.is.findUnique({
+      where: { id },
+      include: { atolye: true },
+    })
+
+    if (!is) {
+      return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
+    }
+
+    const atolye: any = is.atolye
+    const tel = telTemizle(atolye?.telefon || '')
+    const whatsappUrl = tel
+      ? `https://wa.me/${tel}?text=${encodeURIComponent(`${is.teklifNo} numaralı teklifinizi onaylamak istiyorum.`)}`
+      : ''
+
+    const qr = whatsappUrl
+      ? await QRCode.toDataURL(whatsappUrl, { margin: 1, width: 120 })
+      : ''
+
+    const toplamMetraj =
+      Number(is.metrajMtul || 0) +
+      Number(is.tezgahArasiMtul || 0) +
+      Number(is.adaTezgahMtul || 0)
+
+    const satis = Number(is.satisFiyati || 0)
+    const bazMtul = Number(is.metrajMtul || 0)
+    const arasiMtul = Number(is.tezgahArasiMtul || 0)
+    const adaMtul = Number(is.adaTezgahMtul || 0)
+
+    const weightedTotal = bazMtul * 1 + arasiMtul * 0.75 + adaMtul * 1.5
+    const bazFiyat = weightedTotal > 0 ? satis / weightedTotal : 0
+    const fiyatTezgah = bazFiyat
+    const fiyatArasi = bazFiyat * 0.75
+    const fiyatAda = bazFiyat * 1.5
+
+    const satirlar = [
+      bazMtul > 0
+        ? `<tr><td>Tezgah Uygulaması</td><td>${temiz(is.urunAdi)}</td><td style="text-align:right">${bazMtul.toFixed(2)} mtül</td><td style="text-align:right">${para(fiyatTezgah)}</td><td style="text-align:right">${para(bazMtul * fiyatTezgah)}</td></tr>`
+        : '',
+      arasiMtul > 0
+        ? `<tr><td>Tezgah Arası</td><td>${temiz(is.urunAdi)}</td><td style="text-align:right">${arasiMtul.toFixed(2)} mtül</td><td style="text-align:right">${para(fiyatArasi)}</td><td style="text-align:right">${para(arasiMtul * fiyatArasi)}</td></tr>`
+        : '',
+      adaMtul > 0
+        ? `<tr><td>Ada Tezgah</td><td>${temiz(is.urunAdi)}</td><td style="text-align:right">${adaMtul.toFixed(2)} mtül</td><td style="text-align:right">${para(fiyatAda)}</td><td style="text-align:right">${para(adaMtul * fiyatAda)}</td></tr>`
+        : '',
+    ].join('')
+
+    const kurulusYili = Number(atolye?.kurulusYili || 0)
+
+    const deneyim = kurulusYili > 0
+      ? `${kurulusYili} yılından bu yana porselen, doğal taş ve tezgah uygulamaları gerçekleştiriyoruz.`
+      : `Porselen, doğal taş ve tezgah uygulamalarında profesyonel üretim yaklaşımıyla çalışıyoruz.`
+
+    const html = `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>Teklif - ${temiz(is.teklifNo)}</title>
+<style>
+  @page { size: A4; margin: 0; }
+  body { margin:0; background:#e5e7eb; font-family: Arial, sans-serif; color:#0f172a; }
+  .sheet { width:210mm; height:297mm; margin:0 auto; background:white; padding:9mm 10mm; box-sizing:border-box; overflow:hidden; }
+  .hero { background:linear-gradient(135deg,#0f172a,#1e1b4b); color:white; border-radius:18px; padding:16px 18px; }
+  .top { display:flex; justify-content:space-between; gap:24px; }
+  .logo { width:46px; height:46px; border-radius:18px; background:white; object-fit:contain; padding:6px; }
+  .brand { display:flex; gap:14px; align-items:center; }
+  .brand h1 { margin:0; font-size:20px; }
+  .brand p { margin:4px 0 0; color:#cbd5e1; font-size:9px; letter-spacing:1.6px; }
+  .meta { text-align:right; font-size:10px; line-height:1.55; color:#dbeafe; }
+  .hero h2 { margin:18px 0 0; font-size:24px; line-height:1.08; max-width:610px; }
+  .hero .desc { margin-top:7px; color:#dbeafe; font-size:10.5px; max-width:650px; line-height:1.35; }
+  .section { margin-top:8px; border:1px solid #e2e8f0; border-radius:14px; padding:10px 12px; page-break-inside:avoid; break-inside:avoid; }
+  .title { font-size:8.5px; color:#64748b; letter-spacing:1.5px; font-weight:800; text-transform:uppercase; margin-bottom:6px; }
+  .grid { display:grid; grid-template-columns:1.25fr .75fr; gap:10px; }
+  .text { font-size:10px; line-height:1.42; color:#334155; }
+  .pills { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .pill { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:7px 8px; }
+  .pill small { display:block; color:#64748b; font-size:8.5px; margin-bottom:3px; }
+  .pill b { font-size:10.5px; }
+  .benefits { display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; }
+  .benefit { background:#f8fafc; border:1px solid #e2e8f0; border-radius:11px; padding:8px; font-size:9px; line-height:1.32; min-height:44px; }
+  .benefit b { display:block; margin-bottom:3px; font-size:9.5px; }
+  table { width:100%; border-collapse:collapse; font-size:9.5px; overflow:hidden; border-radius:10px; }
+  th { background:#f1f5f9; color:#475569; text-align:left; padding:7px 8px; }
+  td { border-top:1px solid #e2e8f0; padding:7px 8px; }
+  .price { display:grid; grid-template-columns:1fr 220px; gap:10px; margin-top:8px; }
+  .note { background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:9px 10px; font-size:9.5px; line-height:1.35; color:#334155; }
+  .total { background:#0f172a; color:white; border-radius:12px; padding:10px 12px; text-align:right; }
+  .total small { color:#cbd5e1; letter-spacing:1.4px; font-size:8px; }
+  .total b { display:block; margin-top:5px; font-size:20px; }
+  .approval { margin-top:9px; background:linear-gradient(135deg,#eff6ff,#fff); border:1px solid #bfdbfe; border-radius:14px; padding:10px 12px; display:grid; grid-template-columns:1fr 86px; gap:10px; align-items:center; page-break-inside:avoid; break-inside:avoid; }
+  .approval h3 { margin:0; font-size:13px; }
+  .approval p { font-size:9.5px; color:#334155; line-height:1.35; margin:5px 0 0; }
+  .qr { width:76px; height:76px; background:white; border:1px solid #dbeafe; border-radius:10px; padding:5px; }
+  .footer { margin-top:8px; display:flex; justify-content:space-between; color:#64748b; font-size:8.5px; line-height:1.35; }
+  .sign { border-top:1px solid #cbd5e1; width:145px; text-align:center; padding-top:5px; color:#334155; }
+  .print { position:fixed; right:24px; top:24px; background:#2563eb; color:white; border:0; border-radius:14px; padding:12px 18px; font-weight:700; cursor:pointer; }
+  @media print { body{background:white;} .sheet{margin:0;} .print{display:none;} }
+</style>
+</head>
+<body>
+<button class="print" onclick="window.print()">PDF olarak kaydet</button>
+
+<div class="sheet">
+  <div class="hero">
+    <div class="top">
+      <div class="brand">
+        ${atolye?.logoUrl ? `<img class="logo" src="${temiz(atolye.logoUrl)}" />` : ''}
+        <div>
+          <h1>${temiz(atolye?.atolyeAdi || 'Firma')}</h1>
+          <p>PROFESYONEL ÜRETİM TEKLİFİ</p>
+        </div>
+      </div>
+      <div class="meta">
+        <div><b>Teklif No:</b> ${temiz(is.teklifNo)}</div>
+        <div><b>Tarih:</b> ${new Date().toLocaleDateString('tr-TR')}</div>
+        <div><b>Müşteri:</b> ${temiz(is.musteriAdi)}</div>
+      </div>
+    </div>
+    <h2>Projeniz için kontrollü, planlı ve güvenilir üretim.</h2>
+    <div class="desc">Bu teklif; ürün, metraj, üretim süreci ve uygulama kapsamı dikkate alınarak size özel hazırlanmıştır.</div>
+  </div>
+
+  <div class="section">
+    <div class="title">Proje Özeti</div>
+    <div class="grid">
+      <div class="text">
+        <b>${temiz(is.musteriAdi)}</b> için hazırlanan bu teklif kapsamında <b>${temiz(is.urunAdi)}</b> uygulaması planlanmıştır.
+        <br><br>
+        Bu proje, atölye kapasitemiz ve üretim planlamamız dikkate alınarak özel olarak hazırlanmıştır.
+        Uygulama süreci, verimli ve kontrollü üretim modeli ile planlanmıştır.
+        Plaka yerleşimi, minimum fire hedefiyle optimize edilmiştir.
+      </div>
+      <div class="pills">
+        <div class="pill"><small>Ürün</small><b>${temiz(is.urunAdi)}</b></div>
+        <div class="pill"><small>Malzeme</small><b>${temiz(is.malzemeTipi)}</b></div>
+        <div class="pill"><small>Toplam Metraj</small><b>${toplamMetraj.toFixed(2)} mtül</b></div>
+        <div class="pill"><small>Plaka</small><b>${Number(is.kullanilanPlakaSayisi || 0)} adet</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="title">Sistemli Üretim Yaklaşımı</div>
+    <div class="benefits">
+      <div class="benefit"><b>Akıllı üretim planlama</b>İş akışı ve uygulama kapsamı planlı şekilde yönetilir.</div>
+      <div class="benefit"><b>Fire optimizasyonu aktif</b>Plaka yerleşimi minimum fire hedefiyle değerlendirilir.</div>
+      <div class="benefit"><b>Süre ve maliyet kontrolü</b>Tahmini üretim süresi ${Math.round(Number(is.toplamSureDakika || 0))} dakika olarak planlanmıştır.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="title">Teklif Kapsamı</div>
+    <table>
+      <thead>
+        <tr>
+          <th>İş Kalemi</th>
+          <th>Ürün</th>
+          <th style="text-align:right">Miktar</th>
+          <th style="text-align:right">Birim Fiyat</th>
+          <th style="text-align:right">Toplam</th>
+        </tr>
+      </thead>
+      <tbody>${satirlar}</tbody>
+    </table>
+
+    <div class="price">
+      <div class="note">
+        Fiyat; malzeme, üretim planlama, işçilik ve uygulama sürecini kapsar. Ek talepler ayrıca değerlendirilir.
+      </div>
+      <div class="total">
+        <small>TOPLAM YATIRIM</small>
+        <b>${para(is.kdvDahilFiyat || is.satisFiyati)}</b>
+        <div>KDV dahil</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="title">Neden Biz?</div>
+    <div class="text">${temiz(deneyim)}<br><br>Amacımız; ölçüden uygulamaya kadar kontrollü, anlaşılır ve güven veren bir süreç sunmaktır.</div>
+  </div>
+
+  <div class="approval">
+    <div>
+      <h3>Teklifi onaylamak için bize ulaşabilirsiniz.</h3>
+      <p>Onay vermeniz durumunda ölçü, üretim ve uygulama süreci planlanarak iş programına alınacaktır.</p>
+    </div>
+    ${qr ? `<img class="qr" src="${qr}" />` : `<div class="qr"></div>`}
+  </div>
+
+  <div class="footer">
+    <div>
+      <b>${temiz(atolye?.atolyeAdi || '')}</b><br>
+      ${temiz(atolye?.telefon || '')}<br>
+      ${temiz(atolye?.email || '')}
+    </div>
+    <div class="sign">Müşteri Onayı / İmza</div>
+  </div>
+</div>
+</body>
+</html>`
+
+    return new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })
+  } catch (e: any) {
+    return NextResponse.json({ hata: e.message }, { status: 500 })
+  }
+}

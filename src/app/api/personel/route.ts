@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import bcrypt from 'bcryptjs'
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient
@@ -29,6 +30,10 @@ async function atolyeIdAl() {
     )
 
     const { payload } = await jwtVerify(token, secret)
+
+    if ((payload as any).role === 'personel') {
+      return (payload as any).atolyeId || null
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: (payload as any).id },
@@ -79,6 +84,7 @@ export async function GET() {
       if (toplamGorev === 0) {
         return {
           ...p,
+          password: undefined,
           performansNotu: null,
           toplamGorev: 0,
           tamamlananGorev: 0,
@@ -101,6 +107,7 @@ export async function GET() {
 
       return {
         ...p,
+        password: undefined,
         performansNotu,
         toplamGorev,
         tamamlananGorev: tamamlanan.length,
@@ -138,6 +145,7 @@ export async function POST(req: NextRequest) {
     }
 
     const veri = await req.json()
+    const hashedPassword = veri.password ? await bcrypt.hash(veri.password, 10) : ''
 
     const personel = await prisma.personel.create({
       data: {
@@ -149,11 +157,12 @@ export async function POST(req: NextRequest) {
         calismaYili: parseInt(veri.calismaYili) || 0,
         telefon: veri.telefon || '',
         email: veri.email || '',
+        password: hashedPassword,
         aktif: true,
       },
     })
 
-    return NextResponse.json({ personel })
+    return NextResponse.json({ personel: { ...personel, password: undefined } })
   } catch (error: any) {
     console.error('PERSONEL API POST HATASI:', error)
     return NextResponse.json(
@@ -187,9 +196,14 @@ export async function PUT(req: NextRequest) {
       )
     }
 
+    const passwordData = veri.password
+      ? { password: await bcrypt.hash(veri.password, 10) }
+      : {}
+
     const personel = await prisma.personel.update({
       where: { id: veri.id },
       data: {
+        ...passwordData,
         ad: veri.ad,
         soyad: veri.soyad,
         gorevi: veri.gorevi,
@@ -201,7 +215,7 @@ export async function PUT(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ personel })
+    return NextResponse.json({ personel: { ...personel, password: undefined } })
   } catch (error: any) {
     console.error('PERSONEL API PUT HATASI:', error)
     return NextResponse.json(

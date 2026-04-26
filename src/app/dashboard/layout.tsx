@@ -1,6 +1,5 @@
 import PageHeaderTitle from "@/components/dashboard/PageHeaderTitle";
 import Sidebar from "@/components/dashboard/Sidebar";
-import Topbar from "@/components/dashboard/Topbar";
 import DailyPlanPopup from "@/components/dashboard/DailyPlanPopup";
 
 export default function DashboardLayout({
@@ -9,11 +8,13 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="min-h-screen bg-[#F4F7FB]">
+    // Dış arka plan koyu premium renge çevrildi
+    <div className="min-h-screen bg-[#0B1120]">
       <Sidebar />
-      <main className="min-h-screen md:ml-72">
-        <div className="p-4 md:p-8">
-          <Topbar />
+      {/* Kaydırmayı tamamen engellemek için h-screen ve overflow-hidden eklendi */}
+      <main className="h-screen md:ml-72 overflow-hidden bg-[#0B1120]">
+        {/* Topbar (beyaz panel) silindi ve boşluklar sıfırlandı, böylece sayfa tam oturacak */}
+        <div className="h-full w-full">
           <DailyPlanPopup />
           {children}
         </div>

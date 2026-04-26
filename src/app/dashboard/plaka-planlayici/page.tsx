@@ -1,9 +1,9 @@
-import { PlakaPlanlayici } from "@/components/plaka-planlayici/PlakaPlanlayici";
+import { PlakaPlanlayiciV2 } from "@/components/plaka-planlayici/PlakaPlanlayiciV2";
 
 export const metadata = {
-  title: "Plaka Planlayıcı | Metrix",
+  title: "AI Plaka Optimizasyonu | Metrix",
 };
 
 export default function PlakaPlanlayiciPage() {
-  return <PlakaPlanlayici />;
+  return <PlakaPlanlayiciV2 />;
 }

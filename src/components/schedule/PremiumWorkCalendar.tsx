@@ -1,0 +1,789 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { ScheduleModal } from "./ScheduleModal";
+import { movePhase, updateTasDurumu, togglePhaseCompletion } from "@/app/actions/schedule";
+
+const MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+const DAYS = ["PZT","SAL","ÇAR","PER","CUM","CMT","PAZ"];
+
+const PHASE_LABEL: Record<string, string> = {
+  OLCU: "Ölçü",
+  IMALAT: "İmalat",
+  MONTAJ: "Montaj",
+  TAS_ALINACAK: "Taş Alınacak",
+};
+
+const PHASE_STYLE: Record<string, string> = {
+  OLCU: "border-blue-200 bg-blue-50 text-blue-700",
+  IMALAT: "border-amber-200 bg-amber-50 text-amber-700",
+  MONTAJ: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  TAS_ALINACAK: "border-orange-200 bg-orange-50 text-orange-700",
+};
+
+function cls(...items: any[]) {
+  return items.filter(Boolean).join(" ");
+}
+
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+
+function isBusinessDay(d: Date) {
+  return d.getDay() !== 0 && d.getDay() !== 6;
+}
+
+function minusBusinessDays(date: Date, count: number) {
+  const d = new Date(date);
+  let c = 0;
+  while (c < count) {
+    d.setDate(d.getDate() - 1);
+    if (isBusinessDay(d)) c++;
+  }
+  return d;
+}
+
+function fmtDate(d: Date) {
+  return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" });
+}
+
+type Props = {
+  initialSchedules: any[];
+  initialYear: number;
+  initialMonth: number;
+};
+
+export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMonth }: Props) {
+  const [year, setYear] = useState(initialYear);
+  const [month, setMonth] = useState(initialMonth);
+  const [schedules, setSchedules] = useState<any[]>(initialSchedules || []);
+  const [range, setRange] = useState<"MONTH" | "TODAY" | "WEEK">("MONTH");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedSchedule, setSelectedSchedule] = useState<any | null>(null);
+  const [dragEntry, setDragEntry] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [gorevTamamModal, setGorevTamamModal] = useState<any | null>(null);
+  const [personeller, setPersoneller] = useState<any[]>([]);
+  const [tasAtamalar, setTasAtamalar] = useState<Record<string, any>>({});
+  const [tasAlacakPersonelId, setTasAlacakPersonelId] = useState("");
+  const [imalatTamamModal, setImalatTamamModal] = useState<any | null>(null);
+  const [kirilanVarMi, setKirilanVarMi] = useState(false);
+  const [kirilanAdet, setKirilanAdet] = useState("0");
+  const [tasModal, setTasModal] = useState<any | null>(null);
+
+  async function refresh(y = year, m = month) {
+    const res = await fetch(`/api/schedule?year=${y}&month=${m}`, { cache: "no-store" });
+    const data = await res.json();
+    setSchedules(Array.isArray(data) ? data : []);
+  }
+
+  async function navigate(dir: "prev" | "next") {
+    let nextMonth = month + (dir === "next" ? 1 : -1);
+    let nextYear = year;
+
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear++;
+    }
+
+    if (nextMonth < 1) {
+      nextMonth = 12;
+      nextYear--;
+    }
+
+    setLoading(true);
+    try {
+      await refresh(nextYear, nextMonth);
+      setMonth(nextMonth);
+      setYear(nextYear);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openAdd() {
+    setSelectedSchedule(null);
+    setModalOpen(true);
+  }
+
+  function openEdit(schedule: any) {
+    setSelectedSchedule(schedule);
+    setModalOpen(true);
+  }
+
+  function entriesForDay(dayNum: number) {
+    const date = new Date(year, month - 1, dayNum);
+    date.setHours(0, 0, 0, 0);
+
+    const entries: any[] = [];
+
+    for (const schedule of schedules) {
+      const phases = schedule.phases || [];
+
+      for (const phase of phases) {
+        if (!phase.plannedStart || !phase.plannedEnd) continue;
+
+        const start = new Date(phase.plannedStart);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(phase.plannedEnd);
+        end.setHours(23, 59, 59, 999);
+
+        if (date >= start && date <= end) {
+          entries.push({
+            id: phase.id,
+            kind: "phase",
+            phase: phase.phase,
+            label: PHASE_LABEL[phase.phase] || phase.phase,
+            musteri: schedule.is?.musteriAdi || "-",
+            urun: schedule.is?.urunAdi || "-",
+            completed: phase.isCompleted,
+            schedule,
+            phaseObj: phase,
+            plannedStart: new Date(phase.plannedStart),
+            plannedEnd: new Date(phase.plannedEnd),
+            people: (phase.fazAtamalar || []).map((x: any) => x.personel).filter(Boolean),
+            notes: phase.notes || phase.overrideNote || schedule.notes || "",
+            kirilanTasPlaka: Number(schedule.is?.kirilanTasPlaka || 0),
+          });
+        }
+      }
+
+      const olcu = phases.find((p: any) => p.phase === "OLCU");
+      if ((schedule.is?.tasDurumu === "alinacak" || schedule.is?.tasDurumu === "alindi") && olcu?.plannedStart) {
+        const tasDate = minusBusinessDays(new Date(olcu.plannedStart), 3);
+        tasDate.setHours(0, 0, 0, 0);
+
+        if (sameDay(tasDate, date)) {
+          entries.push({
+            id: `tas-${schedule.is.id}`,
+            kind: "tas",
+            phase: "TAS_ALINACAK",
+            label: schedule.is?.tasDurumu === "alindi" ? "Taş Alındı" : "Taş Alınacak",
+            musteri: schedule.is?.musteriAdi || "-",
+            urun: schedule.is?.urunAdi || "-",
+            completed: schedule.is?.tasDurumu === "alindi",
+            tasAtama: tasAtamalar[schedule.is?.id],
+            schedule,
+            plannedStart: tasDate,
+            plannedEnd: tasDate,
+            people: [],
+          });
+        }
+      }
+    }
+
+    return entries;
+  }
+
+  const stats = useMemo(() => {
+    const phases = schedules.flatMap((s: any) => s.phases || []);
+    return {
+      program: schedules.length,
+      aktif: phases.filter((p: any) => !p.isCompleted).length,
+      biten: phases.filter((p: any) => p.isCompleted).length,
+      tas: schedules.filter((s: any) => s.is?.tasDurumu === "alinacak").length,
+      atamali: phases.filter((p: any) => (p.fazAtamalar || []).length > 0).length,
+    };
+  }, [schedules]);
+
+  const today = new Date();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const todayItems = useMemo(() => {
+    const day = today.getFullYear() === year && today.getMonth() + 1 === month
+      ? today.getDate()
+      : 0;
+
+    if (!day) return [];
+
+    return entriesForDay(day).filter((x) => !x.completed).slice(0, 8);
+  }, [schedules, year, month]);
+
+  const cells = useMemo(() => {
+    if (range === "TODAY") {
+      const valid = today.getFullYear() === year && today.getMonth() + 1 === month;
+      return [{ key: "today", day: valid ? today.getDate() : -1, valid }];
+    }
+
+    if (range === "WEEK") {
+      const ref = today.getFullYear() === year && today.getMonth() + 1 === month
+        ? today
+        : new Date(year, month - 1, 1);
+
+      const day = ref.getDay() === 0 ? 7 : ref.getDay();
+      const monday = new Date(ref);
+      monday.setDate(ref.getDate() - day + 1);
+
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const valid = d.getFullYear() === year && d.getMonth() + 1 === month;
+        return { key: `w-${i}`, day: valid ? d.getDate() : -1, valid };
+      });
+    }
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    let first = new Date(year, month - 1, 1).getDay();
+    first = first === 0 ? 6 : first - 1;
+    const total = Math.ceil((daysInMonth + first) / 7) * 7;
+
+    return Array.from({ length: total }, (_, i) => {
+      const day = i - first + 1;
+      return {
+        key: `m-${i}`,
+        day,
+        valid: day >= 1 && day <= daysInMonth,
+      };
+    });
+  }, [range, year, month]);
+
+  async function onDrop(dayNum: number) {
+    if (!dragEntry || !dayNum || dragEntry.kind !== "phase") return;
+
+    const oldStart = new Date(dragEntry.plannedStart);
+    oldStart.setHours(0, 0, 0, 0);
+
+    const oldEnd = new Date(dragEntry.plannedEnd);
+    oldEnd.setHours(0, 0, 0, 0);
+
+    const duration = Math.round((oldEnd.getTime() - oldStart.getTime()) / 86400000);
+    const newStart = new Date(year, month - 1, dayNum);
+    const newEnd = new Date(year, month - 1, dayNum + duration);
+
+    try {
+      await movePhase({
+        schedulePhaseId: dragEntry.id,
+        newStart,
+        newEnd,
+      });
+      await refresh();
+    } catch (e: any) {
+      alert(e.message || "Görev taşınamadı.");
+    } finally {
+      setDragEntry(null);
+    }
+  }
+
+  const visibleHeaders = range === "TODAY"
+    ? [DAYS[((today.getDay() || 7) - 1)]]
+    : DAYS;
+
+  return (
+    <div className="h-full grid grid-cols-[minmax(0,1fr)_270px] gap-3 bg-[#030712] text-white">
+      <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] p-3 overflow-hidden">
+        <div className="h-full rounded-[1.35rem] bg-white text-slate-900 p-3 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Takvim Görünümü</p>
+              <h1 className="text-xl font-black">{range === "MONTH" ? "Aylık Görünüm" : range === "TODAY" ? "Bugün" : "Bu Hafta"}</h1>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button onClick={() => setRange("MONTH")} className={cls("rounded-xl px-4 py-2 text-sm font-bold border", range === "MONTH" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200")}>
+                Tümü
+              </button>
+              <button onClick={() => setRange("TODAY")} className={cls("rounded-xl px-4 py-2 text-sm font-bold border", range === "TODAY" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200")}>
+                Bugün
+              </button>
+              <button onClick={() => setRange("WEEK")} className={cls("rounded-xl px-4 py-2 text-sm font-bold border", range === "WEEK" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-700 border-slate-200")}>
+                Bu Hafta
+              </button>
+              <a href="/dashboard/is-programi?tam=1" className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                Tam Sayfa
+              </a>
+            </div>
+          </div>
+
+          <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <button onClick={() => navigate("prev")} disabled={loading} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">←</button>
+                <div className="min-w-[180px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-center font-black">
+                  {MONTHS[month - 1]} {year}
+                </div>
+                <button onClick={() => navigate("next")} disabled={loading} className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">→</button>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs">
+                <Legend color="bg-blue-500" label="Ölçü" />
+                <Legend color="bg-amber-500" label="İmalat" />
+                <Legend color="bg-emerald-500" label="Montaj" />
+                <Legend color="bg-orange-500" label="Taş Alınacak" />
+                <button onClick={openAdd} className="ml-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2 text-sm font-bold text-white">
+                  + İş Programı Ekle
+                </button>
+              </div>
+            </div>
+
+            <div className={cls("grid gap-1 mb-1", range === "TODAY" ? "grid-cols-1" : "grid-cols-7")}>
+              {visibleHeaders.map((d) => (
+                <div key={d} className="h-7 rounded-lg bg-slate-100 flex items-center justify-center text-[11px] font-black tracking-[0.12em] text-slate-500">
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            <div className={cls("grid gap-1 flex-1 min-h-0", range === "TODAY" ? "grid-cols-1" : "grid-cols-7")}>
+              {cells.map((cell) => {
+                const items = cell.valid ? entriesForDay(cell.day) : [];
+                const isToday = cell.valid && today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === cell.day;
+
+                return (
+                  <div
+                    key={cell.key}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => cell.valid && onDrop(cell.day)}
+                    className={cls(
+                      "rounded-xl border p-1.5 overflow-hidden bg-white",
+                      cell.valid ? "border-slate-200" : "border-slate-100 bg-slate-50",
+                      isToday && "ring-2 ring-blue-500"
+                    )}
+                  >
+                    {cell.valid && (
+                      <>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={cls("h-6 w-6 rounded-full flex items-center justify-center text-xs font-black", isToday ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700")}>
+                            {cell.day}
+                          </span>
+                          {items.length > 1 && (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                              {items.length} kayıt
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          {items.slice(0, 3).map((x) => (
+                            <button
+                              key={x.id}
+                              draggable={x.kind === "phase"}
+                              onDragStart={() => setDragEntry(x)}
+                              onClick={() => {
+                                if (x.kind === "tas") {
+                                  setTasModal(x);
+                                  setTasAlacakPersonelId(x.tasAtama?.personelId || "");
+                                  return;
+                                }
+
+                                if (x.phase === "IMALAT" && !x.completed) {
+                                  setImalatTamamModal(x);
+                                  setKirilanVarMi(false);
+                                  setKirilanAdet("0");
+                                  return;
+                                }
+
+                                if ((x.phase === "OLCU" || x.phase === "MONTAJ") && !x.completed) {
+                                  setGorevTamamModal(x);
+                                  return;
+                                }
+
+                                openEdit(x.schedule);
+                              }}
+                              className={cls(
+                                "w-full h-6 rounded-md border px-1.5 text-left text-[11px] leading-none flex items-center gap-1 overflow-hidden",
+                                PHASE_STYLE[x.phase] || "border-slate-200 bg-slate-50 text-slate-700",
+                                x.completed && "opacity-60 line-through"
+                              )}
+                            >
+                              <span className="shrink-0 font-black">{x.label}</span>
+                              <span className="truncate opacity-80">
+                                {x.musteri}
+                                {x.people?.length > 0 && (
+                                  <span className="ml-1 opacity-70">• {x.people.map((p: any) => p.ad || p.name || "").filter(Boolean).join(", ")}</span>
+                                )}
+                                {x.kind === "tas" && x.tasAtama?.ad && (
+                                  <span className="ml-1 opacity-70">• {x.tasAtama.ad} {x.tasAtama.soyad}</span>
+                                )}
+                              </span>
+                              {x.kirilanTasPlaka > 0 && (
+                                <span className="ml-auto shrink-0 rounded bg-red-100 px-1 text-[9px] font-bold text-red-700">
+                                  Kırık {x.kirilanTasPlaka}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <aside className="rounded-3xl border border-slate-800 bg-[#0B1120] p-4 overflow-hidden flex flex-col">
+        <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Operasyon</p>
+        <h2 className="mt-2 text-xl font-semibold">Bugün</h2>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Mini label="Program" value={stats.program} />
+          <Mini label="Aktif" value={stats.aktif} tone="text-blue-300" />
+          <Mini label="Biten" value={stats.biten} tone="text-emerald-300" />
+          <Mini label="Taş" value={stats.tas} tone="text-amber-300" />
+          <Mini label="Atamalı" value={stats.atamali} tone="text-violet-300" wide />
+        </div>
+
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-sm text-slate-400">Bugün Yapılacaklar</p>
+          <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
+            {todayItems.length}
+          </span>
+        </div>
+
+        <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
+          {todayItems.length === 0 && (
+            <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4 text-sm text-slate-400">
+              Bugün açık görev yok.
+            </div>
+          )}
+
+          {todayItems.map((x) => (
+            <button
+              key={x.id}
+              onClick={() => {
+                if (x.phase === "IMALAT" && !x.completed) {
+                  setImalatTamamModal(x);
+                  setKirilanVarMi(false);
+                  setKirilanAdet("0");
+                } else if ((x.phase === "OLCU" || x.phase === "MONTAJ") && !x.completed) {
+                  setGorevTamamModal(x);
+                } else {
+                  openEdit(x.schedule);
+                }
+              }}
+              className="w-full text-left rounded-2xl border border-slate-800 bg-[#111827] p-3 hover:bg-slate-800"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-semibold">{x.musteri}</p>
+                <span className="rounded-full bg-blue-500/10 px-2 py-1 text-[10px] text-blue-300">
+                  {x.label}
+                </span>
+              </div>
+              <p className="mt-1 truncate text-xs text-slate-400">{x.urun}</p>
+              {x.phase === "TAS_ALINACAK" && (
+                <p className={`mt-2 text-xs ${x.completed ? "text-emerald-300 line-through" : "text-amber-300"}`}>
+                  {x.completed ? "Taş alındı" : "Taş alınacak"}
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 grid gap-2">
+          <button onClick={openAdd} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold hover:bg-blue-500">
+            + İş Programı Ekle
+          </button>
+          <button onClick={() => setRange("TODAY")} className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold hover:bg-emerald-500">
+            Bugünü Filtrele
+          </button>
+          <button onClick={() => setRange("WEEK")} className="rounded-2xl bg-slate-700 px-4 py-3 text-sm font-semibold hover:bg-slate-600">
+            Bu Haftayı Göster
+          </button>
+        </div>
+      </aside>
+
+
+      {tasModal && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setTasModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">Taş Takibi</p>
+            <h2 className="mt-2 text-2xl font-black">{tasModal.musteri}</h2>
+            <p className="mt-1 text-sm text-slate-500">{tasModal.urun}</p>
+
+            <label className="mt-5 block rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Alacak Kişi</p>
+              <select
+                value={tasAlacakPersonelId}
+                onChange={(e) => setTasAlacakPersonelId(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-blue-500"
+              >
+                <option value="">Personel seçilmedi</option>
+                {personeller.map((p: any) => (
+                  <option key={p.id} value={p.id}>
+                    {p.ad} {p.soyad} — {p.gorevi}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="mt-5 grid gap-3">
+              <button
+                onClick={async () => {
+                  await fetch("/api/tas-gorev-personel", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      isId: tasModal.schedule?.is?.id,
+                      personelId: tasAlacakPersonelId || null,
+                    }),
+                  });
+                  await updateTasDurumu({ isId: tasModal.schedule.is.id, tasDurumu: "alinacak" });
+                  await refresh();
+                  setTasModal(null);
+                }}
+                className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-left hover:bg-amber-100"
+              >
+                <p className="font-bold text-amber-700">Bekliyor</p>
+                <p className="text-xs text-slate-500">Taş henüz alınmadı.</p>
+              </button>
+
+              <button
+                onClick={async () => {
+                  await fetch("/api/tas-gorev-personel", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      isId: tasModal.schedule?.is?.id,
+                      personelId: tasAlacakPersonelId || null,
+                    }),
+                  });
+                  await updateTasDurumu({ isId: tasModal.schedule.is.id, tasDurumu: "alindi" });
+                  await refresh();
+                  setTasModal(null);
+                }}
+                className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-left hover:bg-emerald-100"
+              >
+                <p className="font-bold text-emerald-700">Alındı / Stokta</p>
+                <p className="text-xs text-slate-500">Görev tamamlandı olarak işaretlenir.</p>
+              </button>
+
+              <button
+                onClick={() => setTasModal(null)}
+                className="rounded-xl border border-slate-200 px-4 py-3 text-slate-700 hover:bg-slate-50"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+
+      {gorevTamamModal && (
+        <div
+          className="fixed inset-0 z-[340] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setGorevTamamModal(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                  {gorevTamamModal.phase === "OLCU" ? "Ölçü Görevi" : "Montaj Görevi"}
+                </p>
+                <h2 className="mt-2 text-2xl font-black">{gorevTamamModal.musteri}</h2>
+                <p className="mt-1 text-sm text-slate-500">{gorevTamamModal.urun}</p>
+              </div>
+              <button
+                onClick={() => setGorevTamamModal(null)}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-slate-500 hover:bg-slate-50"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Atanan Kişi / Kişiler</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {gorevTamamModal.people?.length > 0 ? (
+                    gorevTamamModal.people.map((p: any) => (
+                      <span key={p.id || p.email || p.ad} className="rounded-full bg-blue-100 px-3 py-1 text-sm font-bold text-blue-700">
+                        {p.ad} {p.soyad || ""}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-slate-500">Bu göreve personel atanmamış.</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Görev Notu</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
+                  {gorevTamamModal.notes?.trim() || "Bu görev için not girilmemiş."}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setGorevTamamModal(null)}
+                className="rounded-xl border border-slate-200 px-4 py-3 text-slate-700 hover:bg-slate-50"
+              >
+                Kapat
+              </button>
+              <button
+                onClick={async () => {
+                  await togglePhaseCompletion({
+                    schedulePhaseId: gorevTamamModal.id,
+                    isCompleted: true,
+                  });
+                  await refresh();
+                  setGorevTamamModal(null);
+                }}
+                className="rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white hover:bg-emerald-500"
+              >
+                Tamamlandı
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imalatTamamModal && (
+        <div
+          className="fixed inset-0 z-[350] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setImalatTamamModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">İmalat Tamamlama</p>
+            <h2 className="mt-2 text-2xl font-black">{imalatTamamModal.musteri}</h2>
+            <p className="mt-1 text-sm text-slate-500">{imalatTamamModal.urun}</p>
+
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">İmalat Atanan Kişi / Kişiler</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {imalatTamamModal.people?.length > 0 ? (
+                  imalatTamamModal.people.map((p: any) => (
+                    <span key={p.id || p.email || p.ad} className="rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-700">
+                      {p.ad} {p.soyad || ""}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-slate-500">Bu imalat görevine personel atanmamış.</span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="font-bold">Kırılan taş var mı?</p>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    setKirilanVarMi(false);
+                    setKirilanAdet("0");
+                  }}
+                  className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                    !kirilanVarMi
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  Yok
+                </button>
+
+                <button
+                  onClick={() => {
+                    setKirilanVarMi(true);
+                    setKirilanAdet("1");
+                  }}
+                  className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                    kirilanVarMi
+                      ? "border-red-500 bg-red-50 text-red-700"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  Var
+                </button>
+              </div>
+
+              {kirilanVarMi && (
+                <label className="mt-4 block">
+                  <p className="mb-2 text-xs font-bold text-slate-500">Kırılan plaka adedi</p>
+                  <input
+                    value={kirilanAdet}
+                    onChange={(e) => setKirilanAdet(e.target.value)}
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-red-500"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setImalatTamamModal(null)}
+                className="rounded-xl border border-slate-200 px-4 py-3 text-slate-700 hover:bg-slate-50"
+              >
+                Vazgeç
+              </button>
+
+              <button
+                onClick={async () => {
+                  const adet = kirilanVarMi ? Math.max(1, Number(kirilanAdet || 1)) : 0;
+
+                  await togglePhaseCompletion({
+                    schedulePhaseId: imalatTamamModal.id,
+                    isCompleted: true,
+                    kirilanTasPlaka: adet,
+                  });
+
+                  await refresh();
+                  setImalatTamamModal(null);
+                }}
+                className="rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white hover:bg-emerald-500"
+              >
+                İmalatı Tamamla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {modalOpen && (
+        <ScheduleModal
+          schedule={selectedSchedule}
+          onClose={() => setModalOpen(false)}
+          onSaved={async () => {
+            setModalOpen(false);
+            await refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Legend({ color, label }: any) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-slate-600">
+      <span className={`h-2 w-2 rounded-full ${color}`} />
+      {label}
+    </span>
+  );
+}
+
+function Mini({ label, value, tone = "text-white", wide = false }: any) {
+  return (
+    <div className={`rounded-2xl border border-slate-800 bg-[#111827] p-3 ${wide ? "col-span-2" : ""}`}>
+      <p className="text-[10px] tracking-[0.18em] text-slate-500 uppercase">{label}</p>
+      <p className={`mt-1 text-xl font-semibold ${tone}`}>{value}</p>
+    </div>
+  );
+}

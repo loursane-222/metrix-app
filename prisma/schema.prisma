@@ -31,6 +31,7 @@ model Atolye {
   email     String @default("")
   adres     String @default("")
   logoUrl   String @default("")
+  kurulusYili Int    @default(0)
 
   toplamMaas  Decimal @default(0)
   sgkGideri   Decimal @default(0)
@@ -282,6 +283,7 @@ model Personel {
   calismaYili Int     @default(0)
   telefon     String  @default("")
   email       String  @default("")
+  password    String  @default("")
   aktif       Boolean @default(true)
 
   createdAt DateTime @default(now())

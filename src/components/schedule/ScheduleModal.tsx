@@ -325,12 +325,12 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-white text-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h2 className="font-semibold">
             {schedule ? "İş Programını Düzenle" : "Yeni İş Programı"}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-slate-500">
             ✕
           </button>
         </div>
@@ -352,7 +352,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {step === "is" && (
             <div className="space-y-3">
-              <label className="text-sm font-medium">İş Ara</label>
+              <label className="text-sm font-medium text-slate-700">İş Ara</label>
 
               <div className="relative">
                 <input
@@ -475,7 +475,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
             <div className="space-y-4">
               {selectedIs && (
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <span className="text-sm font-medium">{selectedIs.teklifNo}</span>
+                  <span className="text-sm font-medium text-slate-700">{selectedIs.teklifNo}</span>
                   <span className="text-xs text-gray-500 ml-2">{selectedIs.musteriAdi}</span>
                 </div>
               )}
@@ -483,7 +483,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
               <div>
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Notlar</label>
                 <textarea
-                  className="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border rounded-lg px-3 py-2 text-sm text-slate-900 bg-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows={3}
                   placeholder="İsteğe bağlı..."
                   value={notes}
@@ -501,7 +501,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
                     <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium">
                       {i + 1}
                     </span>
-                    <span className="text-sm font-medium">{PHASE_LABELS[phase]}</span>
+                    <span className="text-sm font-medium text-slate-700">{PHASE_LABELS[phase]}</span>
                     {currentSchedule &&
                       (() => {
                         const p = currentSchedule.phases.find((ph: any) => ph.phase === phase);
@@ -511,10 +511,10 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Plan Başl.</label>
+                      <label className="text-xs text-slate-500 mb-1 block">Plan Başl.</label>
                       <input
                         type="date"
-                        className="w-full border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border rounded-lg px-2 py-1.5 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={phaseDates[phase].start}
                         onChange={(e) =>
                           setPhaseDates((prev) => ({
@@ -526,10 +526,10 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
                     </div>
 
                     <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Plan Bitiş</label>
+                      <label className="text-xs text-slate-500 mb-1 block">Plan Bitiş</label>
                       <input
                         type="date"
-                        className="w-full border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full border rounded-lg px-2 py-1.5 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={phaseDates[phase].end}
                         min={phaseDates[phase].start}
                         onChange={(e) =>

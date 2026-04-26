@@ -2,67 +2,100 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { paraGoster, yuzdeGoster } from '@/lib/format'
 
-type IsKaydi = {
-  id: string
-  teklifNo: string
-  satisFiyati: number
-  durum: string
-  tahsilat: number
+function tl(v: any) {
+  const n = Number(v || 0)
+  return n.toLocaleString('tr-TR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }) + ' ₺'
 }
 
-type Tahsilat = {
-  id: string
-  tarih: string
-  tutar: number
+function pct(v: any) {
+  const n = Number(v || 0)
+  return '%' + n.toLocaleString('tr-TR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  })
 }
 
-type Musteri = {
-  id: string
-  firmaAdi: string
-  ad: string
-  soyad: string
-  telefon: string
-  email: string
-  acilisBakiyesi: number
-  bakiyeTipi: string
-  isler: IsKaydi[]
-  tahsilatlar: Tahsilat[]
+function musteriAdi(m: any) {
+  return m.firmaAdi || [m.ad, m.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'
 }
 
-type FormState = {
-  firmaAdi: string
-  ad: string
-  soyad: string
-  telefon: string
-  email: string
-  acilisBakiyesi: string
-  bakiyeTipi: string
-}
+function analiz(m: any) {
+  const isler = m?.isler || []
+  const tahsilatlar = m?.tahsilatlar || []
 
+  const teklifSayisi = isler.length
+  const onayli = isler.filter((i: any) => i.durum === 'onaylandi')
+  const kayip = isler.filter((i: any) => i.durum === 'kaybedildi')
+  const bekleyen = isler.filter((i: any) => i.durum === 'teklif_verildi')
 
-function getQueryParam(key: string) {
-  if (typeof window === 'undefined') return null
-  return new URLSearchParams(window.location.search).get(key)
-}
+  const onaySayisi = onayli.length
+  const kayipSayisi = kayip.length
+  const bekleyenSayisi = bekleyen.length
 
-function cls(...c: Array<string | false | null | undefined>) {
-  return c.filter(Boolean).join(' ')
-}
+  const ciro = onayli.reduce((a: number, i: any) => a + Number(i.satisFiyati || 0), 0)
+  const tahsilat = tahsilatlar.reduce((a: number, t: any) => a + Number(t.tutar || 0), 0)
 
-function tamAd(m: Musteri) {
-  const kisimlar = [m.firmaAdi, m.ad, m.soyad].filter(Boolean)
-  return kisimlar.join(' / ')
-}
+  const acilis = Number(m?.acilisBakiyesi || 0) * (m?.bakiyeTipi === 'alacak' ? -1 : 1)
+  const bakiye = ciro - tahsilat + acilis
 
-function acilisBakiyeYazisi(m: Musteri) {
-  const tip = m.bakiyeTipi === 'alacak' ? 'Alacak' : 'Borç'
-  return `${paraGoster(Number(m.acilisBakiyesi || 0))} (${tip})`
-}
+  const onayOrani = teklifSayisi > 0 ? (onaySayisi / teklifSayisi) * 100 : 0
+  const tahsilatOrani = ciro > 0 ? (tahsilat / ciro) * 100 : 100
 
-function bosForm(): FormState {
+  let kategori = 'Yeni'
+  let kategoriClass = 'bg-slate-500/10 text-slate-300 border-slate-500/30'
+  let risk = 'Veri az. Takip et.'
+
+  if (ciro > 150000 && tahsilatOrani >= 80 && onayOrani >= 50) {
+    kategori = 'Premium'
+    kategoriClass = 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+    risk = 'Güçlü müşteri. Öncelikli teklif ver.'
+  } else if (bakiye > 100000 && tahsilatOrani < 50) {
+    kategori = 'Riskli'
+    kategoriClass = 'bg-red-500/10 text-red-300 border-red-500/30'
+    risk = 'Tahsilat riski yüksek. Yeni işte ödeme şartı sıkı tutulmalı.'
+  } else if (onayOrani >= 40) {
+    kategori = 'Potansiyel'
+    kategoriClass = 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+    risk = 'Satış potansiyeli var. Düzenli takip edilmeli.'
+  } else if (teklifSayisi >= 3 && onayOrani < 30) {
+    kategori = 'Zor'
+    kategoriClass = 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+    risk = 'Çok teklif, düşük dönüş. Fiyat/ikna stratejisi değişmeli.'
+  }
+
   return {
+    teklifSayisi,
+    onaySayisi,
+    kayipSayisi,
+    bekleyenSayisi,
+    ciro,
+    tahsilat,
+    bakiye,
+    onayOrani,
+    tahsilatOrani,
+    kategori,
+    kategoriClass,
+    risk,
+  }
+}
+
+export default function MusterilerPage() {
+  const router = useRouter()
+
+  const [musteriler, setMusteriler] = useState<any[]>([])
+  const [aktif, setAktif] = useState<any>(null)
+  const [arama, setArama] = useState('')
+  const [yeniAcik, setYeniAcik] = useState(false)
+  const [kaydediliyor, setKaydediliyor] = useState(false)
+  const [excelYukleniyor, setExcelYukleniyor] = useState(false)
+  const [excelMesaji, setExcelMesaji] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const [form, setForm] = useState({
     firmaAdi: '',
     ad: '',
     soyad: '',
@@ -70,229 +103,24 @@ function bosForm(): FormState {
     email: '',
     acilisBakiyesi: '',
     bakiyeTipi: 'borc',
-  }
-}
-
-function formDoldur(m: Musteri): FormState {
-  return {
-    firmaAdi: m.firmaAdi || '',
-    ad: m.ad || '',
-    soyad: m.soyad || '',
-    telefon: m.telefon || '',
-    email: m.email || '',
-    acilisBakiyesi: String(Number(m.acilisBakiyesi || 0)),
-    bakiyeTipi: m.bakiyeTipi || 'borc',
-  }
-}
-
-export default function MusterilerPage() {
-  const router = useRouter()
-const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-  const [musteriler, setMusteriler] = useState<Musteri[]>([])
-  const [yukleniyor, setYukleniyor] = useState(true)
-  const [excelYukleniyor, setExcelYukleniyor] = useState(false)
-  const [excelMesaji, setExcelMesaji] = useState('')
-  const [arama, setArama] = useState('')
-
-  const [yeniMusteriAcik, setYeniMusteriAcik] = useState(false)
-  const [detayMusteri, setDetayMusteri] = useState<Musteri | null>(null)
-  const [tahsilatPopup, setTahsilatPopup] = useState<Musteri | null>(null)
-  const [duzenlePopup, setDuzenlePopup] = useState<Musteri | null>(null)
-
-  const [kaydediliyor, setKaydediliyor] = useState(false)
-  const [tahsilatKaydediliyor, setTahsilatKaydediliyor] = useState(false)
-  const [duzenleKaydediliyor, setDuzenleKaydediliyor] = useState(false)
-
-  const [yeniMusteriForm, setYeniMusteriForm] = useState<FormState>(bosForm())
-  const [duzenleForm, setDuzenleForm] = useState<FormState>(bosForm())
-
-  const [tahsilatForm, setTahsilatForm] = useState({
-    tarih: new Date().toISOString().slice(0, 10),
-    tutar: '',
   })
 
-  async function listeYukle() {
-    setYukleniyor(true)
-    try {
-      const r = await fetch('/api/musteriler')
-      const v = await r.json()
-      setMusteriler(Array.isArray(v?.musteriler) ? v.musteriler : [])
-    } finally {
-      setYukleniyor(false)
+  async function listeYukle(secilecekId?: string) {
+    const r = await fetch('/api/musteriler')
+    const d = await r.json()
+    const liste = d.musteriler || []
+    setMusteriler(liste)
+
+    if (secilecekId) {
+      setAktif(liste.find((m: any) => m.id === secilecekId) || liste[0] || null)
+    } else {
+      setAktif((prev: any) => prev ? liste.find((m: any) => m.id === prev.id) || liste[0] || null : liste[0] || null)
     }
   }
 
   useEffect(() => {
     listeYukle()
   }, [])
-
-  useEffect(() => {
-    if (getQueryParam('yeni') === '1') {
-      setYeniMusteriForm(bosForm())
-      setYeniMusteriAcik(true)
-    }
-
-    function yeniMusteriLinkiniYakala(e: MouseEvent) {
-      const target = e.target as HTMLElement | null
-      const link = target?.closest('a') as HTMLAnchorElement | null
-      if (!link) return
-
-      const href = link.getAttribute('href') || ''
-      if (!href.includes('/dashboard/musteriler?yeni=1')) return
-
-      e.preventDefault()
-      setYeniMusteriForm(bosForm())
-      setYeniMusteriAcik(true)
-      window.history.replaceState(null, '', '/dashboard/musteriler?yeni=1')
-    }
-
-    document.addEventListener('click', yeniMusteriLinkiniYakala)
-    return () => document.removeEventListener('click', yeniMusteriLinkiniYakala)
-  }, [])
-
-  const ciroSiralamasi = useMemo(() => {
-    const sirali = [...musteriler]
-      .map(m => ({
-        id: m.id,
-        ciro: m.isler
-          .filter(i => i.durum === 'onaylandi')
-          .reduce((a, i) => a + Number(i.satisFiyati || 0), 0)
-      }))
-      .sort((a, b) => b.ciro - a.ciro)
-
-    const map = new Map<string, number>()
-    sirali.forEach((item, index) => map.set(item.id, index + 1))
-    return map
-  }, [musteriler])
-
-  const filtrelenmisMusteriler = useMemo(() => {
-    const q = arama.trim().toLocaleLowerCase('tr-TR')
-
-    const liste = q
-      ? musteriler.filter(m => {
-          const alan = [
-            m.firmaAdi,
-            m.ad,
-            m.soyad,
-            m.telefon,
-            typeof (m as any).email === 'string' ? (m as any).email : ''
-          ].join(' ').toLocaleLowerCase('tr-TR')
-
-          return alan.includes(q)
-        })
-      : musteriler
-
-    return [...liste].sort((a, b) => {
-      const ciroA = a.isler.filter(i => i.durum === 'onaylandi').reduce((x, i) => x + Number(i.satisFiyati || 0), 0)
-      const ciroB = b.isler.filter(i => i.durum === 'onaylandi').reduce((x, i) => x + Number(i.satisFiyati || 0), 0)
-
-      if (ciroB !== ciroA) return ciroB - ciroA
-
-      const adA = (a.firmaAdi || `${a.ad || ''} ${a.soyad || ''}`).trim()
-      const adB = (b.firmaAdi || `${b.ad || ''} ${b.soyad || ''}`).trim()
-
-      return adA.localeCompare(adB, 'tr')
-    })
-  }, [arama, musteriler])
-
-  const genelOzet = useMemo(() => {
-    let toplamCiro = 0
-    let toplamTahsilat = 0
-    let toplamTeklif = 0
-    let acikBakiye = 0
-
-    musteriler.forEach(m => {
-      const onayliCiro = m.isler
-        .filter(i => i.durum === 'onaylandi')
-        .reduce((a, i) => a + Number(i.satisFiyati || 0), 0)
-
-      const tahsilat = m.tahsilatlar.reduce((a, t) => a + Number(t.tutar || 0), 0)
-      const acilis = Number(m.acilisBakiyesi || 0) * (m.bakiyeTipi === 'alacak' ? -1 : 1)
-
-      toplamCiro += onayliCiro
-      toplamTahsilat += tahsilat
-      toplamTeklif += m.isler.length
-      acikBakiye += (onayliCiro - tahsilat) + acilis
-    })
-
-    return {
-      musteri: musteriler.length,
-      teklif: toplamTeklif,
-      ciro: toplamCiro,
-      tahsilat: toplamTahsilat,
-      acikBakiye,
-    }
-  }, [musteriler])
-
-  async function yeniMusteriKaydet(e: React.FormEvent) {
-    e.preventDefault()
-    setKaydediliyor(true)
-    try {
-      await fetch('/api/musteriler', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...yeniMusteriForm,
-          acilisBakiyesi: Number(yeniMusteriForm.acilisBakiyesi || 0)
-        })
-      })
-      setYeniMusteriAcik(false)
-      setYeniMusteriForm(bosForm())
-      router.replace('/dashboard/musteriler')
-      await listeYukle()
-    } finally {
-      setKaydediliyor(false)
-    }
-  }
-
-  async function musteriGuncelle(e: React.FormEvent) {
-    e.preventDefault()
-    if (!duzenlePopup) return
-
-    setDuzenleKaydediliyor(true)
-    try {
-      await fetch('/api/musteriler', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: duzenlePopup.id,
-          ...duzenleForm,
-          acilisBakiyesi: Number(duzenleForm.acilisBakiyesi || 0)
-        })
-      })
-      setDuzenlePopup(null)
-      setDuzenleForm(bosForm())
-      await listeYukle()
-    } finally {
-      setDuzenleKaydediliyor(false)
-    }
-  }
-
-  async function tahsilatKaydet(e: React.FormEvent) {
-    e.preventDefault()
-    if (!tahsilatPopup) return
-    setTahsilatKaydediliyor(true)
-    try {
-      await fetch('/api/tahsilat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          musteriId: tahsilatPopup.id,
-          tarih: tahsilatForm.tarih,
-          tutar: Number(tahsilatForm.tutar || 0)
-        })
-      })
-      setTahsilatPopup(null)
-      setTahsilatForm({
-        tarih: new Date().toISOString().slice(0, 10),
-        tutar: '',
-      })
-      await listeYukle()
-    } finally {
-      setTahsilatKaydediliyor(false)
-    }
-  }
 
   async function excelSecildi(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -305,447 +133,477 @@ const fileInputRef = useRef<HTMLInputElement | null>(null)
       const formData = new FormData()
       formData.append('file', file)
 
-      const r = await fetch('/api/musteriler/import', {
+      const res = await fetch('/api/musteriler/import', {
         method: 'POST',
-        body: formData
+        body: formData,
       })
 
-      const v = await r.json()
+      const json = await res.json()
 
-      if (!r.ok) {
-        const detay = Array.isArray(v.hatalar) && v.hatalar.length > 0
-          ? `\n\n${v.hatalar.join('\n')}`
+      if (!res.ok) {
+        const detay = Array.isArray(json.hatalar) && json.hatalar.length > 0
+          ? `\n\n${json.hatalar.join('\n')}`
           : ''
-        setExcelMesaji(v.hata ? `${v.hata}${detay}` : 'İçe aktarma başarısız.')
-      } else {
-        const detay = Array.isArray(v.hatalar) && v.hatalar.length > 0
-          ? `\n\nUyarılar:\n${v.hatalar.join('\n')}`
-          : ''
-        setExcelMesaji(`İçe aktarma tamamlandı. Eklenen: ${v.eklenen}, Atlanan: ${v.atlanan}${detay}`)
-        await listeYukle()
+
+        setExcelMesaji(json.hata ? `${json.hata}${detay}` : 'Excel yükleme başarısız.')
+        return
       }
+
+      const uyarilar = Array.isArray(json.hatalar) && json.hatalar.length > 0
+        ? `\n\nUyarılar:\n${json.hatalar.join('\n')}`
+        : ''
+
+      setExcelMesaji(`Excel yüklendi. Eklenen: ${json.eklenen || 0}, Atlanan: ${json.atlanan || 0}${uyarilar}`)
+      await listeYukle()
+    } catch (err: any) {
+      setExcelMesaji(err.message || 'Excel yükleme sırasında hata oluştu.')
     } finally {
       setExcelYukleniyor(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
-  function teklifVer(m: Musteri) {
-    const gosterilecekAd = m.firmaAdi || [m.ad, m.soyad].filter(Boolean).join(' ')
-    router.push(`/dashboard/yeni-is?musteriId=${encodeURIComponent(m.id)}&musteriAdi=${encodeURIComponent(gosterilecekAd)}`)
-  }
+  async function yeniMusteriKaydet(e: React.FormEvent) {
+    e.preventDefault()
 
-  function detayAc(m: Musteri) {
-    setDetayMusteri(m)
-  }
+    if (!form.firmaAdi.trim() && !form.ad.trim()) {
+      alert('Firma adı veya ad girmelisin.')
+      return
+    }
 
-  function duzenleAc(m: Musteri) {
-    setDuzenleForm(formDoldur(m))
-    setDuzenlePopup(m)
-  }
+    setKaydediliyor(true)
 
-  function yeniMusteriModalAc() {
-    setYeniMusteriAcik(true)
-    router.replace('/dashboard/musteriler?yeni=1')
-  }
+    try {
+      const res = await fetch('/api/musteriler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          acilisBakiyesi: Number(form.acilisBakiyesi || 0),
+        }),
+      })
 
-  function yeniMusteriModalKapat() {
-    setYeniMusteriAcik(false)
-    setYeniMusteriForm(bosForm())
-    if (typeof window !== 'undefined') {
-      window.history.replaceState(null, '', '/dashboard/musteriler')
+      const json = await res.json()
+
+      if (!res.ok) {
+        alert(json.hata || json.error || 'Müşteri oluşturulamadı.')
+        return
+      }
+
+      setYeniAcik(false)
+      setForm({
+        firmaAdi: '',
+        ad: '',
+        soyad: '',
+        telefon: '',
+        email: '',
+        acilisBakiyesi: '',
+        bakiyeTipi: 'borc',
+      })
+
+      await listeYukle(json.musteri?.id)
+    } finally {
+      setKaydediliyor(false)
     }
   }
 
-  if (yukleniyor) {
-    return <div className="p-8 text-slate-500">Yükleniyor...</div>
+  const filtreli = useMemo(() => {
+    const q = arama.toLocaleLowerCase('tr-TR').trim()
+    if (!q) return musteriler
+
+    return musteriler.filter((m) => {
+      return [
+        m.firmaAdi,
+        m.ad,
+        m.soyad,
+        m.telefon,
+        m.email,
+      ].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR').includes(q)
+    })
+  }, [musteriler, arama])
+
+  const genel = useMemo(() => {
+    const toplamMusteri = musteriler.length
+    let toplamCiro = 0
+    let toplamTahsilat = 0
+    let toplamAlacak = 0
+    let toplamTeklif = 0
+
+    musteriler.forEach((m) => {
+      const a = analiz(m)
+      toplamCiro += a.ciro
+      toplamTahsilat += a.tahsilat
+      toplamAlacak += Math.max(0, a.bakiye)
+      toplamTeklif += a.teklifSayisi
+    })
+
+    const tahsilatOrani = toplamCiro > 0 ? (toplamTahsilat / toplamCiro) * 100 : 0
+
+    return {
+      toplamMusteri,
+      toplamCiro,
+      toplamTahsilat,
+      toplamAlacak,
+      toplamTeklif,
+      tahsilatOrani,
+    }
+  }, [musteriler])
+
+  const a = aktif ? analiz(aktif) : null
+
+  if (!aktif || !a) {
+    return (
+      <div className="h-screen bg-[#030712] text-white flex items-center justify-center">
+        Müşteri bulunamadı.
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl border border-slate-200 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-        <div className="relative bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.35),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(124,58,237,0.35),_transparent_35%),linear-gradient(135deg,#0f172a_0%,#111827_45%,#1e1b4b_100%)] p-7 text-white">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-cyan-400/10 blur-3xl" />
+    <div className="h-screen flex bg-[#030712] text-white overflow-hidden">
 
-          <div className="relative z-10 grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-300">
-                Premium CRM Görünümü
-              </p>
-              <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-tight lg:text-4xl">
-                Müşterilerini yönet, ciroyu büyüt
-              </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
-                Müşteriler ciro performansına göre sıralanır; eşit ciroda alfabetik düzen kullanılır.
-              </p>
+      <div className="w-[25%] border-r border-slate-800 flex flex-col">
+        <div className="p-5 border-b border-slate-800">
+          <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">CRM</p>
+          <h1 className="text-2xl mt-2">Müşteriler</h1>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  onClick={yeniMusteriModalAc}
-                  className="rounded-2xl border border-white/15 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
-                >
-                  + Yeni Müşteri
-                </button>
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <MiniCard label="Müşteri" value={genel.toplamMusteri} />
+            <MiniCard label="Teklif" value={genel.toplamTeklif} />
+            <MiniCard label="Alacak" value={tl(genel.toplamAlacak)} tone="text-amber-300" />
+            <MiniCard label="Tahsilat" value={pct(genel.tahsilatOrani)} tone="text-emerald-300" />
+          </div>
 
-                <a
-                  href="/api/musteriler/sablon"
-                  className="rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
-                >
-                  Excel Şablon İndir
-                </a>
+          <input
+            value={arama}
+            onChange={(e) => setArama(e.target.value)}
+            placeholder="Ara..."
+            className="mt-4 w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
+          />
+        </div>
 
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={excelYukleniyor}
-                  className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/15 disabled:opacity-60"
-                >
-                  {excelYukleniyor ? 'Excel Yükleniyor...' : 'Excel Yükle'}
-                </button>
+        <div className="overflow-y-auto flex-1 p-3 space-y-2">
+          {filtreli.map((m) => {
+            const ma = analiz(m)
+            return (
+              <button
+                key={m.id}
+                onClick={() => setAktif(m)}
+                className={`w-full text-left rounded-xl border p-4 transition ${
+                  aktif?.id === m.id
+                    ? 'bg-[#111827] border-blue-500/50'
+                    : 'bg-[#0B1120] border-slate-800 hover:bg-[#111827]'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{musteriAdi(m)}</p>
+                    <p className="text-xs text-slate-500 mt-1">{ma.teklifSayisi} iş · {tl(ma.ciro)}</p>
+                  </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx"
-                  onChange={excelSecildi}
-                  className="hidden"
-                />
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${ma.kategoriClass}`}>
+                    {ma.kategori}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className={ma.bakiye > 0 ? 'text-amber-300' : 'text-emerald-300'}>
+                    {ma.bakiye > 0 ? 'Borçlu' : 'Kapalı'}
+                  </span>
+                  <span className="text-slate-400">{pct(ma.onayOrani)} onay</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <main className="w-[50%] p-6 overflow-hidden flex flex-col gap-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Müşteri Detayı</p>
+            <h2 className="text-3xl mt-2 font-semibold">{musteriAdi(aktif)}</h2>
+            <p className="text-sm text-slate-400 mt-2">
+              {[aktif.telefon, aktif.email].filter(Boolean).join(' · ') || 'İletişim bilgisi yok'}
+            </p>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+    <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${a.kategoriClass}`}>
+      {a.kategori} Müşteri
+    </span>
+
+    <button
+      onClick={() => setYeniAcik(true)}
+      className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold hover:bg-slate-800"
+    >
+      ✏️ Düzenle
+    </button>
+  </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <BigCard label="Onaylı Ciro" value={tl(a.ciro)} tone="text-emerald-300" />
+          <BigCard label="Tahsilat" value={tl(a.tahsilat)} tone="text-cyan-300" />
+          <BigCard label="Bakiye" value={tl(a.bakiye)} tone={a.bakiye > 0 ? 'text-amber-300' : 'text-emerald-300'} />
+        </div>
+
+        <div className="grid grid-cols-4 gap-4">
+          <BigCard label="Teklif" value={a.teklifSayisi} />
+          <BigCard label="Onay" value={a.onaySayisi} tone="text-emerald-300" />
+          <BigCard label="Kayıp" value={a.kayipSayisi} tone="text-red-300" />
+          <BigCard label="Onay Oranı" value={pct(a.onayOrani)} tone="text-blue-300" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+            <p className="text-sm text-slate-400 mb-4">Müşteri Performansı</p>
+
+            <div className="space-y-4">
+              <Progress label="Tahsilat Oranı" value={a.tahsilatOrani} />
+              <Progress label="Teklif Onay Oranı" value={a.onayOrani} />
+            </div>
+          </div>
+
+          <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+            <p className="text-sm text-slate-400 mb-4">Risk Analizi</p>
+            <p className="text-lg font-semibold">{a.risk}</p>
+            <p className="text-sm text-slate-500 mt-3">
+              Açık bakiye: {tl(a.bakiye)} · Bekleyen teklif: {a.bekleyenSayisi}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5 flex-1 overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-slate-400">Son İşler</p>
+            <button
+              onClick={() => router.push('/dashboard/isler')}
+              className="text-xs text-blue-300 hover:text-blue-200"
+            >
+              Tüm işleri gör
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {(aktif.isler || []).slice(0, 5).map((i: any) => (
+              <div key={i.id} className="grid grid-cols-[1fr_120px_100px] items-center rounded-xl bg-[#111827] px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">{i.teklifNo}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                  <p className="text-xs text-slate-500">{i.urunAdi || 'Ürün bilgisi yok'}</p>
+                  {i.kirilanTasPlaka > 0 && (
+                    <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] text-red-300">
+                      Kırılan Taş: {i.kirilanTasPlaka}
+                    </span>
+                  )}
+
+                  {i.tasDurumu && (
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${
+                      i.tasDurumu === 'alinacak'
+                        ? 'bg-amber-500/10 text-amber-300'
+                        : 'bg-emerald-500/10 text-emerald-300'
+                    }`}>
+                      {i.tasDurumu === 'alinacak' ? 'Taş alınacak' : 'Taş stokta'}
+                    </span>
+                  )}
+                </div>
+                </div>
+                <p className="text-sm text-emerald-300">{tl(i.satisFiyati)}</p>
+                <p className="text-xs text-slate-400">{i.durum}</p>
               </div>
+            ))}
+
+            {(aktif.isler || []).length === 0 && (
+              <p className="text-sm text-slate-500">Bu müşteriye ait iş yok.</p>
+            )}
+          </div>
+        </div>
+      </main>
+
+      <aside className="w-[25%] border-l border-slate-800 p-6 flex flex-col gap-4">
+        <button
+          onClick={() => setYeniAcik(true)}
+          className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold"
+        >
+          + Yeni Müşteri
+        </button>
+
+        <a
+          href="/api/musteriler/sablon"
+          className="bg-slate-700 hover:bg-slate-600 p-4 rounded-xl font-semibold text-center"
+        >
+          Excel Şablon İndir
+        </a>
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={excelYukleniyor}
+          className="bg-cyan-700 hover:bg-cyan-600 p-4 rounded-xl font-semibold disabled:bg-slate-700"
+        >
+          {excelYukleniyor ? 'Excel Yükleniyor...' : 'Excel Yükle'}
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx"
+          onChange={excelSecildi}
+          className="hidden"
+        />
+
+        {excelMesaji && (
+          <div className="whitespace-pre-wrap rounded-2xl border border-slate-800 bg-[#0B1120] p-4 text-xs text-slate-300">
+            {excelMesaji}
+          </div>
+        )}
+
+        <button
+          onClick={() => router.push(`/dashboard/yeni-is-v3?musteriId=${aktif.id}&musteriAdi=${encodeURIComponent(musteriAdi(aktif))}`)}
+          className="bg-green-600 hover:bg-green-500 p-4 rounded-xl font-semibold"
+        >
+          + Yeni İş
+        </button>
+
+        <button
+          onClick={() => alert('Tahsilat popup bir sonraki adımda bağlanacak.')}
+          className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold"
+        >
+          Tahsilat Gir
+        </button>
+
+        <button
+          onClick={() => alert('PDF ekstre bir sonraki adımda bağlanacak.')}
+          className="bg-purple-600 hover:bg-purple-500 p-4 rounded-xl font-semibold"
+        >
+          PDF Ekstre
+        </button>
+
+        <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+          <p className="text-sm text-slate-400">Satış Tavsiyesi</p>
+          <p className="mt-3 text-lg font-semibold">
+            {a.kategori === 'Premium'
+              ? 'Bu müşteriye hızlı teklif + öncelikli takip.'
+              : a.kategori === 'Riskli'
+              ? 'Peşinat almadan yeni işe girme.'
+              : a.kategori === 'Zor'
+              ? 'Fiyat yerine değer anlatımı gerekli.'
+              : 'Takipte kal, sıcak müşteri olabilir.'}
+          </p>
+        </div>
+
+        <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+          <p className="text-sm text-slate-400">Portföy İçindeki Durum</p>
+          <p className="mt-3 text-2xl font-semibold text-emerald-300">{tl(a.ciro)}</p>
+          <p className="text-xs text-slate-500 mt-2">Bu müşteriden gelen onaylı ciro</p>
+        </div>
+      </aside>
+
+      {yeniAcik && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setYeniAcik(false)}
+        >
+          <form
+            onSubmit={yeniMusteriKaydet}
+            className="w-full max-w-xl rounded-2xl border border-slate-800 bg-[#0B1120] p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5">
+              <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">CRM</p>
+              <h2 className="mt-2 text-xl font-semibold">Yeni Müşteri</h2>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Toplam Müşteri</p>
-                <p className="mt-3 text-2xl font-bold">{genelOzet.musteri}</p>
-              </div>
+              <Input label="Firma Adı" value={form.firmaAdi} onChange={(v: string) => setForm({ ...form, firmaAdi: v })} />
+              <Input label="Telefon" value={form.telefon} onChange={(v: string) => setForm({ ...form, telefon: v })} />
+              <Input label="Ad" value={form.ad} onChange={(v: string) => setForm({ ...form, ad: v })} />
+              <Input label="Soyad" value={form.soyad} onChange={(v: string) => setForm({ ...form, soyad: v })} />
+              <Input label="E-posta" value={form.email} onChange={(v: string) => setForm({ ...form, email: v })} />
+              <Input label="Açılış Bakiyesi" value={form.acilisBakiyesi} onChange={(v: string) => setForm({ ...form, acilisBakiyesi: v })} />
 
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Toplam Alacak</p>
-                <p className="mt-3 text-2xl font-bold">{paraGoster(Math.max(0, genelOzet.acikBakiye))}</p>
-              </div>
-
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Onaylı Ciro</p>
-                <p className="mt-3 text-2xl font-bold">{paraGoster(genelOzet.ciro)}</p>
-              </div>
-
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Tahsilat</p>
-                <p className="mt-3 text-2xl font-bold">{paraGoster(genelOzet.tahsilat)}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {excelMesaji && (
-        <div className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-          {excelMesaji}
-        </div>
-      )}
-
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-medium text-slate-500">Müşteri Arama</p>
-            <h3 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-              Müşteri portföyün
-            </h3>
-          </div>
-
-          <div className="w-full max-w-xl">
-            <input
-              value={arama}
-              onChange={e => setArama(e.target.value)}
-              placeholder="Firma, kişi, telefon veya e-posta ara..."
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-3">
-        {filtrelenmisMusteriler.map((m) => {
-          const toplamTeklifAdeti = m.isler.length
-          const onaylananlar = m.isler.filter(i => i.durum === 'onaylandi')
-          const bekleyenler = m.isler.filter(i => i.durum === 'teklif_verildi')
-          const kaybedilenler = m.isler.filter(i => i.durum === 'kaybedildi')
-
-          const onaylananToplam = onaylananlar.reduce((a, i) => a + Number(i.satisFiyati || 0), 0)
-          const toplamTahsilat = m.tahsilatlar.reduce((a, t) => a + Number(t.tutar || 0), 0)
-
-          const acilisEtkisi = Number(m.acilisBakiyesi || 0) * (m.bakiyeTipi === 'alacak' ? -1 : 1)
-          const netBakiye = (onaylananToplam - toplamTahsilat) + acilisEtkisi
-          const bakiyeDurumu = netBakiye > 0 ? 'Borçlu' : netBakiye < 0 ? 'Alacaklı' : 'Kapalı'
-
-          const onaylananAdet = onaylananlar.length
-          const kaybedilenAdet = kaybedilenler.length
-          const bekleyenAdet = bekleyenler.length
-          const onayYuzdesi = toplamTeklifAdeti > 0 ? (onaylananAdet / toplamTeklifAdeti) * 100 : 0
-          const sira = ciroSiralamasi.get(m.id) || 0
-          const email = typeof (m as any).email === 'string' ? (m as any).email : ''
-          const iletisim = [m.telefon, email].filter(Boolean).join(' • ')
-
-          return (
-            <div
-              key={m.id}
-              className="rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.055)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_44px_rgba(15,23,42,0.09)]"
-            >
-              <div className="grid gap-4 xl:grid-cols-[1fr_170px] xl:items-center">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="truncate text-xl font-black tracking-tight text-slate-950">
-                      {tamAd(m)}
-                    </h3>
-
-                    <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700">
-                      #{sira} ciro
-                    </span>
-
-                    <span className={cls(
-                      'rounded-full px-2.5 py-1 text-[11px] font-bold',
-                      netBakiye > 0
-                        ? 'border border-rose-200 bg-rose-50 text-rose-700'
-                        : netBakiye < 0
-                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                        : 'border border-slate-200 bg-slate-50 text-slate-600'
-                    )}>
-                      {bakiyeDurumu}
-                    </span>
-                  </div>
-
-                  <p className="mt-1 text-xs font-medium text-slate-500">
-                    {iletisim || 'Telefon / e-posta bilgisi yok'}
-                  </p>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1.1fr_1.2fr]">
-                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">Onaylı Ciro</p>
-                      <p className="mt-1 text-lg font-black text-blue-800">{paraGoster(onaylananToplam)}</p>
-                    </div>
-
-                    <div className="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-500">Tahsilat</p>
-                      <p className="mt-1 text-lg font-black text-cyan-800">{paraGoster(toplamTahsilat)}</p>
-                    </div>
-
-                    <div className={cls(
-                      'rounded-2xl border px-4 py-3',
-                      netBakiye > 0
-                        ? 'border-rose-100 bg-rose-50'
-                        : netBakiye < 0
-                        ? 'border-emerald-100 bg-emerald-50'
-                        : 'border-slate-200 bg-slate-50'
-                    )}>
-                      <p className={cls(
-                        'text-[10px] font-black uppercase tracking-[0.14em]',
-                        netBakiye > 0 ? 'text-rose-500' : netBakiye < 0 ? 'text-emerald-500' : 'text-slate-400'
-                      )}>
-                        Açık Bakiye
-                      </p>
-                      <p className={cls(
-                        'mt-1 text-lg font-black',
-                        netBakiye > 0 ? 'text-rose-800' : netBakiye < 0 ? 'text-emerald-800' : 'text-slate-800'
-                      )}>
-                        {paraGoster(Math.abs(netBakiye))}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Pipeline</p>
-                      <p className="mt-1 text-sm font-black text-slate-900">
-                        {toplamTeklifAdeti} teklif · %{onayYuzdesi.toFixed(0)} onay
-                      </p>
-                      <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                        {onaylananAdet} onay · {bekleyenAdet} bekleyen · {kaybedilenAdet} kayıp
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
-                  <button onClick={() => teklifVer(m)} className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_10px_22px_rgba(59,130,246,0.20)] transition hover:scale-[1.01]">
-                    Teklif Ver
-                  </button>
-                  <button onClick={() => setTahsilatPopup(m)} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-700 transition hover:bg-emerald-100">
-                    Tahsilat
-                  </button>
-                  <button onClick={() => duzenleAc(m)} className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-black text-amber-700 transition hover:bg-amber-100">
-                    Düzenle
-                  </button>
-                  <button onClick={() => detayAc(m)} className="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-200">
-                    Detay
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        })}
-
-        {filtrelenmisMusteriler.length === 0 && (
-          <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-            Aramaya uygun müşteri bulunamadı.
-          </div>
-        )}
-      </section>
-
-      {yeniMusteriAcik && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={yeniMusteriModalKapat}>
-          <div className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.22)]" onClick={e => e.stopPropagation()}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Yeni Müşteri</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Müşteri kartı oluştur</h3>
-              </div>
-              <button onClick={yeniMusteriModalKapat} className="rounded-2xl border border-slate-200 px-3 py-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600">✕</button>
-            </div>
-
-            <form onSubmit={yeniMusteriKaydet} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <input value={yeniMusteriForm.firmaAdi} onChange={e => setYeniMusteriForm(prev => ({...prev, firmaAdi:e.target.value}))} placeholder="Firma Adı" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <input value={yeniMusteriForm.ad} onChange={e => setYeniMusteriForm(prev => ({...prev, ad:e.target.value}))} placeholder="Ad" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <input value={yeniMusteriForm.soyad} onChange={e => setYeniMusteriForm(prev => ({...prev, soyad:e.target.value}))} placeholder="Soyad" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <input value={yeniMusteriForm.telefon} onChange={e => setYeniMusteriForm(prev => ({...prev, telefon:e.target.value}))} placeholder="Telefon" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <input value={yeniMusteriForm.email} onChange={e => setYeniMusteriForm(prev => ({...prev, email:e.target.value}))} placeholder="Mail" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white md:col-span-2" />
-                <input type="number" step="0.01" value={yeniMusteriForm.acilisBakiyesi} onChange={e => setYeniMusteriForm(prev => ({...prev, acilisBakiyesi:e.target.value}))} placeholder="Açılış Bakiyesi" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <select value={yeniMusteriForm.bakiyeTipi} onChange={e => setYeniMusteriForm(prev => ({...prev, bakiyeTipi:e.target.value}))} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white">
+              <label className="block col-span-2">
+                <p className="text-xs text-slate-400 mb-2">Bakiye Tipi</p>
+                <select
+                  value={form.bakiyeTipi}
+                  onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}
+                  className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
+                >
                   <option value="borc">Borç</option>
                   <option value="alacak">Alacak</option>
                 </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={yeniMusteriModalKapat} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                  İptal
-                </button>
-                <button type="submit" disabled={kaydediliyor} className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:scale-[1.01] disabled:opacity-70">
-                  {kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {duzenlePopup && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setDuzenlePopup(null)}>
-          <div className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.22)]" onClick={e => e.stopPropagation()}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Müşteri Düzenle</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{tamAd(duzenlePopup)}</h3>
-              </div>
-              <button onClick={() => setDuzenlePopup(null)} className="rounded-2xl border border-slate-200 px-3 py-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600">✕</button>
+              </label>
             </div>
 
-            <form onSubmit={musteriGuncelle} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <input value={duzenleForm.firmaAdi} onChange={e => setDuzenleForm(prev => ({...prev, firmaAdi:e.target.value}))} placeholder="Firma Adı" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <input value={duzenleForm.ad} onChange={e => setDuzenleForm(prev => ({...prev, ad:e.target.value}))} placeholder="Ad" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <input value={duzenleForm.soyad} onChange={e => setDuzenleForm(prev => ({...prev, soyad:e.target.value}))} placeholder="Soyad" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <input value={duzenleForm.telefon} onChange={e => setDuzenleForm(prev => ({...prev, telefon:e.target.value}))} placeholder="Telefon" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <input value={duzenleForm.email} onChange={e => setDuzenleForm(prev => ({...prev, email:e.target.value}))} placeholder="Mail" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white md:col-span-2" />
-                <input type="number" step="0.01" value={duzenleForm.acilisBakiyesi} onChange={e => setDuzenleForm(prev => ({...prev, acilisBakiyesi:e.target.value}))} placeholder="Açılış Bakiyesi" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-                <select value={duzenleForm.bakiyeTipi} onChange={e => setDuzenleForm(prev => ({...prev, bakiyeTipi:e.target.value}))} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white">
-                  <option value="borc">Borç</option>
-                  <option value="alacak">Alacak</option>
-                </select>
-              </div>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setYeniAcik(false)}
+                className="rounded-xl border border-slate-700 px-4 py-3 text-slate-300 hover:bg-slate-800"
+              >
+                Vazgeç
+              </button>
 
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setDuzenlePopup(null)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                  İptal
-                </button>
-                <button type="submit" disabled={duzenleKaydediliyor} className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:scale-[1.01] disabled:opacity-70">
-                  {duzenleKaydediliyor ? 'Kaydediliyor...' : 'Güncelle'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {detayMusteri && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setDetayMusteri(null)}>
-          <div className="w-full max-w-5xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.22)]" onClick={e => e.stopPropagation()}>
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Müşteri Detayı</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{tamAd(detayMusteri)}</h3>
-              </div>
-              <button onClick={() => setDetayMusteri(null)} className="rounded-2xl border border-slate-200 px-3 py-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600">✕</button>
+              <button
+                disabled={kaydediliyor}
+                className="rounded-xl bg-emerald-600 px-4 py-3 font-semibold hover:bg-emerald-500 disabled:bg-slate-700"
+              >
+                {kaydediliyor ? 'Kaydediliyor...' : 'Müşteriyi Kaydet'}
+              </button>
             </div>
-
-            {(() => {
-              const toplamTeklifTutari = detayMusteri.isler.reduce((a, i) => a + Number(i.satisFiyati || 0), 0)
-              const onaylananlar = detayMusteri.isler.filter(i => i.durum === 'onaylandi')
-              const bekleyenler = detayMusteri.isler.filter(i => i.durum === 'teklif_verildi')
-              const kaybedilenler = detayMusteri.isler.filter(i => i.durum === 'kaybedildi')
-
-              const onaylananToplam = onaylananlar.reduce((a, i) => a + Number(i.satisFiyati || 0), 0)
-              const bekleyenToplam = bekleyenler.reduce((a, i) => a + Number(i.satisFiyati || 0), 0)
-              const kaybedilenToplam = kaybedilenler.reduce((a, i) => a + Number(i.satisFiyati || 0), 0)
-
-              const toplamTeklifAdeti = detayMusteri.isler.length
-              const onaylananAdet = onaylananlar.length
-              const onayYuzdesi = toplamTeklifAdeti > 0 ? (onaylananAdet / toplamTeklifAdeti) * 100 : 0
-              const toplamTahsilat = detayMusteri.tahsilatlar.reduce((a, t) => a + Number(t.tutar || 0), 0)
-              const sira = ciroSiralamasi.get(detayMusteri.id) || '-'
-
-              return (
-                <>
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                    <div className="rounded-2xl bg-slate-50 p-4">Açılış Bakiyesi: <strong>{acilisBakiyeYazisi(detayMusteri)}</strong></div>
-                    <div className="rounded-2xl bg-blue-50 p-4">Verilen Teklif Toplamı: <strong>{paraGoster(toplamTeklifTutari)}</strong></div>
-                    <div className="rounded-2xl bg-emerald-50 p-4">Onaylanan Toplam: <strong>{paraGoster(onaylananToplam)}</strong></div>
-                    <div className="rounded-2xl bg-amber-50 p-4">Bekleyen Toplam: <strong>{paraGoster(bekleyenToplam)}</strong></div>
-                    <div className="rounded-2xl bg-rose-50 p-4">Kaybedilen Toplam: <strong>{paraGoster(kaybedilenToplam)}</strong></div>
-                    <div className="rounded-2xl bg-slate-50 p-4">Toplam Teklif Adeti: <strong>{toplamTeklifAdeti}</strong></div>
-                    <div className="rounded-2xl bg-emerald-50 p-4">Onaylanan Adet: <strong>{onaylananAdet}</strong></div>
-                    <div className="rounded-2xl bg-violet-50 p-4">Onaylama Yüzdesi: <strong>{yuzdeGoster(onayYuzdesi)}</strong></div>
-                    <div className="rounded-2xl bg-indigo-50 p-4">Ciro Sırası: <strong>#{sira}</strong></div>
-                    <div className="rounded-2xl bg-cyan-50 p-4">Toplam Tahsilat: <strong>{paraGoster(toplamTahsilat)}</strong></div>
-                  </div>
-
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <button onClick={() => teklifVer(detayMusteri)} className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white">Teklif Ver</button>
-                    <button onClick={() => { setTahsilatPopup(detayMusteri); setDetayMusteri(null) }} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">Tahsilat Gir</button>
-                    <button onClick={() => { duzenleAc(detayMusteri); setDetayMusteri(null) }} className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">Müşteriyi Düzenle</button>
-                  </div>
-                </>
-              )
-            })()}
-          </div>
+          </form>
         </div>
       )}
+    </div>
+  )
+}
 
-      {tahsilatPopup && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setTahsilatPopup(null)}>
-          <div className="w-full max-w-lg rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.22)]" onClick={e => e.stopPropagation()}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Tahsilat Gir</p>
-                <h3 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{tamAd(tahsilatPopup)}</h3>
-              </div>
-              <button onClick={() => setTahsilatPopup(null)} className="rounded-2xl border border-slate-200 px-3 py-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600">✕</button>
-            </div>
+function Input({ label, value, onChange }: any) {
+  return (
+    <label className="block">
+      <p className="text-xs text-slate-400 mb-2">{label}</p>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
+      />
+    </label>
+  )
+}
 
-            <form onSubmit={tahsilatKaydet} className="space-y-4">
-              <input type="date" value={tahsilatForm.tarih} onChange={e => setTahsilatForm(prev => ({...prev, tarih:e.target.value}))} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
-              <input type="number" step="0.01" value={tahsilatForm.tutar} onChange={e => setTahsilatForm(prev => ({...prev, tutar:e.target.value}))} placeholder="Tahsilat tutarı" className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
+function MiniCard({ label, value, tone = 'text-white' }: any) {
+  return (
+    <div className="rounded-xl bg-[#0B1120] border border-slate-800 p-3">
+      <p className="text-[10px] text-slate-500">{label}</p>
+      <p className={`text-sm mt-1 font-semibold ${tone}`}>{value}</p>
+    </div>
+  )
+}
 
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setTahsilatPopup(null)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                  İptal
-                </button>
-                <button type="submit" disabled={tahsilatKaydediliyor} className="rounded-2xl bg-gradient-to-r from-emerald-600 to-green-600 px-4 py-3 text-sm font-semibold text-white transition hover:scale-[1.01] disabled:opacity-70">
-                  {tahsilatKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+function BigCard({ label, value, tone = 'text-white' }: any) {
+  return (
+    <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className={`text-2xl mt-3 font-semibold ${tone}`}>{value}</p>
+    </div>
+  )
+}
+
+function Progress({ label, value }: any) {
+  const safe = Math.max(0, Math.min(100, Number(value || 0)))
+
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-2">
+        <span className="text-slate-400">{label}</span>
+        <span className="text-slate-300">{pct(safe)}</span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-blue-500"
+          style={{ width: `${safe}%` }}
+        />
+      </div>
     </div>
   )
 }

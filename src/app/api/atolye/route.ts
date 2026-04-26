@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
     update: {
       atolyeAdi: veri.atolyeAdi, sehir: veri.sehir, ilce: veri.ilce,
       telefon: veri.telefon || '', email: veri.email || '', adres: veri.adres || '',
+        kurulusYili: parseInt(veri.kurulusYili) || 0,
       toplamMaas: parseFloat(veri.toplamMaas) || 0,
       sgkGideri: parseFloat(veri.sgkGideri) || 0,
       yemekGideri: parseFloat(veri.yemekGideri) || 0,
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
       userId: kullanici.id,
       atolyeAdi: veri.atolyeAdi || '', sehir: veri.sehir || '', ilce: veri.ilce || '',
       telefon: veri.telefon || '', email: veri.email || '', adres: veri.adres || '',
+        kurulusYili: parseInt(veri.kurulusYili) || 0,
       toplamMaas: parseFloat(veri.toplamMaas) || 0,
       sgkGideri: parseFloat(veri.sgkGideri) || 0,
       yemekGideri: parseFloat(veri.yemekGideri) || 0,

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
 type Atolye = {
@@ -13,6 +13,12 @@ type SidebarStats = {
   toplamIs: number;
   onaylananIs: number;
   bekleyenIs: number;
+};
+
+type CurrentUser = {
+  role?: "admin" | "personel";
+  personelId?: string | null;
+  allowedMenus?: string[] | null;
 };
 
 const menuItems = [
@@ -30,17 +36,25 @@ export default function Sidebar() {
   const [atolye, setAtolye] = useState<Atolye | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [stats, setStats] = useState<SidebarStats | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   useEffect(() => {
+    function userGetir() {
+      fetch("/api/auth/current-user", { cache: "no-store", credentials: "include" })
+        .then((res) => res.json())
+        .then((data) => setCurrentUser(data || null))
+        .catch(() => setCurrentUser(null));
+    }
+
     function atolyeGetir() {
-      fetch("/api/atolye", { cache: "no-store" })
+      fetch("/api/atolye", { cache: "no-store", credentials: "include" })
         .then((res) => res.json())
         .then((data) => setAtolye(data?.atolye || null))
         .catch(() => setAtolye(null));
     }
 
     function ozetGetir() {
-      fetch("/api/dashboard", { cache: "no-store" })
+      fetch("/api/dashboard", { cache: "no-store", credentials: "include" })
         .then((res) => res.json())
         .then((data) =>
           setStats({
@@ -52,6 +66,7 @@ export default function Sidebar() {
         .catch(() => setStats(null));
     }
 
+    userGetir();
     atolyeGetir();
     ozetGetir();
 
@@ -59,19 +74,29 @@ export default function Sidebar() {
 
     function aktifOluncaYenile() {
       if (document.visibilityState === "visible") {
+        userGetir();
         ozetGetir();
       }
     }
 
-    window.addEventListener("focus", ozetGetir);
+    window.addEventListener("focus", aktifOluncaYenile);
     document.addEventListener("visibilitychange", aktifOluncaYenile);
 
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener("focus", ozetGetir);
+      window.removeEventListener("focus", aktifOluncaYenile);
       document.removeEventListener("visibilitychange", aktifOluncaYenile);
     };
   }, []);
+
+  const visibleMenuItems = useMemo(() => {
+    if (!currentUser || currentUser.role !== "personel") return menuItems;
+
+    const allowed = currentUser.allowedMenus || ["/dashboard"];
+    const allowedSet = new Set(allowed);
+
+    return menuItems.filter((item) => allowedSet.has(item.href));
+  }, [currentUser]);
 
   async function logout() {
     try {
@@ -118,6 +143,11 @@ export default function Sidebar() {
             <h2 className="mt-1 break-words text-[15px] font-semibold leading-[1.15] text-white">
               {firmaAdi}
             </h2>
+            {currentUser?.role === "personel" && (
+              <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-emerald-300">
+                Personel Girişi
+              </p>
+            )}
           </div>
         </div>
 
@@ -133,7 +163,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="mt-3 space-y-1">
-        {menuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const active = pathname === item.href;
 
           return (
@@ -157,17 +187,19 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-3 rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-3">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-amber-300">
-          Aksiyon
-        </p>
-        <h3 className="mt-1 text-sm font-semibold leading-tight">
-          Takip Gerekiyor
-        </h3>
-        <p className="mt-2 text-xs leading-snug text-slate-300">
-          Bekleyen teklif sayısı yüksek. İlk 5 müşteriye bugün dönüş yap.
-        </p>
-      </div>
+      {currentUser?.role !== "personel" && (
+        <div className="mt-3 rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-3">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-amber-300">
+            Aksiyon
+          </p>
+          <h3 className="mt-1 text-sm font-semibold leading-tight">
+            Takip Gerekiyor
+          </h3>
+          <p className="mt-2 text-xs leading-snug text-slate-300">
+            Bekleyen teklif sayısı yüksek. İlk 5 müşteriye bugün dönüş yap.
+          </p>
+        </div>
+      )}
 
       <button
         onClick={logout}
@@ -181,7 +213,6 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* MOBILE MENU BUTTON */}
       <button
         type="button"
         onClick={() => setMobileOpen(true)}
@@ -191,7 +222,6 @@ export default function Sidebar() {
         ☰
       </button>
 
-      {/* MOBILE DRAWER */}
       {mobileOpen && (
         <div className="fixed inset-0 z-[100] md:hidden">
           <div
@@ -221,7 +251,6 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:flex md:w-72 bg-[#0B1020] text-white border-r border-white/10">
         <div className="flex h-full w-full min-h-0 flex-col p-4">
           <SidebarContent />

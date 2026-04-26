@@ -4,11 +4,26 @@ import { useState, useEffect, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 import { teklifPdfIndir } from '@/lib/teklif-pdf'
-import { PlakaPlanlayiciMini, type PlakaHesapSonucu } from '@/components/plaka-planlayici/PlakaPlanlayiciMini'
+import { PlakaPlanlayiciV2 } from '@/components/plaka-planlayici/PlakaPlanlayiciV2'
+import type { PlakaHesapSonucu } from '@/components/plaka-planlayici/PlakaPlanlayiciMini'
 
 type Makine = { id: string; makineAdi: string; dakikalikMaliyet: number }
 type Operasyon = { operasyonTipi: string; makineId: string; adet: number; birimDakika: number; toplamDakika: number }
 type MusteriSecim = { id: string; firmaAdi?: string; ad?: string; soyad?: string }
+
+type AIPlakaAktarSonucu = {
+  toplamPlaka: number
+  toplamMaliyet: number
+  ortalamaPlakaFiyati: number
+  fireOrani: number
+  fireMaliyeti: number
+  tezgahMtul: number
+  tezgahArasiMtul: number
+  adaTezgahMtul: number
+  plakaGenislik: number
+  plakaYukseklik: number
+}
+
 
 const OPERASYONLAR = [
   { key: 'ocak_kesim', label: 'Ocak Kesim', varsayilanDakika: 25 },
@@ -157,9 +172,53 @@ export default function YeniIs() {
     kdvOrani: number
   }>({ adi: '', adres: '', telefon: '', email: '', sehir: '', ilce: '', logoUrl: '', kdvOrani: 20 })
 
+  const [aiAcik, setAiAcik] = useState(false)
   const [plakaHesap, setPlakaHesap] = useState<PlakaHesapSonucu | null>(null)
 
-  const [sonuc, setSonuc] = useState<{
+  // AI PLAKA SONUCUNU YENI ISE AKTAR
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const raw = localStorage.getItem('aiPlakaSonuc');
+    if (!raw) return;
+
+    try {
+      const data = JSON.parse(raw);
+
+      setForm(prev => ({
+        ...prev,
+        manuelPlakaSayisi: data.toplamPlaka ? String(data.toplamPlaka) : prev.manuelPlakaSayisi,
+        plakaFiyatiEuro: data.ortalamaPlakaFiyati ? String(Number(data.ortalamaPlakaFiyati).toFixed(2)) : prev.plakaFiyatiEuro,
+        metrajMtul: data.tezgahMtul ? String(Number(data.tezgahMtul).toFixed(2)) : prev.metrajMtul,
+        tezgahArasiMtul: data.tezgahArasiMtul ? String(Number(data.tezgahArasiMtul).toFixed(2)) : prev.tezgahArasiMtul,
+        adaTezgahMtul: data.adaTezgahMtul ? String(Number(data.adaTezgahMtul).toFixed(2)) : prev.adaTezgahMtul,
+        plakaGenislikCm: data.plakaGenislik ? String(data.plakaGenislik) : prev.plakaGenislikCm,
+        plakaUzunlukCm: data.plakaYukseklik ? String(data.plakaYukseklik) : prev.plakaUzunlukCm,
+      }));
+
+      setPlakaHesap({
+        fireOrani: Number(data.fireOrani || 0),
+        toplamPlakaAdet: Number(data.toplamPlaka || 0),
+        plakaEni: Number(data.plakaGenislik || 0),
+        plakaBoy: Number(data.plakaYukseklik || 0),
+        tezgahBoy: Number(data.tezgahMtul || 0) * 100,
+        tezgahAdet: 1,
+        tezgahArasiBoy: Number(data.tezgahArasiMtul || 0) * 100,
+        tezgahArasiAdet: 1,
+        adaTezgahBoy: Number(data.adaTezgahMtul || 0) * 100,
+        adaTezgahAdet: 1,
+      });
+
+      localStorage.removeItem('aiPlakaSonuc');
+    } catch {}
+  }, []);
+
+
+  const [fiyatModalAcik, setFiyatModalAcik] = useState(false)
+
+  const [basariModal, setBasariModal] = useState(false)
+
+const [sonuc, setSonuc] = useState<{
     toplamSureDakika: number
     iscilikMaliyeti: number
     malzemeMaliyeti: number
@@ -428,13 +487,33 @@ export default function YeniIs() {
       if (yanit.ok) {
         setSonuc(veri)
         setStep(5)
+        setBasariModal(true)
       }
     } finally {
       setKaydediliyor(false)
     }
   }
 
-  function pdfModalAc() {
+  function whatsappGonder() {
+  if (!sonuc) return;
+
+  const link = `${window.location.origin}/teklif/${sonuc.teklifNo}`
+  const mesaj = encodeURIComponent(
+    `Merhaba, teklifinizi aşağıdaki linkten inceleyip onaylayabilirsiniz:\n\n${link}`
+  )
+
+  window.open(`https://wa.me/?text=${mesaj}`, '_blank')
+}
+
+function linkKopyala() {
+  if (!sonuc) return;
+
+  const link = `${window.location.origin}/teklif/${sonuc.teklifNo}`
+  navigator.clipboard.writeText(link)
+  alert("Teklif linki kopyalandı")
+}
+
+function pdfModalAc() {
     if (!sonuc) return
     setPdfModalAcik(true)
   }
@@ -651,7 +730,7 @@ export default function YeniIs() {
         )}
 
         {step === 2 && (
-          <SectionCard title="Ürün ve plaka bilgileri" desc="Malzeme, plaka ölçüleri ve temel maliyet girdilerini tanımla.">
+          <SectionCard title="Ürün ve AI plaka optimizasyonu" desc="Ürün, plaka, desen ve damar takipli yerleşimi aynı akışta yönet.">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Field label="Ürün Adı">
                 <Input required value={form.urunAdi} onChange={e => guncelle('urunAdi', e.target.value)} placeholder="Mutfak tezgahı / ada vb." />
@@ -665,52 +744,77 @@ export default function YeniIs() {
                 </Select>
               </Field>
 
-              <Field label="Plaka Fiyatı (€)">
-                <Input type="number" step="0.01" required value={form.plakaFiyatiEuro} onChange={e => guncelle('plakaFiyatiEuro', e.target.value)} />
-              </Field>
-
-              <Field label="Plaka Genişliği (cm)">
-                <Input type="number" step="0.1" value={form.plakaGenislikCm} onChange={e => guncelle('plakaGenislikCm', e.target.value)} placeholder="örn: 150" />
-              </Field>
-
-              <Field label="Plaka Uzunluğu (cm)">
-                <Input type="number" step="0.1" value={form.plakaUzunlukCm} onChange={e => guncelle('plakaUzunlukCm', e.target.value)} placeholder="örn: 320" />
-              </Field>
-
               <Field label="Güncel Kur (1€ = ? TL)">
                 <Input type="number" step="0.01" required value={form.kullanilanKur} onChange={e => guncelle('kullanilanKur', e.target.value)} />
               </Field>
-
-              <Field label="Bu plakadan alınan mtül" hint={`Atölye ortalaması: ${plakaBasinaOrtMtul} mtül/plaka`}>
-                <Input type="number" step="0.01" value={form.plakadanAlinanMtul} onChange={e => guncelle('plakadanAlinanMtul', e.target.value)} />
-              </Field>
             </div>
 
-            <div className="mt-6">
-              <PlakaPlanlayiciMini
-                plakaEni={form.plakaGenislikCm}
-                plakaBoy={form.plakaUzunlukCm}
-                onHesapla={(sonuc) => {
-                  setPlakaHesap(sonuc)
-                  if (sonuc.tezgahBoy > 0 && sonuc.tezgahAdet > 0) {
-                    const tezgahMtul = (sonuc.tezgahBoy / 100) * sonuc.tezgahAdet
-                    guncelle('metrajMtul', tezgahMtul.toFixed(2))
-                  }
-                  if (sonuc.tezgahArasiBoy > 0 && sonuc.tezgahArasiAdet > 0) {
-                    const tezgahArasiMtul = (sonuc.tezgahArasiBoy / 100) * sonuc.tezgahArasiAdet
-                    guncelle('tezgahArasiMtul', tezgahArasiMtul.toFixed(2))
-                  }
-                  if (sonuc.adaTezgahBoy > 0 && sonuc.adaTezgahAdet > 0) {
-                    const adaMtul = (sonuc.adaTezgahBoy / 100) * sonuc.adaTezgahAdet
-                    guncelle('adaTezgahMtul', adaMtul.toFixed(2))
-                  }
-                }}
-              />
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 p-6 text-white shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-300">
+                    Metrix AI
+                  </p>
+                  <h3 className="mt-2 text-xl font-black">
+                    AI Plaka Optimizasyonu
+                  </h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                    Damar takibi, tip bazlı desen ayrımı, çoklu plaka ve minimum fire hesabı ile yerleşimi profesyonelce hazırla.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAiAcik(prev => !prev)}
+                  className="rounded-2xl bg-white px-6 py-3 text-sm font-black text-slate-950 shadow-[0_14px_30px_rgba(0,0,0,0.22)] transition hover:scale-[1.02]"
+                >
+                  {aiAcik ? 'AI Planlayıcıyı Kapat' : 'AI Plaka Planlayıcıyı Aç →'}
+                </button>
+              </div>
             </div>
+
+            {aiAcik && (
+              <div className="mt-6">
+                <PlakaPlanlayiciV2
+                  embedded
+                  onApply={(sonuc: AIPlakaAktarSonucu) => {
+                    setForm(prev => ({
+                      ...prev,
+                      manuelPlakaSayisi: sonuc.toplamPlaka ? String(sonuc.toplamPlaka) : prev.manuelPlakaSayisi,
+                      plakaFiyatiEuro: sonuc.ortalamaPlakaFiyati ? String(Number(sonuc.ortalamaPlakaFiyati).toFixed(2)) : prev.plakaFiyatiEuro,
+                      metrajMtul: sonuc.tezgahMtul ? String(Number(sonuc.tezgahMtul).toFixed(2)) : prev.metrajMtul,
+                      tezgahArasiMtul: sonuc.tezgahArasiMtul ? String(Number(sonuc.tezgahArasiMtul).toFixed(2)) : prev.tezgahArasiMtul,
+                      adaTezgahMtul: sonuc.adaTezgahMtul ? String(Number(sonuc.adaTezgahMtul).toFixed(2)) : prev.adaTezgahMtul,
+                      plakaGenislikCm: sonuc.plakaGenislik ? String(sonuc.plakaGenislik) : prev.plakaGenislikCm,
+                      plakaUzunlukCm: sonuc.plakaYukseklik ? String(sonuc.plakaYukseklik) : prev.plakaUzunlukCm,
+                      plakadanAlinanMtul:
+                        sonuc.toplamPlaka > 0 && (sonuc.tezgahMtul + sonuc.tezgahArasiMtul + sonuc.adaTezgahMtul) > 0
+                          ? String(((sonuc.tezgahMtul + sonuc.tezgahArasiMtul + sonuc.adaTezgahMtul) / sonuc.toplamPlaka).toFixed(2))
+                          : prev.plakadanAlinanMtul,
+                    }))
+
+                    setPlakaHesap({
+                      fireOrani: Number(sonuc.fireOrani || 0),
+                      toplamPlakaAdet: Number(sonuc.toplamPlaka || 0),
+                      plakaEni: Number(sonuc.plakaGenislik || 0),
+                      plakaBoy: Number(sonuc.plakaYukseklik || 0),
+                      tezgahBoy: Number(sonuc.tezgahMtul || 0) * 100,
+                      tezgahAdet: 1,
+                      tezgahArasiBoy: Number(sonuc.tezgahArasiMtul || 0) * 100,
+                      tezgahArasiAdet: 1,
+                      adaTezgahBoy: Number(sonuc.adaTezgahMtul || 0) * 100,
+                      adaTezgahAdet: 1,
+                    })
+
+                    setAiAcik(false)
+                  }}
+                />
+              </div>
+            )}
 
             {plakaHesap && (
-              <div className="mt-5 rounded-2xl bg-blue-50 p-4 text-sm text-blue-900">
-                Plaka planlayıcı ölçülere göre bazı alanları otomatik doldurdu. İstersen alt adımda manuel revize edebilirsin.
+              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                AI plaka optimizasyonu Yeni İş formuna aktarıldı. Metraj, plaka sayısı ve ortalama plaka maliyeti otomatik işlendi.
               </div>
             )}
           </SectionCard>
@@ -927,6 +1031,38 @@ export default function YeniIs() {
               <div className="space-y-6">
                 {(() => {
                   const netKar = sonuc.satisFiyati - sonuc.toplamMaliyet
+
+                  const bazMtul = parseFloat(form.metrajMtul || "0")
+                  const arasiMtul = parseFloat(form.tezgahArasiMtul || "0")
+                  const adaMtul = parseFloat(form.adaTezgahMtul || "0")
+
+                  const weightedTotal =
+                    (bazMtul * 1) +
+                    (arasiMtul * 0.75) +
+                    (adaMtul * 1.5)
+
+                  const bazFiyat = weightedTotal > 0 ? sonuc.satisFiyati / weightedTotal : 0
+
+                  const fiyatDagilimi = [
+                    bazMtul > 0 && {
+                      ad: "Tezgah",
+                      mtul: bazMtul,
+                      birim: bazFiyat,
+                      toplam: bazMtul * bazFiyat
+                    },
+                    arasiMtul > 0 && {
+                      ad: "Tezgah Arası",
+                      mtul: arasiMtul,
+                      birim: bazFiyat * 0.75,
+                      toplam: arasiMtul * (bazFiyat * 0.75)
+                    },
+                    adaMtul > 0 && {
+                      ad: "Ada",
+                      mtul: adaMtul,
+                      birim: bazFiyat * 1.5,
+                      toplam: adaMtul * (bazFiyat * 1.5)
+                    }
+                  ].filter(Boolean)
                   const karOrani = sonuc.satisFiyati > 0 ? (netKar / sonuc.satisFiyati) * 100 : 0
                   const tahminiGun = Math.max(0.1, sonuc.toplamSureDakika / 480)
                   const kapasite = Math.min(999, (sonuc.toplamSureDakika / 480) * 100)
@@ -979,6 +1115,22 @@ export default function YeniIs() {
                               className="rounded-3xl bg-white px-5 py-4 text-sm font-black text-emerald-800 transition hover:scale-[1.01] disabled:opacity-70"
                             >
                               {pdfYukleniyor ? 'Hazırlanıyor...' : '📄 Premium PDF Teklif İndir'}
+
+<button
+  type="button"
+  onClick={linkKopyala}
+  className="rounded-3xl bg-slate-900 px-5 py-4 text-sm font-black text-white mt-3"
+>
+  🔗 Teklif Linkini Kopyala
+</button>
+
+                            <button
+                              type="button"
+                              onClick={() => setFiyatModalAcik(true)}
+                              className="rounded-3xl bg-slate-900 px-5 py-4 text-sm font-black text-white"
+                            >
+                              📊 Kalem Bazlı Fiyat Analizi
+                            </button>
                             </button>
                           </div>
                         </div>
@@ -1195,7 +1347,46 @@ export default function YeniIs() {
             </div>
           </div>
         </section>
-      </form>
+      
+
+{/* 🔥 SUCCESS MODAL */}
+{basariModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center">
+      
+      <h2 className="text-2xl font-black mb-2">🔥 TEKLİF HAZIR</h2>
+      <p className="text-sm text-slate-500 mb-6">
+        Teklif oluşturuldu. Müşteriye gönderebilirsin.
+      </p>
+
+      <div className="space-y-3">
+
+        <button onClick={whatsappGonder}
+          className="w-full rounded-2xl bg-green-600 py-3 text-white font-bold">
+          📲 WhatsApp ile Gönder
+        </button>
+
+        <button onClick={linkKopyala}
+          className="w-full rounded-2xl bg-slate-900 py-3 text-white font-bold">
+          🔗 Linki Kopyala
+        </button>
+
+        <button onClick={pdfModalAc}
+          className="w-full rounded-2xl bg-blue-600 py-3 text-white font-bold">
+          📄 PDF Aç
+        </button>
+
+        <button onClick={() => setBasariModal(false)}
+          className="w-full rounded-2xl border py-3">
+          Kapat
+        </button>
+
+      </div>
+    </div>
+  </div>
+)}
+
+</form>
 
       {pdfModalAcik && (
         <div

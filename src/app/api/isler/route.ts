@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     ozel2Mtul +
     ozel3Mtul
 
-  let toplamSureDakika =
+  const temelSureDakika =
     normalTezgahMtul * (parseFloat(birMtulDakika) || 0) +
     normalTezgahArasiMtul * (parseFloat(tezgahArasiDakika) || 0) +
     normalAdaTezgahMtul * (parseFloat(adaTezgahDakika) || 0) +
@@ -140,11 +140,27 @@ export async function POST(req: NextRequest) {
     ozel2Mtul * (parseFloat(ozelIscilik2Dakika) || 0) +
     ozel3Mtul * (parseFloat(ozelIscilik3Dakika) || 0)
 
+  let operasyonSureDakika = 0
+  let operasyonMaliyeti = 0
+
   for (const op of operasyonlar || []) {
-    toplamSureDakika += Number(op.toplamDakika) || 0
+    const opDakika = Number(op.toplamDakika) || 0
+    operasyonSureDakika += opDakika
+
+    let opDakikalikMaliyet = dakikaMaliyeti
+
+    if (op.makineId) {
+      const makine = atolye.makineler.find((m) => m.id === op.makineId)
+      if (makine) {
+        opDakikalikMaliyet = Number(makine.dakikalikMaliyet) || dakikaMaliyeti
+      }
+    }
+
+    operasyonMaliyeti += opDakika * opDakikalikMaliyet
   }
 
-  const iscilikMaliyeti = toplamSureDakika * dakikaMaliyeti
+  const toplamSureDakika = temelSureDakika + operasyonSureDakika
+  const iscilikMaliyeti = (temelSureDakika * dakikaMaliyeti) + operasyonMaliyeti
 
   const otomatikPlakaSayisi =
     gercekPlakaMtul > 0 ? Math.ceil(toplamMetraj / gercekPlakaMtul) : 0

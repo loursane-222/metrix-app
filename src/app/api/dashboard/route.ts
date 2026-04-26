@@ -1,128 +1,161 @@
-import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { prisma } from "@/lib/prisma";
+import { teklifSkoru } from "@/lib/salesScore";
 
-const prisma = new PrismaClient();
+function phaseLabel(phase: string) {
+  const map: Record<string, string> = {
+    OLCU: "Ölçü",
+    TAS_ALINACAK: "Taş Alınacak",
+    IMALAT: "İmalat",
+    MONTAJ: "Montaj",
+    TESLIM: "Teslim",
+  };
 
-async function kullaniciAl() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("metrix-token")?.value;
-  if (!token) return null;
-
-  try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-    const { payload } = await jwtVerify(token, secret);
-    return payload as { id: string };
-  } catch {
-    return null;
-  }
+  return map[phase] || phase;
 }
 
 export async function GET() {
   try {
-    const kullanici = await kullaniciAl();
-
-    if (!kullanici) {
-      return NextResponse.json({ hata: "Yetkisiz" }, { status: 401 });
-    }
-
-    const atolye = await prisma.atolye.findUnique({
-      where: { userId: kullanici.id },
-    });
-
-    if (!atolye) {
-      return NextResponse.json({
-        toplamIs: 0,
-        onaylananIs: 0,
-        kaybedilenIs: 0,
-        bekleyenIs: 0,
-        teklifVerilenTutar: 0,
-        onaylananTutar: 0,
-        onaylanmaOrani: 0,
-        toplamCiro: 0,
-        toplamMaliyet: 0,
-        toplamKar: 0,
-        toplamTahsilat: 0,
-      });
-    }
-
     const isler = await prisma.is.findMany({
-      where: { atolyeId: atolye.id },
+      orderBy: { createdAt: "desc" },
     });
 
-    const toplamIs = isler.length;
-
-    const onaylananlar = isler.filter((i) =>
-      ["onaylandi", "onaylandı", "onay"].includes(
-        String(i.durum || "").toLowerCase()
-      )
+    const bekleyen = isler.filter(
+      i => i.durum !== "onaylandi" && i.durum !== "kaybedildi"
     );
 
-    const kaybedilenler = isler.filter((i) =>
-      ["kaybedildi", "kayip", "kayıp"].includes(
-        String(i.durum || "").toLowerCase()
-      )
-    );
+    const onaylanan = isler.filter(i => i.durum === "onaylandi");
 
-    const bekleyenler = isler.filter(
-      (i) =>
-        !["onaylandi", "onaylandı", "onay", "kaybedildi", "kayip", "kayıp"].includes(
-          String(i.durum || "").toLowerCase()
-        )
-    );
-
-    const teklifVerilenTutar = isler.reduce(
-      (a, i) => a + Number(i.satisFiyati || 0),
+    const toplamCiro = onaylanan.reduce(
+      (acc, i) => acc + Number(i.satisFiyati || 0),
       0
     );
 
-    const onaylananTutar = onaylananlar.reduce(
-      (a, i) => a + Number(i.satisFiyati || 0),
-      0
-    );
+    const kapanabilirTeklifler = bekleyen.map(i => {
+      const ihtimal = teklifSkoru(i);
 
-    const toplamCiro = onaylananTutar;
-
-    const toplamMaliyet = onaylananlar.reduce(
-      (a, i) => a + Number(i.toplamMaliyet || 0),
-      0
-    );
-
-    const toplamKar = toplamCiro - toplamMaliyet;
-
-    const toplamTahsilat = isler.reduce(
-      (a, i) => a + Number(i.tahsilat || 0),
-      0
-    );
-
-    const onaylananIs = onaylananlar.length;
-    const kaybedilenIs = kaybedilenler.length;
-    const bekleyenIs = bekleyenler.length;
-
-    const onaylanmaOrani =
-      toplamIs > 0 ? (onaylananIs / toplamIs) * 100 : 0;
-
-    return NextResponse.json({
-      toplamIs,
-      onaylananIs,
-      kaybedilenIs,
-      bekleyenIs,
-      teklifVerilenTutar,
-      onaylananTutar,
-      onaylanmaOrani,
-      toplamCiro,
-      toplamMaliyet,
-      toplamKar,
-      toplamTahsilat,
+      return {
+        id: i.id,
+        musteri: i.musteriAdi,
+        tutar: Number(i.satisFiyati || 0),
+        ihtimal,
+        aksiyon: ihtimal >= 65 ? "Hemen ara" : "Takip et",
+      };
     });
-  } catch (err) {
-    console.error("Dashboard API Hata:", err);
-    return NextResponse.json(
-      { hata: "Dashboard verisi alınamadı" },
-      { status: 500 }
+
+    const bugunKapanabilirCiro = kapanabilirTeklifler
+      .filter(t => t.ihtimal >= 65)
+      .reduce((acc, t) => acc + t.tutar, 0);
+
+    const bugun = new Date();
+    bugun.setHours(0, 0, 0, 0);
+
+    const yarin = new Date(bugun);
+    yarin.setDate(yarin.getDate() + 1);
+
+    const schedulePhases = await prisma.schedulePhase.findMany({
+      where: {
+        plannedStart: {
+          gte: bugun,
+          lt: yarin,
+        },
+      },
+      orderBy: {
+        plannedStart: "asc",
+      },
+    });
+
+    const workScheduleIds = schedulePhases.map(p => p.workScheduleId);
+
+    const workSchedules = await prisma.workSchedule.findMany({
+      where: {
+        id: {
+          in: workScheduleIds,
+        },
+      },
+    });
+
+    const isIds = workSchedules.map(w => w.isId).filter(Boolean);
+
+    const operasyonIsleri = await prisma.is.findMany({
+      where: {
+        id: {
+          in: isIds,
+        },
+      },
+    });
+
+    const workScheduleMap = new Map(workSchedules.map(w => [w.id, w]));
+    const isMap = new Map(operasyonIsleri.map(i => [i.id, i]));
+
+    const operasyonPlan = schedulePhases.map(p => {
+      const ws = workScheduleMap.get(p.workScheduleId);
+      const ilgiliIs = ws ? isMap.get(ws.isId) : null;
+
+      return {
+        id: p.id,
+        isId: ws?.isId || null,
+        saat: p.plannedStart
+          ? new Date(p.plannedStart).toLocaleTimeString("tr-TR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "--:--",
+        tip: phaseLabel(p.phase),
+        phase: p.phase,
+        musteri: ilgiliIs?.musteriAdi || "Müşteri yok",
+        urun: ilgiliIs?.urunAdi || "",
+        durum: p.isCompleted ? "Tamamlandı" : "Bekliyor",
+        tamamlandi: p.isCompleted,
+      };
+    });
+
+    const toplamDakika = operasyonIsleri.reduce(
+      (acc, i) => acc + Number(i.toplamSureDakika || 0),
+      0
     );
+
+    const kapasiteDakika = 720;
+
+    const atelye = {
+      doluluk: Math.round((toplamDakika / kapasiteDakika) * 100),
+      bugunOperasyon: operasyonPlan.length,
+      bekleyenOperasyon: operasyonPlan.filter(o => !o.tamamlandi).length,
+    };
+
+    const satisAksiyonlari = kapanabilirTeklifler
+      .filter(t => t.ihtimal >= 65)
+      .sort((a, b) => b.ihtimal - a.ihtimal)
+      .slice(0, 3)
+      .map(t => ({
+        tip: "Satış",
+        metin: `${t.musteri} → ${t.tutar.toLocaleString("tr-TR")}₺ (%${t.ihtimal})`,
+        id: t.id,
+      }));
+
+    const operasyonAksiyonlari = operasyonPlan
+      .filter(o => !o.tamamlandi)
+      .slice(0, 5)
+      .map(o => ({
+        tip: o.tip,
+        metin: `${o.saat} - ${o.musteri}${o.urun ? " / " + o.urun : ""}`,
+        id: o.isId,
+      }));
+
+    return Response.json({
+      toplamIs: isler.filter(i => new Date(i.createdAt) >= bugun && new Date(i.createdAt) < yarin).length,
+      onaylananIs: isler.filter(i => i.durum === "onaylandi" && i.onaylanmaTarihi && new Date(i.onaylanmaTarihi) >= bugun && new Date(i.onaylanmaTarihi) < yarin).length,
+      bekleyenIs: isler.filter(i => i.durum !== "onaylandi" && i.durum !== "kaybedildi" && new Date(i.createdAt) >= bugun && new Date(i.createdAt) < yarin).length,
+      finans: {
+        toplamCiro,
+        bugunKapanabilirCiro,
+      },
+      kapanabilirTeklifler,
+      atelye,
+      operasyonPlan,
+      satisAksiyonlari,
+      operasyonAksiyonlari,
+    });
+  } catch (e:any) {
+    return Response.json({ error: e.message }, { status: 500 });
   }
 }

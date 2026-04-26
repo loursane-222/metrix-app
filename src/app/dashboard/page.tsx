@@ -1,166 +1,179 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-import HeroBanner from "@/components/dashboard/HeroBanner";
-import StatCard from "@/components/dashboard/StatCard";
-import PipelineCard from "@/components/dashboard/PipelineCard";
-import ProfitCard from "@/components/dashboard/ProfitCard";
-import SmartActions from "@/components/dashboard/SmartActions";
-import RecentJobs from "@/components/dashboard/RecentJobs";
-import MonthlySummary from "@/components/dashboard/MonthlySummary";
-
-import { paraGoster } from "@/lib/format";
-
-type DashboardData = {
-  toplamIs: number;
-  onaylananIs: number;
-  kaybedilenIs: number;
-  teklifVerilenTutar: number;
-  onaylananTutar: number;
-  onaylanmaOrani: number;
-  toplamCiro: number;
-  toplamMaliyet: number;
-  toplamKar: number;
-  toplamTahsilat: number;
-  bekleyenIs: number;
-};
-
-type MonthlySummaryData = {
-  yil: number;
-  ay: number;
-  ayAdi: string;
-  toplamTeklif: number;
-  onaylananTeklif: number;
-  bekleyenTeklif: number;
-  kaybedilenTeklif: number;
-  onaylanmaOrani: number;
-  toplamTeklifTutari: number;
-  onaylananTeklifTutari: number;
-  kaybedilenTeklifTutari: number;
-  toplamTahsilat: number;
-  kirilanTas: number;
-  toplamPlaka: number;
-  toplamMaliyet: number;
-  toplamKazanc: number;
-};
-
-type AylikResponse = {
-  aylar: MonthlySummaryData[];
-};
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [monthly, setMonthly] = useState<MonthlySummaryData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/dashboard").then((res) => res.json()),
-      fetch("/api/dashboard/aylik").then((res) => res.json()),
-    ])
-      .then(([dashboardRes, aylikRes]: [DashboardData, AylikResponse]) => {
-        setData(dashboardRes);
-        setMonthly(aylikRes?.aylar?.[0] ?? null);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+    fetch("/api/dashboard")
+      .then(r => r.json())
+      .then(setData);
   }, []);
 
-  if (loading) {
+  if (!data) {
     return (
-      <div className="p-10 text-center text-slate-500">
-        Dashboard yükleniyor...
+      <div className="h-screen flex items-center justify-center bg-[#030712] text-slate-400">
+        Yükleniyor...
       </div>
     );
   }
 
-  if (!data) {
+  if (data.error) {
     return (
-      <div className="p-10 text-center text-red-500">
-        Veri alınamadı
+      <div className="h-screen flex items-center justify-center bg-[#030712] text-red-400">
+        {data.error}
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <HeroBanner
-        onaylananTutar={data.onaylananTutar}
-        toplamKar={data.toplamKar}
-        onaylanmaOrani={data.onaylanmaOrani}
-        toplamTahsilat={data.toplamTahsilat}
-        bekleyenIs={data.bekleyenIs}
-        onaylananIs={data.onaylananIs}
-      />
+    <div className="min-h-screen w-full bg-[#030712] text-slate-200 p-6 flex flex-col gap-6">
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Toplam Teklif Hacmi"
-          value={paraGoster(data.teklifVerilenTutar)}
-          note={`${data.toplamIs} teklif`}
-          tone="blue"
-        />
-        <StatCard
-          label="Onaylanan Tutar"
-          value={paraGoster(data.onaylananTutar)}
-          note={`${data.onaylananIs} onay`}
-          tone="green"
-        />
-        <StatCard
-          label="Toplam Kar"
-          value={paraGoster(data.toplamKar)}
-          note="Gerçekleşen kazanç"
-          tone="purple"
-        />
-        <StatCard
-          label="Tahsilatlar"
-          value={paraGoster(data.toplamTahsilat)}
-          note="Nakit akışı"
-          tone="amber"
-        />
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-3">
-        <div className="xl:col-span-1">
-          <PipelineCard
-            toplamIs={data.toplamIs}
-            onaylananIs={data.onaylananIs}
-            kaybedilenIs={data.kaybedilenIs}
-          />
+      <div className="grid grid-cols-4 gap-4">
+        <div className="bg-[#0B1120] p-5 rounded-xl border border-slate-800">
+          <p className="text-xs text-slate-400">Toplam Ciro</p>
+          <p className="text-2xl">{data.finans.toplamCiro.toLocaleString("tr-TR")}₺</p>
         </div>
 
-        <div className="xl:col-span-1">
-          <ProfitCard
-            toplamCiro={data.toplamCiro}
-            toplamMaliyet={data.toplamMaliyet}
-            toplamKar={data.toplamKar}
-          />
+        <div className="bg-[#0B1120] p-5 rounded-xl border border-slate-800">
+          <p className="text-xs text-slate-400">Bugün Kapanabilir</p>
+          <p className="text-2xl text-emerald-400">
+            {data.finans.bugunKapanabilirCiro.toLocaleString("tr-TR")}₺
+          </p>
         </div>
 
-        <div className="xl:col-span-1">
-          <SmartActions
-            toplamIs={data.toplamIs}
-            onaylananIs={data.onaylananIs}
-            kaybedilenIs={data.kaybedilenIs}
-            onaylanmaOrani={data.onaylanmaOrani}
-            toplamCiro={data.toplamCiro}
-            toplamTahsilat={data.toplamTahsilat}
-            toplamKar={data.toplamKar}
-          />
+        <div className="bg-[#0B1120] p-5 rounded-xl border border-slate-800">
+          <p className="text-xs text-slate-400">Atölye Doluluk</p>
+          <p className="text-2xl">%{data.atelye.doluluk}</p>
         </div>
-      </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
-        <div>
-          <MonthlySummary data={monthly} />
+        <div className="bg-[#0B1120] p-5 rounded-xl border border-slate-800">
+          <p className="text-xs text-slate-400">Bugünkü Operasyon</p>
+          <p className="text-2xl">{data.atelye.bekleyenOperasyon} / {data.atelye.bugunOperasyon}</p>
         </div>
-        <div>
-          <RecentJobs />
+      </div>
+
+      <div className="grid grid-cols-12 gap-6 flex-1">
+
+        <div className="col-span-5 bg-[#0B1120] p-6 rounded-xl border border-slate-800">
+          <h2 className="text-sm text-slate-400 mb-4">Kapanabilir Teklifler</h2>
+
+          <div className="space-y-3">
+            {data.kapanabilirTeklifler.map((t:any) => (
+              <div key={t.id} className="flex justify-between items-center bg-[#111827] p-4 rounded-lg border border-slate-800">
+                <div>
+                  <p className="text-sm font-medium">{t.musteri}</p>
+                  <p className="text-xs text-slate-400">{t.tutar.toLocaleString("tr-TR")}₺</p>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <span className={`text-sm ${t.ihtimal >= 65 ? "text-emerald-400" : "text-yellow-400"}`}>
+                    %{t.ihtimal}
+                  </span>
+
+                  <button
+                    onClick={() => router.push(`/is/detay?id=${t.id}`)}
+                    className="px-3 py-1 bg-blue-600 text-xs rounded"
+                  >
+                    {t.aksiyon}
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {data.kapanabilirTeklifler.length === 0 && (
+              <div className="text-slate-500 text-sm">Kapanabilir teklif yok.</div>
+            )}
+          </div>
         </div>
-      </section>
+
+        <div className="col-span-4 bg-[#0B1120] p-6 rounded-xl border border-slate-800">
+          <h2 className="text-sm text-slate-400 mb-4">Bugünün Atölye Planı</h2>
+
+          <div className="space-y-3">
+            {data.operasyonPlan.map((o:any) => (
+              <div
+                key={o.id}
+                className={`bg-[#111827] p-4 rounded-lg border ${
+                  o.tamamlandi ? "border-emerald-500/30" : "border-slate-800"
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {o.saat} · {o.tip}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {o.musteri}
+                    </p>
+                    {o.urun && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        {o.urun}
+                      </p>
+                    )}
+                  </div>
+
+                  <span className={`text-xs ${o.tamamlandi ? "text-emerald-400" : "text-amber-400"}`}>
+                    {o.durum}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {data.operasyonPlan.length === 0 && (
+              <div className="text-slate-500 text-sm">Bugün operasyon planı yok.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="col-span-3 bg-[#0B1120] p-6 rounded-xl border border-slate-800">
+          <h2 className="text-sm text-slate-400 mb-4">Bugün Yapılacaklar</h2>
+
+          <div className="space-y-5">
+            <div>
+              <p className="text-xs text-emerald-400 mb-2 uppercase tracking-widest">Satış</p>
+              <div className="space-y-2">
+                {data.satisAksiyonlari.map((a:any, i:number) => (
+                  <div
+                    key={i}
+                    onClick={() => a.id && router.push(`/is/detay?id=${a.id}`)}
+                    className="bg-[#111827] p-3 rounded text-sm cursor-pointer hover:bg-[#172033]"
+                  >
+                    {a.metin}
+                  </div>
+                ))}
+
+                {data.satisAksiyonlari.length === 0 && (
+                  <div className="text-xs text-slate-500">Bugün sıcak satış aksiyonu yok.</div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs text-blue-400 mb-2 uppercase tracking-widest">Atölye</p>
+              <div className="space-y-2">
+                {data.operasyonAksiyonlari.map((a:any, i:number) => (
+                  <div
+                    key={i}
+                    onClick={() => a.id && router.push(`/is/detay?id=${a.id}`)}
+                    className="bg-[#111827] p-3 rounded text-sm cursor-pointer hover:bg-[#172033]"
+                  >
+                    <span className="text-blue-400">{a.tip}</span> · {a.metin}
+                  </div>
+                ))}
+
+                {data.operasyonAksiyonlari.length === 0 && (
+                  <div className="text-xs text-slate-500">Bugün atölye aksiyonu yok.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }

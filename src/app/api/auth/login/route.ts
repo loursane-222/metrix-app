@@ -9,44 +9,69 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password, beniHatirla } = await req.json()
 
-    const kullanici = await prisma.user.findUnique({ where: { email } })
-    if (!kullanici) {
-      return NextResponse.json({ hata: 'E-posta veya şifre hatalı.' }, { status: 401 })
-    }
-
-    const sifreDoğru = await bcrypt.compare(password, kullanici.password)
-    if (!sifreDoğru) {
-      return NextResponse.json({ hata: 'E-posta veya şifre hatalı.' }, { status: 401 })
-    }
-
-    // Aktiflik kontrolü
-    if (!kullanici.aktif) {
-      return NextResponse.json({ hata: 'Hesabınız askıya alınmıştır. Lütfen destek ile iletişime geçin.' }, { status: 403 })
-    }
-
-    // Abonelik kontrolü
-    if (kullanici.abonelikBitis && new Date() > kullanici.abonelikBitis) {
-      return NextResponse.json({ hata: 'Abonelik süreniz dolmuştur. Lütfen yenileyin.' }, { status: 403 })
-    }
-
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const sureDakika = beniHatirla ? 60 * 24 * 30 : 60 * 24 // 30 gün veya 1 gün
+    const sureDakika = beniHatirla ? 60 * 24 * 30 : 60 * 24
 
-    const token = await new SignJWT({ id: kullanici.id, email: kullanici.email })
+    const admin = await prisma.user.findUnique({ where: { email } })
+
+    if (admin) {
+      const ok = await bcrypt.compare(password, admin.password)
+      if (!ok) return NextResponse.json({ hata: 'E-posta veya şifre hatalı.' }, { status: 401 })
+
+      const token = await new SignJWT({
+        id: admin.id,
+        email: admin.email,
+        role: 'admin',
+      })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setExpirationTime(`${sureDakika}m`)
+        .sign(secret)
+
+      const res = NextResponse.json({ mesaj: 'Giriş başarılı.' })
+      res.cookies.set('metrix-token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: sureDakika * 60,
+        path: '/',
+      })
+
+      return res
+    }
+
+    const personel = await prisma.personel.findFirst({
+      where: { email, aktif: true },
+      include: { atolye: { include: { user: true } } },
+    })
+
+    if (!personel || !personel.password) {
+      return NextResponse.json({ hata: 'E-posta veya şifre hatalı.' }, { status: 401 })
+    }
+
+    const ok = await bcrypt.compare(password, personel.password)
+    if (!ok) return NextResponse.json({ hata: 'E-posta veya şifre hatalı.' }, { status: 401 })
+
+    const token = await new SignJWT({
+      id: personel.atolye.user.id,
+      email: personel.email,
+      role: 'personel',
+      personelId: personel.id,
+      atolyeId: personel.atolyeId,
+    })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime(`${sureDakika}m`)
       .sign(secret)
 
-    const yanit = NextResponse.json({ mesaj: 'Giriş başarılı.' })
-    yanit.cookies.set('metrix-token', token, {
+    const res = NextResponse.json({ mesaj: 'Giriş başarılı.' })
+    res.cookies.set('metrix-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: sureDakika * 60,
       path: '/',
     })
 
-    return yanit
-  } catch {
+    return res
+  } catch (e) {
+    console.error('LOGIN ERROR:', e)
     return NextResponse.json({ hata: 'Bir hata oluştu.' }, { status: 500 })
   }
 }

@@ -80,6 +80,13 @@ export async function getSchedulesForMonth(year: number, month: number) {
           musteriAdi: true,
           urunAdi: true,
           tasDurumu: true,
+          kirilanTasPlaka: true,
+          hataliKesimPlaka: true,
+          plakaFiyatiEuro: true,
+          kullanilanKur: true,
+          kullanilanPlakaSayisi: true,
+          toplamMaliyet: true,
+          satisFiyati: true,
         },
       },
       phases: {
@@ -182,6 +189,7 @@ export async function togglePhaseCompletion(data: {
   isCompleted: boolean;
   completedBy?: string;
   overrideNote?: string;
+  kirilanTasPlaka?: number;
 }) {
   const auth = await authBilgisiAl();
   if (!auth.atolyeId || !auth.userId) throw new Error("Yetkisiz");
@@ -233,6 +241,23 @@ export async function togglePhaseCompletion(data: {
     if (!check.allowed && !data.overrideNote) {
       throw new Error(check.reason ?? "Bu aşama henüz işaretlenemez");
     }
+  }
+
+  const kirilanTasPlaka = Math.max(0, Number(data.kirilanTasPlaka || 0));
+
+  if (
+    phase.phase === "IMALAT" &&
+    data.isCompleted === true &&
+    kirilanTasPlaka > 0
+  ) {
+    await prisma.is.update({
+      where: { id: phase.workSchedule.isId },
+      data: {
+        kirilanTasPlaka: {
+          increment: kirilanTasPlaka,
+        },
+      },
+    });
   }
 
   const updated = await prisma.schedulePhase.update({
@@ -289,6 +314,23 @@ export async function movePhase(data: {
 
   if (!phase) throw new Error("Aşama bulunamadı");
   if (phase.workSchedule.is.atolyeId !== atolyeId) throw new Error("Yetkisiz");
+
+  const kirilanTasPlaka = Math.max(0, Number(data.kirilanTasPlaka || 0));
+
+  if (
+    phase.phase === "IMALAT" &&
+    data.isCompleted === true &&
+    kirilanTasPlaka > 0
+  ) {
+    await prisma.is.update({
+      where: { id: phase.workSchedule.isId },
+      data: {
+        kirilanTasPlaka: {
+          increment: kirilanTasPlaka,
+        },
+      },
+    });
+  }
 
   const updated = await prisma.schedulePhase.update({
     where: { id: data.schedulePhaseId },
