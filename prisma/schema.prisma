@@ -179,6 +179,10 @@ model Is {
   satisFiyati      Decimal @default(0)
   mtulSatisFiyati  Decimal @default(0)
 
+  tezgahBirimFiyatOverride      Decimal @default(0)
+  tezgahArasiBirimFiyatOverride Decimal @default(0)
+  adaBirimFiyatOverride         Decimal @default(0)
+
   teklifGecerlilikTarihi DateTime?
   kirilanTasPlaka        Decimal @default(0)
   hataliKesimPlaka       Decimal @default(0)

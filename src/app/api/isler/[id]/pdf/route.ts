@@ -64,9 +64,13 @@ export async function GET(
 
     const weightedTotal = bazMtul * 1 + arasiMtul * 0.75 + adaMtul * 1.5
     const bazFiyat = weightedTotal > 0 ? satis / weightedTotal : 0
-    const fiyatTezgah = bazFiyat
-    const fiyatArasi = bazFiyat * 0.75
-    const fiyatAda = bazFiyat * 1.5
+    const overrideTezgah = Number((is as any).tezgahBirimFiyatOverride || 0)
+    const overrideArasi = Number((is as any).tezgahArasiBirimFiyatOverride || 0)
+    const overrideAda = Number((is as any).adaBirimFiyatOverride || 0)
+
+    const fiyatTezgah = overrideTezgah > 0 ? overrideTezgah : bazFiyat
+    const fiyatArasi = overrideArasi > 0 ? overrideArasi : bazFiyat * 0.75
+    const fiyatAda = overrideAda > 0 ? overrideAda : bazFiyat * 1.5
 
     const satirlar = [
       bazMtul > 0

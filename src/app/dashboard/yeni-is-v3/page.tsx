@@ -4,6 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PlakaPlanlayiciV2, type AIPlakaAktarSonucu } from "@/components/plaka-planlayici/PlakaPlanlayiciV2";
 
+
+function tl(v: any) {
+  return Number(v || 0).toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + " ₺";
+}
+
 function n(v: string | number) {
   const x = Number(String(v || "0").replace(",", "."));
   return Number.isFinite(x) ? x : 0;
@@ -21,7 +29,9 @@ export default function YeniIsV3Page() {
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [sonKayitModalAcik, setSonKayitModalAcik] = useState(false)
   const [sonKayitTeklifNo, setSonKayitTeklifNo] = useState("")
-  const [sonKayitIsId, setSonKayitIsId] = useState("");
+  const [sonKayitIsId, setSonKayitIsId] = useState("")
+  const [fiyatPanelAcik, setFiyatPanelAcik] = useState(false)
+  const [fiyatOverride, setFiyatOverride] = useState<any>({});
   const [hesapPopupAcik, setHesapPopupAcik] = useState(false);
   const [duzenlenmis, setDuzenlenmis] = useState<any>(null);
   const [musteriler, setMusteriler] = useState<any[]>([]);
@@ -227,6 +237,80 @@ export default function YeniIsV3Page() {
       yapistirmaMaliyet,
     };
   }, [form, makineler]);
+
+  function fiyatAnaliziSatirlari() {
+    const satis = hesap.satis || 0
+    const tezgah = n(form.metrajMtul)
+    const arasi = n(form.tezgahArasiMtul)
+    const ada = n(form.adaTezgahMtul)
+
+    const weighted = tezgah * 1 + arasi * 0.75 + ada * 1.5
+    const baz = weighted > 0 ? satis / weighted : 0
+
+    return [
+      tezgah > 0 ? { ad: "Tezgah", mtul: tezgah, katsayi: 1, birim: baz, toplam: tezgah * baz } : null,
+      arasi > 0 ? { ad: "Tezgah Arası", mtul: arasi, katsayi: 0.75, birim: baz * 0.75, toplam: arasi * baz * 0.75 } : null,
+      ada > 0 ? { ad: "Ada Tezgah", mtul: ada, katsayi: 1.5, birim: baz * 1.5, toplam: ada * baz * 1.5 } : null,
+    ].filter(Boolean) as any[]
+  }
+
+  function fiyatKarari() {
+    const kar = n(form.karYuzdesi)
+    if (kar >= 60) return { baslik: "Premium fiyat", metin: "Kâr güçlü. Değer anlatımı ve teslim güveniyle savunulmalı.", renk: "text-emerald-300" }
+    if (kar >= 35) return { baslik: "Sağlıklı fiyat", metin: "Fiyat dengeli. Pazarlık payı kontrollü bırakılabilir.", renk: "text-blue-300" }
+    if (kar >= 20) return { baslik: "Dikkatli fiyat", metin: "Marj daralıyor. Ek işçilik ve fire riski mutlaka korunmalı.", renk: "text-amber-300" }
+    return { baslik: "Riskli fiyat", metin: "Bu fiyat hata affetmez. İndirim yapma, mümkünse fiyatı yukarı çek.", renk: "text-red-300" }
+  }
+
+  function fiyatPanelToplam() {
+    return fiyatAnaliziSatirlari().reduce((acc, r) => {
+      const birim = Number(fiyatOverride[r.ad] ?? r.birim)
+      return acc + (birim * r.mtul)
+    }, 0)
+  }
+
+  function fiyatPanelKar() {
+    return fiyatPanelToplam() - (hesap.maliyet || 0)
+  }
+
+  function fiyatPanelKarYuzde() {
+    return (hesap.maliyet || 0) > 0 ? (fiyatPanelKar() / (hesap.maliyet || 1)) * 100 : 0
+  }
+
+  async function manuelFiyatlariKaydet() {
+    if (!sonKayitIsId) {
+      alert("Önce teklif kaydedilmeli.")
+      return
+    }
+
+    const satirlar = fiyatAnaliziSatirlari()
+    const tezgah = satirlar.find((x) => x.ad === "Tezgah")
+    const arasi = satirlar.find((x) => x.ad === "Tezgah Arası")
+    const ada = satirlar.find((x) => x.ad === "Ada Tezgah")
+
+    const payload = {
+      tezgahBirimFiyatOverride: Number(fiyatOverride["Tezgah"] ?? tezgah?.birim ?? 0),
+      tezgahArasiBirimFiyatOverride: Number(fiyatOverride["Tezgah Arası"] ?? arasi?.birim ?? 0),
+      adaBirimFiyatOverride: Number(fiyatOverride["Ada Tezgah"] ?? ada?.birim ?? 0),
+    }
+
+    const res = await fetch(`/api/isler/${sonKayitIsId}/fiyat`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    const raw = await res.text()
+    let veri: any = {}
+    try { veri = raw ? JSON.parse(raw) : {} } catch { veri = { hata: raw } }
+
+    if (!res.ok) {
+      alert(veri?.hata || "Fiyat kaydedilemedi.")
+      return
+    }
+
+    alert("Manuel fiyatlar kaydedildi. Online teklif ve PDF güncellendi.")
+  }
 
   function onlineTeklifLinki() {
     if (!sonKayitTeklifNo) return ""
@@ -652,6 +736,93 @@ export default function YeniIsV3Page() {
           </button>
 
       {/* SATIS_AKSIYON_MODAL */}
+      {fiyatPanelAcik && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-3xl rounded-[32px] border border-slate-700 bg-[#0B1120] p-6 text-white shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-purple-300">FIYAT_KONTROL_MODAL</p>
+                <h2 className="mt-2 text-2xl font-black">Fiyat Kontrol Paneli</h2>
+                <p className="mt-2 text-sm text-slate-400">Kalem bazlı satış fiyatı, katsayı ve kâr kararını burada görürsün.</p>
+              </div>
+              <button type="button" onClick={() => setFiyatPanelAcik(false)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm">Kapat</button>
+            </div>
+
+            <div className="mb-5 grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
+                <p className="text-xs text-slate-400">Satış</p>
+                <p className="mt-2 text-xl font-black text-emerald-300">{tl(fiyatPanelToplam())}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
+                <p className="text-xs text-slate-400">Maliyet</p>
+                <p className="mt-2 text-xl font-black">{tl(hesap.maliyet)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
+                <p className="text-xs text-slate-400">Kâr</p>
+                <p className="mt-2 text-xl font-black text-amber-300">{tl(fiyatPanelKar())} · %{fiyatPanelKarYuzde().toFixed(1)}</p>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-700">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-900 text-slate-400">
+                  <tr>
+                    <th className="p-3 text-left">Kalem</th>
+                    <th className="p-3 text-right">Mtül</th>
+                    <th className="p-3 text-right">Katsayı</th>
+                    <th className="p-3 text-right">Birim</th>
+                    <th className="p-3 text-right">Toplam</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fiyatAnaliziSatirlari().map((r) => (
+                    <tr key={r.ad} className="border-t border-slate-800">
+                      <td className="p-3 font-semibold">{r.ad}</td>
+                      <td className="p-3 text-right">{r.mtul.toFixed(2)}</td>
+                      <td className="p-3 text-right">{r.katsayi}</td>
+                      <td className="p-3 text-right">
+    <input
+      value={fiyatOverride[r.ad] ?? r.birim.toFixed(2)}
+      onChange={(e) =>
+        setFiyatOverride({
+          ...fiyatOverride,
+          [r.ad]: Number(e.target.value || 0),
+        })
+      }
+      className="w-28 rounded bg-slate-800 px-2 py-1 text-right"
+    />
+    <span className="ml-1 text-xs text-slate-400">TL</span>
+  </td>
+                      <td className="p-3 text-right font-bold">{tl((fiyatOverride[r.ad] ?? r.birim) * r.mtul)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5">
+              <button
+                type="button"
+                onClick={manuelFiyatlariKaydet}
+                className="w-full rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white hover:bg-emerald-500"
+              >
+                💾 Manuel Fiyatları Kaydet ve Teklifi Güncelle
+              </button>
+            </div>
+
+            {(() => {
+              const karar = fiyatKarari()
+              return (
+                <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                  <p className={`text-lg font-black ${karar.renk}`}>{karar.baslik}</p>
+                  <p className="mt-2 text-sm text-slate-300">{karar.metin}</p>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
       {sonKayitModalAcik && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg rounded-[32px] border border-slate-700 bg-[#0B1120] p-6 text-white shadow-2xl">
@@ -666,6 +837,10 @@ export default function YeniIsV3Page() {
 
               <button type="button" onClick={teklifLinkiKopyala} className="w-full rounded-2xl bg-slate-800 px-5 py-4 text-sm font-black text-white hover:bg-slate-700">
                 🔗 Linki Kopyala
+              </button>
+
+              <button type="button" onClick={() => setFiyatPanelAcik(true)} className="w-full rounded-2xl bg-purple-600 px-5 py-4 text-sm font-black text-white hover:bg-purple-500">
+                💰 Fiyat Kontrol Paneli
               </button>
 
               <button type="button" onClick={pdfTeklifAc} className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white hover:bg-blue-500">

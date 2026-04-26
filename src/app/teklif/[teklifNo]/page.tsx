@@ -55,6 +55,14 @@ export default async function Page({ params }: any) {
 
   const bazFiyat = weightedTotal > 0 ? satis / weightedTotal : 0;
 
+  const overrideTezgah = Number((is as any).tezgahBirimFiyatOverride || 0);
+  const overrideArasi = Number((is as any).tezgahArasiBirimFiyatOverride || 0);
+  const overrideAda = Number((is as any).adaBirimFiyatOverride || 0);
+
+  const fiyatTezgah = overrideTezgah > 0 ? overrideTezgah : bazFiyat;
+  const fiyatArasi = overrideArasi > 0 ? overrideArasi : bazFiyat * 0.75;
+  const fiyatAda = overrideAda > 0 ? overrideAda : bazFiyat * 1.5;
+
   const whatsapp = tel
     ? `https://wa.me/${tel}?text=${encodeURIComponent(
         `${is.teklifNo} numaralı teklif hakkında bilgi almak istiyorum.`
@@ -161,18 +169,10 @@ export default async function Page({ params }: any) {
                     <td>{row.urun}</td>
                     <td>{row.miktar.toFixed(2)} mtül</td>
                     <td>{para(
-    row.kalem === "Tezgah"
-      ? bazFiyat
-      : row.kalem === "Tezgah Arası"
-      ? bazFiyat * 0.75
-      : bazFiyat * 1.5
+    row.kalem === "Tezgah" ? fiyatTezgah : row.kalem === "Tezgah Arası" ? fiyatArasi : fiyatAda
   )}</td>
                     <td>{para(row.miktar * (
-    row.kalem === "Tezgah"
-      ? bazFiyat
-      : row.kalem === "Tezgah Arası"
-      ? bazFiyat * 0.75
-      : bazFiyat * 1.5
+    row.kalem === "Tezgah" ? fiyatTezgah : row.kalem === "Tezgah Arası" ? fiyatArasi : fiyatAda
   ))}</td>
                   </tr>
                 ))
