@@ -72,7 +72,6 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
   const [kirilanVarMi, setKirilanVarMi] = useState(false);
   const [kirilanAdet, setKirilanAdet] = useState("0");
   const [tasModal, setTasModal] = useState<any | null>(null);
-  const [operationOpen, setOperationOpen] = useState(false);
 
   async function refresh(y = year, m = month) {
     const res = await fetch(`/api/schedule?year=${y}&month=${m}`, { cache: "no-store" });
@@ -274,24 +273,8 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
     : DAYS;
 
   return (
-    <div className="h-full grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_270px] gap-3 bg-[#030712] text-white">
-      {/* OPERASYON_MOBILE_BUTTON */}
-      <button
-        onClick={() => setOperationOpen(true)}
-        className="md:hidden fixed top-3 right-3 z-50 bg-blue-600 px-4 py-2 rounded-xl text-sm font-semibold shadow-lg"
-      >
-        Operasyon
-      </button>
-
-      {/* OPERATION_BACKDROP */}
-      {operationOpen && (
-        <div
-          onClick={() => setOperationOpen(false)}
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-        />
-      )}
-
-      <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] p-2 md:p-3 overflow-hidden">
+    <div className="h-full grid grid-cols-[minmax(0,1fr)_270px] gap-3 bg-[#030712] text-white">
+      <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] p-3 overflow-hidden">
         <div className="h-full rounded-[1.35rem] bg-white text-slate-900 p-3 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <div>
@@ -434,21 +417,7 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
         </div>
       </main>
 
-      <aside
-        className={`rounded-3xl border border-slate-800 bg-[#0B1120] p-4 overflow-hidden flex flex-col
-        fixed md:static top-0 right-0 h-full z-50
-        w-[85%] md:w-auto
-        transform transition-transform duration-300
-        ${operationOpen ? "translate-x-0" : "translate-x-full md:translate-x-0"}
-        `}
-      >
-        <button
-          onClick={() => setOperationOpen(false)}
-          className="md:hidden mb-3 text-sm text-white border border-slate-700 rounded-lg px-3 py-2"
-        >
-          Kapat
-        </button>
-
+      <aside className="rounded-3xl border border-slate-800 bg-[#0B1120] p-4 overflow-hidden flex flex-col">
         <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Operasyon</p>
         <h2 className="mt-2 text-xl font-semibold">Bugün</h2>
 

@@ -43,7 +43,7 @@ function analiz(m: any) {
   const bakiye = ciro - tahsilat + acilis
 
   const onayOrani = teklifSayisi > 0 ? (onaySayisi / teklifSayisi) * 100 : 0
-  const tahsilatOrani = ciro > 0 ? (tahsilat / ciro) * 100 : 0
+  const tahsilatOrani = ciro > 0 ? (tahsilat / ciro) * 100 : 100
 
   let kategori = 'Yeni'
   let kategoriClass = 'bg-slate-500/10 text-slate-300 border-slate-500/30'
@@ -94,17 +94,6 @@ export default function MusterilerPage() {
   const [excelYukleniyor, setExcelYukleniyor] = useState(false)
   const [excelMesaji, setExcelMesaji] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
-  const [actionsOpen, setActionsOpen] = useState(false)
-
-  const [tahsilatAcik, setTahsilatAcik] = useState(false)
-  const [personeller, setPersoneller] = useState<any[]>([])
-  const [tahsilatForm, setTahsilatForm] = useState({
-    tutar: '',
-    tur: 'nakit',
-    tarih: new Date().toISOString().slice(0,10),
-    personelId: ''
-  })
 
   const [form, setForm] = useState({
     firmaAdi: '',
@@ -131,10 +120,6 @@ export default function MusterilerPage() {
 
   useEffect(() => {
     listeYukle()
-
-    fetch('/api/personel')
-      .then(r => r.json())
-      .then(d => setPersoneller(d.personeller || []))
   }, [])
 
   async function excelSecildi(e: React.ChangeEvent<HTMLInputElement>) {
@@ -176,35 +161,6 @@ export default function MusterilerPage() {
       setExcelYukleniyor(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
-  }
-
-  async function tahsilatKaydet() {
-    if (!tahsilatForm.tutar) {
-      alert('Tutar gir.')
-      return
-    }
-
-    await fetch('/api/tahsilat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        musteriId: aktif.id,
-        tutar: Number(tahsilatForm.tutar),
-        tur: tahsilatForm.tur,
-        tarih: tahsilatForm.tarih,
-        personelId: tahsilatForm.personelId
-      })
-    })
-
-    setTahsilatAcik(false)
-    setTahsilatForm({
-      tutar: '',
-      tur: 'nakit',
-      tarih: new Date().toISOString().slice(0,10),
-      personelId: ''
-    })
-
-    await listeYukle(aktif.id)
   }
 
   async function yeniMusteriKaydet(e: React.FormEvent) {
@@ -304,9 +260,9 @@ export default function MusterilerPage() {
   }
 
   return (
-    <div className="relative h-screen flex bg-[#030712] text-white overflow-hidden w-full max-w-full overflow-x-hidden">
+    <div className="h-screen flex bg-[#030712] text-white overflow-hidden">
 
-      <div className={`w-full md:w-[25%] border-r border-slate-800 flex-col ${mobileView === "list" ? "flex" : "hidden md:flex"}`}>
+      <div className="w-[25%] border-r border-slate-800 flex flex-col">
         <div className="p-5 border-b border-slate-800">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">CRM</p>
           <h1 className="text-2xl mt-2">Müşteriler</h1>
@@ -332,7 +288,7 @@ export default function MusterilerPage() {
             return (
               <button
                 key={m.id}
-                onClick={() => { setAktif(m); setMobileView('detail') }}
+                onClick={() => setAktif(m)}
                 className={`w-full text-left rounded-xl border p-4 transition ${
                   aktif?.id === m.id
                     ? 'bg-[#111827] border-blue-500/50'
@@ -352,15 +308,7 @@ export default function MusterilerPage() {
 
                 <div className="mt-3 flex items-center justify-between text-xs">
                   <span className={ma.bakiye > 0 ? 'text-amber-300' : 'text-emerald-300'}>
-                    {(
-      ma.teklifSayisi === 0
-        ? 'Yeni'
-        : ma.bakiye > 0
-        ? 'Borçlu'
-        : ma.bakiye < 0
-        ? 'Alacaklı'
-        : 'Kapalı'
-    )}
+                    {ma.bakiye > 0 ? 'Borçlu' : 'Kapalı'}
                   </span>
                   <span className="text-slate-400">{pct(ma.onayOrani)} onay</span>
                 </div>
@@ -370,15 +318,9 @@ export default function MusterilerPage() {
         </div>
       </div>
 
-      <main className={`w-full md:w-[50%] p-4 md:p-6 overflow-y-auto md:overflow-hidden flex-col gap-5 ${mobileView === "detail" ? "flex" : "hidden md:flex"}`}>
-        <div className="flex items-start justify-between gap-3">
-          <button
-            onClick={() => { setMobileView('list'); setActionsOpen(false) }}
-            className="md:hidden shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-sm text-white"
-          >
-            ←
-          </button>
-          <div className="min-w-0 flex-1">
+      <main className="w-[50%] p-6 overflow-hidden flex flex-col gap-5">
+        <div className="flex items-start justify-between">
+          <div>
             <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Müşteri Detayı</p>
             <h2 className="text-3xl mt-2 font-semibold">{musteriAdi(aktif)}</h2>
             <p className="text-sm text-slate-400 mt-2">
@@ -400,20 +342,20 @@ export default function MusterilerPage() {
   </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <BigCard label="Onaylı Ciro" value={tl(a.ciro)} tone="text-emerald-300" />
           <BigCard label="Tahsilat" value={tl(a.tahsilat)} tone="text-cyan-300" />
           <BigCard label="Bakiye" value={tl(a.bakiye)} tone={a.bakiye > 0 ? 'text-amber-300' : 'text-emerald-300'} />
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <BigCard label="Teklif" value={a.teklifSayisi} />
           <BigCard label="Onay" value={a.onaySayisi} tone="text-emerald-300" />
           <BigCard label="Kayıp" value={a.kayipSayisi} tone="text-red-300" />
           <BigCard label="Onay Oranı" value={pct(a.onayOrani)} tone="text-blue-300" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
             <p className="text-sm text-slate-400 mb-4">Müşteri Performansı</p>
 
@@ -445,7 +387,7 @@ export default function MusterilerPage() {
 
           <div className="space-y-2">
             {(aktif.isler || []).slice(0, 5).map((i: any) => (
-              <div key={i.id} className="grid grid-cols-1 md:grid-cols-[1fr_120px_100px] gap-2 md:gap-0 md:items-center rounded-xl bg-[#111827] px-4 py-3">
+              <div key={i.id} className="grid grid-cols-[1fr_120px_100px] items-center rounded-xl bg-[#111827] px-4 py-3">
                 <div>
                   <p className="text-sm font-medium">{i.teklifNo}</p>
                   <div className="mt-1 flex items-center gap-2">
@@ -479,27 +421,7 @@ export default function MusterilerPage() {
         </div>
       </main>
 
-      <button
-        onClick={() => setActionsOpen(true)}
-        className="md:hidden fixed top-4 right-4 z-[120] rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold shadow-xl"
-      >
-        Aksiyon
-      </button>
-
-      {actionsOpen && (
-        <div
-          onClick={() => setActionsOpen(false)}
-          className="md:hidden fixed inset-0 z-[125] bg-black/60"
-        />
-      )}
-
-      <aside className={`fixed md:static top-0 right-0 z-[130] h-full w-[82%] max-w-[380px] md:max-w-none md:w-[25%] bg-[#030712] border-l border-slate-800 p-6 flex flex-col gap-4 overflow-y-auto transform transition-transform duration-300 ${actionsOpen ? "translate-x-0" : "translate-x-full md:translate-x-0"}`}>
-        <button
-          onClick={() => setActionsOpen(false)}
-          className="md:hidden mb-2 rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold"
-        >
-          Kapat
-        </button>
+      <aside className="w-[25%] border-l border-slate-800 p-6 flex flex-col gap-4">
         <button
           onClick={() => setYeniAcik(true)}
           className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold"
@@ -544,7 +466,7 @@ export default function MusterilerPage() {
         </button>
 
         <button
-          onClick={() => setTahsilatAcik(true)}
+          onClick={() => alert('Tahsilat popup bir sonraki adımda bağlanacak.')}
           className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold"
         >
           Tahsilat Gir
@@ -577,81 +499,7 @@ export default function MusterilerPage() {
         </div>
       </aside>
 
-      {tahsilatAcik && (
-  <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4">
-    <div className="w-full max-w-md bg-[#0B1120] border border-slate-800 rounded-2xl p-6">
-
-      <h2 className="text-lg font-semibold mb-4">Tahsilat Gir</h2>
-
-      <input
-        placeholder="Tutar"
-        value={tahsilatForm.tutar}
-        onChange={(e) => setTahsilatForm({...tahsilatForm, tutar: e.target.value})}
-        className="w-full mb-3 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
-      />
-
-      <select
-        value={tahsilatForm.tur}
-        onChange={(e) => setTahsilatForm({...tahsilatForm, tur: e.target.value})}
-        className="w-full mb-3 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
-      >
-        <option value="nakit">Nakit</option>
-        <option value="cek">Çek</option>
-        <option value="kart">Kredi Kartı</option>
-      </select>
-
-      <div className="relative mb-3">
-      <input
-        type="date"
-        value={tahsilatForm.tarih}
-        onChange={(e) => setTahsilatForm({...tahsilatForm, tarih: e.target.value})}
-        className="w-full px-4 py-3 pr-12 bg-[#111827] border border-slate-700 rounded-xl"
-      />
-
-      <button
-        type="button"
-        onClick={(e) => {
-          const input = e.currentTarget.parentElement.querySelector('input')
-          if (input && input.showPicker) input.showPicker()
-        }}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-      >
-        📅
-      </button>
-    </div>
-
-      <select
-        value={tahsilatForm.personelId}
-        onChange={(e) => setTahsilatForm({...tahsilatForm, personelId: e.target.value})}
-        className="w-full mb-4 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
-      >
-        <option value="">Personel seç</option>
-        {personeller.map(p => (
-          <option key={p.id} value={p.id}>{p.ad}</option>
-        ))}
-      </select>
-
-      <div className="flex gap-2">
-        <button
-          onClick={() => setTahsilatAcik(false)}
-          className="flex-1 border border-slate-700 py-3 rounded-xl"
-        >
-          Vazgeç
-        </button>
-
-        <button
-          onClick={tahsilatKaydet}
-          className="flex-1 bg-emerald-600 py-3 rounded-xl"
-        >
-          Kaydet
-        </button>
-      </div>
-
-    </div>
-  </div>
-)}
-
-{yeniAcik && (
+      {yeniAcik && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
           onClick={() => setYeniAcik(false)}
@@ -666,7 +514,7 @@ export default function MusterilerPage() {
               <h2 className="mt-2 text-xl font-semibold">Yeni Müşteri</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <Input label="Firma Adı" value={form.firmaAdi} onChange={(v: string) => setForm({ ...form, firmaAdi: v })} />
               <Input label="Telefon" value={form.telefon} onChange={(v: string) => setForm({ ...form, telefon: v })} />
               <Input label="Ad" value={form.ad} onChange={(v: string) => setForm({ ...form, ad: v })} />

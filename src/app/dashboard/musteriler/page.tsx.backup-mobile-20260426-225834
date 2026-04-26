@@ -94,8 +94,6 @@ export default function MusterilerPage() {
   const [excelYukleniyor, setExcelYukleniyor] = useState(false)
   const [excelMesaji, setExcelMesaji] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
-  const [actionsOpen, setActionsOpen] = useState(false)
 
   const [tahsilatAcik, setTahsilatAcik] = useState(false)
   const [personeller, setPersoneller] = useState<any[]>([])
@@ -304,9 +302,9 @@ export default function MusterilerPage() {
   }
 
   return (
-    <div className="relative h-screen flex bg-[#030712] text-white overflow-hidden w-full max-w-full overflow-x-hidden">
+    <div className="h-screen flex bg-[#030712] text-white overflow-hidden">
 
-      <div className={`w-full md:w-[25%] border-r border-slate-800 flex-col ${mobileView === "list" ? "flex" : "hidden md:flex"}`}>
+      <div className="w-[25%] border-r border-slate-800 flex flex-col">
         <div className="p-5 border-b border-slate-800">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">CRM</p>
           <h1 className="text-2xl mt-2">Müşteriler</h1>
@@ -332,7 +330,7 @@ export default function MusterilerPage() {
             return (
               <button
                 key={m.id}
-                onClick={() => { setAktif(m); setMobileView('detail') }}
+                onClick={() => setAktif(m)}
                 className={`w-full text-left rounded-xl border p-4 transition ${
                   aktif?.id === m.id
                     ? 'bg-[#111827] border-blue-500/50'
@@ -370,15 +368,9 @@ export default function MusterilerPage() {
         </div>
       </div>
 
-      <main className={`w-full md:w-[50%] p-4 md:p-6 overflow-y-auto md:overflow-hidden flex-col gap-5 ${mobileView === "detail" ? "flex" : "hidden md:flex"}`}>
-        <div className="flex items-start justify-between gap-3">
-          <button
-            onClick={() => { setMobileView('list'); setActionsOpen(false) }}
-            className="md:hidden shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-sm text-white"
-          >
-            ←
-          </button>
-          <div className="min-w-0 flex-1">
+      <main className="w-[50%] p-6 overflow-hidden flex flex-col gap-5">
+        <div className="flex items-start justify-between">
+          <div>
             <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Müşteri Detayı</p>
             <h2 className="text-3xl mt-2 font-semibold">{musteriAdi(aktif)}</h2>
             <p className="text-sm text-slate-400 mt-2">
@@ -400,20 +392,20 @@ export default function MusterilerPage() {
   </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <BigCard label="Onaylı Ciro" value={tl(a.ciro)} tone="text-emerald-300" />
           <BigCard label="Tahsilat" value={tl(a.tahsilat)} tone="text-cyan-300" />
           <BigCard label="Bakiye" value={tl(a.bakiye)} tone={a.bakiye > 0 ? 'text-amber-300' : 'text-emerald-300'} />
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <BigCard label="Teklif" value={a.teklifSayisi} />
           <BigCard label="Onay" value={a.onaySayisi} tone="text-emerald-300" />
           <BigCard label="Kayıp" value={a.kayipSayisi} tone="text-red-300" />
           <BigCard label="Onay Oranı" value={pct(a.onayOrani)} tone="text-blue-300" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
             <p className="text-sm text-slate-400 mb-4">Müşteri Performansı</p>
 
@@ -445,7 +437,7 @@ export default function MusterilerPage() {
 
           <div className="space-y-2">
             {(aktif.isler || []).slice(0, 5).map((i: any) => (
-              <div key={i.id} className="grid grid-cols-1 md:grid-cols-[1fr_120px_100px] gap-2 md:gap-0 md:items-center rounded-xl bg-[#111827] px-4 py-3">
+              <div key={i.id} className="grid grid-cols-[1fr_120px_100px] items-center rounded-xl bg-[#111827] px-4 py-3">
                 <div>
                   <p className="text-sm font-medium">{i.teklifNo}</p>
                   <div className="mt-1 flex items-center gap-2">
@@ -479,27 +471,7 @@ export default function MusterilerPage() {
         </div>
       </main>
 
-      <button
-        onClick={() => setActionsOpen(true)}
-        className="md:hidden fixed top-4 right-4 z-[120] rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold shadow-xl"
-      >
-        Aksiyon
-      </button>
-
-      {actionsOpen && (
-        <div
-          onClick={() => setActionsOpen(false)}
-          className="md:hidden fixed inset-0 z-[125] bg-black/60"
-        />
-      )}
-
-      <aside className={`fixed md:static top-0 right-0 z-[130] h-full w-[82%] max-w-[380px] md:max-w-none md:w-[25%] bg-[#030712] border-l border-slate-800 p-6 flex flex-col gap-4 overflow-y-auto transform transition-transform duration-300 ${actionsOpen ? "translate-x-0" : "translate-x-full md:translate-x-0"}`}>
-        <button
-          onClick={() => setActionsOpen(false)}
-          className="md:hidden mb-2 rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold"
-        >
-          Kapat
-        </button>
+      <aside className="w-[25%] border-l border-slate-800 p-6 flex flex-col gap-4">
         <button
           onClick={() => setYeniAcik(true)}
           className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold"
@@ -666,7 +638,7 @@ export default function MusterilerPage() {
               <h2 className="mt-2 text-xl font-semibold">Yeni Müşteri</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <Input label="Firma Adı" value={form.firmaAdi} onChange={(v: string) => setForm({ ...form, firmaAdi: v })} />
               <Input label="Telefon" value={form.telefon} onChange={(v: string) => setForm({ ...form, telefon: v })} />
               <Input label="Ad" value={form.ad} onChange={(v: string) => setForm({ ...form, ad: v })} />
