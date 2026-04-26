@@ -164,7 +164,7 @@ function IsDetayContent() {
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-[#0B1120] p-4 rounded-xl border border-slate-800">
           <p className="text-xs text-slate-400">Maliyet</p>
           <p className="text-xl">{maliyet.toLocaleString("tr-TR")} ₺</p>

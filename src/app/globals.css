@@ -79,3 +79,14 @@ body {
 
 /* ===== END ===== */
 
+
+/* MOBILE FIX GLOBAL */
+html, body {
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* mobilde taşma engelle */
+* {
+  max-width: 100%;
+}
