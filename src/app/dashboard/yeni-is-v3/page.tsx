@@ -328,20 +328,29 @@ export default function YeniIsV3Page() {
         }),
       });
 
-      const json = await res.json();
+      // KRİTİK: response body sadece 1 kez okunur.
+      const raw = await res.text();
+
+      let veri: any = {};
+      try {
+        veri = raw ? JSON.parse(raw) : {};
+      } catch {
+        veri = { hata: raw || "Sunucudan geçersiz cevap geldi." };
+      }
 
       if (!res.ok) {
-        alert(json.hata || json.error || "İş kaydedilemedi.");
+        alert(veri?.hata || "İş kaydedilemedi.");
         return;
       }
 
-      const teklifNo = veri?.teklifNo || veri?.is?.teklifNo || ""
-      const isId = veri?.id || veri?.is?.id || ""
-      setSonKayitTeklifNo(teklifNo)
-      setSonKayitIsId(isId)
-      setSonKayitModalAcik(true)
+      const teklifNo = veri?.teklifNo || veri?.is?.teklifNo || "";
+      const isId = veri?.id || veri?.is?.id || "";
+
+      setSonKayitTeklifNo(teklifNo);
+      setSonKayitIsId(isId);
+      setSonKayitModalAcik(true);
     } catch (e: any) {
-      alert(e.message || "İş kaydedilemedi.");
+      alert(e?.message || "Kaydetme sırasında hata oluştu.");
     } finally {
       setKaydediliyor(false);
     }
@@ -641,6 +650,35 @@ export default function YeniIsV3Page() {
           >
             {kaydediliyor ? "Kaydediliyor..." : "Hesapla & Kaydet"}
           </button>
+
+      {/* SATIS_AKSIYON_MODAL */}
+      {sonKayitModalAcik && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg rounded-[32px] border border-slate-700 bg-[#0B1120] p-6 text-white shadow-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-300">TEKLİF HAZIR</p>
+            <h2 className="mt-2 text-2xl font-black">Satış aksiyonu seç</h2>
+            <p className="mt-2 text-sm text-slate-400">Teklif kaydedildi. Müşteriye gönderebilir veya PDF açabilirsin.</p>
+
+            <div className="mt-5 space-y-3">
+              <button type="button" onClick={whatsappTeklifGonder} className="w-full rounded-2xl bg-green-600 px-5 py-4 text-sm font-black text-white hover:bg-green-500">
+                📲 WhatsApp ile Gönder
+              </button>
+
+              <button type="button" onClick={teklifLinkiKopyala} className="w-full rounded-2xl bg-slate-800 px-5 py-4 text-sm font-black text-white hover:bg-slate-700">
+                🔗 Linki Kopyala
+              </button>
+
+              <button type="button" onClick={pdfTeklifAc} className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white hover:bg-blue-500">
+                📄 PDF Aç
+              </button>
+
+              <button type="button" onClick={() => setSonKayitModalAcik(false)} className="w-full rounded-2xl border border-slate-700 px-5 py-4 text-sm font-bold text-slate-300 hover:bg-slate-800">
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
       </aside>
       {plakaAcik && (
