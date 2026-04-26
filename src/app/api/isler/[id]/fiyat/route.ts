@@ -43,22 +43,31 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
     if (!mevcut) return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
 
-    const tezgah = Number(body.tezgahBirimFiyatOverride || 0)
-    const arasi = Number(body.tezgahArasiBirimFiyatOverride || 0)
-    const ada = Number(body.adaBirimFiyatOverride || 0)
+    const tezgahMtul = Number(mevcut.metrajMtul || 0)
+    const arasiMtul = Number(mevcut.tezgahArasiMtul || 0)
+    const adaMtul = Number(mevcut.adaTezgahMtul || 0)
 
-    const satisFiyati =
-      Number(mevcut.metrajMtul || 0) * tezgah +
-      Number(mevcut.tezgahArasiMtul || 0) * arasi +
-      Number(mevcut.adaTezgahMtul || 0) * ada
+    const agirlikliMtul = tezgahMtul + arasiMtul * 0.75 + adaMtul * 1.5
+
+    const satisFiyatiToplam = Number(body.satisFiyatiToplam || 0)
+
+    const bazBirim = satisFiyatiToplam > 0 && agirlikliMtul > 0
+      ? satisFiyatiToplam / agirlikliMtul
+      : Number(body.tezgahBirimFiyatOverride || 0)
+
+    const tezgah = bazBirim
+    const arasi = bazBirim * 0.75
+    const ada = bazBirim * 1.5
+
+    const satisFiyati = satisFiyatiToplam > 0
+      ? satisFiyatiToplam
+      : tezgahMtul * tezgah + arasiMtul * arasi + adaMtul * ada
 
     const kdvOrani = Number(atolye.kdvOrani || 20)
     const kdvTutari = satisFiyati * (kdvOrani / 100)
     const kdvDahilFiyat = satisFiyati + kdvTutari
     const toplamMetraj =
-      Number(mevcut.metrajMtul || 0) +
-      Number(mevcut.tezgahArasiMtul || 0) +
-      Number(mevcut.adaTezgahMtul || 0)
+      tezgahMtul + arasiMtul + adaMtul
 
     const mtulSatisFiyati = toplamMetraj > 0 ? satisFiyati / toplamMetraj : 0
     const karYuzdesi = Number(mevcut.toplamMaliyet || 0) > 0

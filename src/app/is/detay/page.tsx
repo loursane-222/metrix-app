@@ -27,7 +27,12 @@ function IsDetayContent() {
       })
       .then((d) => {
         setData(d);
-        setFiyat(Number(d.satisFiyati || 0));
+
+        const gelenFiyat = Number(d.satisFiyati || 0);
+        const maliyet = Number(d.toplamMaliyet || 0);
+        const guvenliMax = maliyet > 0 ? Math.round(maliyet * 2) : gelenFiyat;
+
+        setFiyat(gelenFiyat > guvenliMax * 1.5 ? guvenliMax : gelenFiyat);
       })
       .catch((err) => setError(err.message || "Veri alınamadı"));
   }, [id]);
@@ -80,15 +85,11 @@ function IsDetayContent() {
     if (!data?.id) return alert("İş bulunamadı.")
 
     try {
-      const bazBirim = Number(fiyat || 0) / Math.max(Number(data.metrajMtul || 0), 1)
-
       const res = await fetch(`/api/isler/${data.id}/fiyat`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tezgahBirimFiyatOverride: bazBirim,
-          tezgahArasiBirimFiyatOverride: bazBirim * 0.75,
-          adaBirimFiyatOverride: bazBirim * 1.5,
+          satisFiyatiToplam: Number(fiyat || 0),
         }),
       })
 
@@ -101,7 +102,8 @@ function IsDetayContent() {
         return
       }
 
-      alert("Revize fiyat kaydedildi. Online teklif ve PDF güncellendi.")
+      alert("Revize fiyat kaydedildi.")
+      window.history.back()
       
     } catch (e: any) {
       alert(e?.message || "Revize fiyat kaydedilemedi.")
@@ -198,7 +200,7 @@ function IsDetayContent() {
         <input
           type="range"
           min={Math.round(maliyet * 1.05)}
-          max={Math.round(maliyet * 2)}
+          max={Math.max(Math.round(maliyet * 2), fiyat)}
           step="500"
           value={fiyat}
           onChange={(e) => setFiyat(Number(e.target.value))}

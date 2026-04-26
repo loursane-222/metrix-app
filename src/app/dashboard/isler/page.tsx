@@ -8,6 +8,11 @@ import { PlakaPlanlayiciV2 } from '@/components/plaka-planlayici/PlakaPlanlayici
 export default function IslerPage() {
   const router = useRouter()
 
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
+  const [isArama, setIsArama] = useState("")
+
+
   function aktifTeklifLinki() {
     if (!aktifIs?.teklifNo) return ""
     return `${window.location.origin}/teklif/${aktifIs.teklifNo}`
@@ -273,6 +278,26 @@ function teklifTakipDurumu(i: any) {
     return 'text-amber-400 border-amber-500/30 bg-amber-500/10'
   }
 
+
+  const filtreliIsler = useMemo(() => {
+    const q = isArama.trim().toLowerCase()
+    if (!q) return isler
+
+    return isler.filter((item: any) => {
+      return [
+        item.musteriAdi,
+        item.urunAdi,
+        item.teklifNo,
+        item.durum,
+        item.malzemeTipi,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    })
+  }, [isler, isArama])
+
   function TasBadge({ durum }: { durum?: string }) {
     if (!durum) return null
 
@@ -290,9 +315,218 @@ function teklifTakipDurumu(i: any) {
   }
 
   return (
-    <div className="h-screen flex bg-[#030712] text-white overflow-hidden">
+    <div className="h-[100dvh] flex flex-col md:flex-row bg-[#030712] text-white overflow-hidden">
 
-      <div className="w-[25%] border-r border-slate-800 flex flex-col">
+      {/* MOBILE_LIST_DETAIL_APP */}
+      <div className="md:hidden flex h-full min-h-0 flex-col bg-[#030712] text-white">
+        {mobileView === 'list' && (
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="shrink-0 border-b border-slate-800 bg-[#030712] pl-20 pr-4 py-4">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Metrix</p>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <h1 className="text-2xl font-black">İşler</h1>
+                <button
+                  onClick={() => router.push('/dashboard/yeni-is-v3')}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold"
+                >
+                  + Yeni
+                </button>
+              </div>
+
+              <input
+                value={isArama}
+                onChange={(e) => setIsArama(e.target.value)}
+                placeholder="Müşteri, ürün veya teklif ara..."
+                className="mt-4 w-full rounded-2xl border border-slate-800 bg-[#0B1120] px-4 py-4 text-base text-white outline-none placeholder:text-slate-600"
+              />
+
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                <div className="rounded-xl bg-[#111827] p-2 text-center">
+                  <p className="text-[10px] text-slate-500">Toplam</p>
+                  <p className="text-sm font-bold">{ozet.toplam}</p>
+                </div>
+                <div className="rounded-xl bg-[#111827] p-2 text-center">
+                  <p className="text-[10px] text-slate-500">Bek.</p>
+                  <p className="text-sm font-bold text-amber-400">{ozet.bekleyen}</p>
+                </div>
+                <div className="rounded-xl bg-[#111827] p-2 text-center">
+                  <p className="text-[10px] text-slate-500">Onay</p>
+                  <p className="text-sm font-bold text-emerald-400">{ozet.onaylanan}</p>
+                </div>
+                <div className="rounded-xl bg-[#111827] p-2 text-center">
+                  <p className="text-[10px] text-slate-500">Kayıp</p>
+                  <p className="text-sm font-bold text-red-400">{ozet.kayip}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto pb-8">
+              {filtreliIsler.map((is: any) => (
+                <button
+                  key={is.id}
+                  onClick={() => {
+                    setAktifIs(is)
+                    setMobileView('detail')
+                  }}
+                  className="block w-full border-b border-slate-800 p-4 text-left active:bg-[#111827]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-black">{is.musteriAdi}</p>
+                      <p className="mt-1 truncate text-sm text-slate-400">{is.urunAdi}</p>
+                      <p className="mt-2 text-sm text-slate-500">{paraGoster(Number(is.satisFiyati || 0))}</p>
+                    </div>
+
+                    <span className={`shrink-0 rounded-full border px-3 py-1 text-xs ${durumRenk(is.durum)}`}>
+                      {is.durum}
+                    </span>
+                  </div>
+                </button>
+              ))}
+
+              {filtreliIsler.length === 0 && (
+                <div className="p-8 text-center text-slate-500">
+                  Aramaya uygun iş bulunamadı.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {mobileView === 'detail' && aktifIs && (
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="shrink-0 border-b border-slate-800 bg-[#030712] px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => setMobileView('list')}
+                  className="rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm font-bold"
+                >
+                  ← İşler
+                </button>
+
+                <button
+                  onClick={() => setMobileActionsOpen(true)}
+                  className="rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm font-bold"
+                >
+                  Aksiyon
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Seçili İş</p>
+                  <h2 className="mt-2 text-2xl font-black leading-tight">{aktifIs.musteriAdi}</h2>
+                  <p className="mt-2 text-base text-slate-400">{aktifIs.urunAdi}</p>
+                </div>
+
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <span className={`rounded-full border px-3 py-1 text-xs ${durumRenk(aktifIs.durum)}`}>
+                    {aktifIs.durum}
+                  </span>
+                  <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-300">
+                    v{Number(aktifIs.versiyon || 1)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
+                  <p className="text-xs text-slate-400">Teklif Tutarı</p>
+                  <p className="mt-2 text-xl text-emerald-400">{paraGoster(aktifSatis)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
+                  <p className="text-xs text-slate-400">Maliyet</p>
+                  <p className="mt-2 text-xl">{paraGoster(aktifMaliyet)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
+                  <p className="text-xs text-slate-400">Kâr</p>
+                  <p className="mt-2 text-xl text-yellow-400">{paraGoster(aktifKar)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
+                  <p className="text-xs text-slate-400">Kazanç</p>
+                  <p className="mt-2 text-xl text-blue-400">%{aktifKarYuzde.toFixed(1)}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
+                {(() => {
+                  const takip = teklifTakipDurumu(aktifIs)
+                  return (
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Satış Takip Uyarısı</p>
+                      <p className={`mt-2 text-2xl font-black ${takip.renk}`}>{takip.baslik}</p>
+                      <p className="mt-2 text-sm text-slate-400">{takip.metin}</p>
+
+                      <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Sıcaklık Skoru</p>
+                          <p className={`text-sm font-black ${takip.renk}`}>{takip.skor}/5 · {takip.etiket}</p>
+                        </div>
+
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(100, Math.max(0, takip.skor * 20))}%`,
+                              backgroundColor: takip.barColor,
+                            }}
+                          />
+                        </div>
+
+                        <p className="mt-2 text-xs text-slate-400">Önerilen aksiyon: <b>{takip.aksiyon}</b></p>
+                      </div>
+
+                      <p className="mt-3 text-xs text-slate-500">
+                        Görüntülenme: {Number(aktifIs.teklifGoruntulenmeSayisi || 0)} kez
+                        {aktifIs.teklifSonGoruntulenmeTarihi
+                          ? ` · Son bakış: ${new Date(aktifIs.teklifSonGoruntulenmeTarihi).toLocaleString("tr-TR")}`
+                          : " · Henüz açılmadı"}
+                      </p>
+
+                      <button
+                        onClick={aktifTakipMesajiKopyala}
+                        className="mt-4 w-full rounded-2xl bg-slate-800 px-4 py-4 text-sm font-bold hover:bg-slate-700"
+                      >
+                        Akıllı Takip Mesajı Kopyala
+                      </button>
+                    </div>
+                  )
+                })()}
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
+                  <p className="text-xs text-slate-400">Taş / Ürün</p>
+                  <p className="mt-2 text-base font-bold">{aktifIs.urunAdi || '-'}</p>
+                  <p className="mt-1 text-xs text-slate-500">{aktifIs.malzemeTipi || '-'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
+                  <p className="text-xs text-slate-400">Kaç Plaka?</p>
+                  <p className="mt-2 text-2xl font-black">{Number(aktifIs.kullanilanPlakaSayisi || 0)} plaka</p>
+                  <p className="mt-1 text-xs text-slate-500">{aktifIs.plakaGenislikCm || '-'} × {aktifIs.plakaUzunlukCm || '-'} cm</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
+                  <p className="text-xs text-slate-400">Toplam Süre</p>
+                  <p className="mt-2 text-2xl font-black">{Number(aktifIs.toplamSureDakika || 0).toFixed(0)} dk</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
+                  <p className="text-xs text-slate-400">Tahsilat</p>
+                  <p className="mt-2 text-2xl font-black text-cyan-400">{paraGoster(Number(aktifIs.tahsilat || 0))}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
+                <p className="text-xs text-slate-400">Notlar</p>
+                <p className="mt-2 text-sm text-slate-300">{aktifIs.notlar || 'Bu iş için not girilmemiş.'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="hidden md:flex md:w-[25%] border-r border-slate-800 flex-col">
         <div className="p-5 border-b border-slate-800">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Metrix</p>
           <h1 className="text-xl mt-2">İşler</h1>
@@ -317,8 +551,19 @@ function teklifTakipDurumu(i: any) {
           </div>
         </div>
 
+        
+        {/* DESKTOP_IS_ARAMA */}
+        <div className="border-b border-slate-800 p-3">
+          <input
+            value={isArama}
+            onChange={(e) => setIsArama(e.target.value)}
+            placeholder="İş ara..."
+            className="w-full rounded-xl border border-slate-800 bg-[#0B1120] px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600"
+          />
+        </div>
+
         <div className="overflow-y-auto flex-1">
-          {isler.map((is) => (
+          {filtreliIsler.map((is) => (
             <div
               key={is.id}
               onClick={() => setAktifIs(is)}
@@ -352,7 +597,7 @@ function teklifTakipDurumu(i: any) {
         </div>
       </div>
 
-      <div className="w-[50%] p-6 flex flex-col gap-5 overflow-hidden">
+      <div className="hidden md:flex md:w-[50%] p-6 flex-col gap-5 overflow-hidden">
         {!aktifIs && <div className="text-slate-400">Bir iş seç</div>}
 
         {aktifIs && (
@@ -361,7 +606,7 @@ function teklifTakipDurumu(i: any) {
               <div>
                 <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Seçili İş</p>
                 <div className="mt-2 flex items-center gap-3">
-                  <h2 className="text-2xl">{aktifIs.musteriAdi}</h2>
+                  <h2 className="text-xl md:text-2xl leading-tight">{aktifIs.musteriAdi}</h2>
                   {/* METRIX_VERSION_BADGE */}
                   <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-300">
                     v{Number(aktifIs.versiyon || 1)}
@@ -379,23 +624,23 @@ function teklifTakipDurumu(i: any) {
               </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-4">
-              <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              <div className="bg-[#111827] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[92px] md:min-h-0">
                 <p className="text-xs text-slate-400">Teklif Tutarı</p>
                 <p className="text-lg mt-2 text-emerald-400">{paraGoster(aktifSatis)}</p>
               </div>
 
-              <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#111827] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[92px] md:min-h-0">
                 <p className="text-xs text-slate-400">Maliyet</p>
                 <p className="text-lg mt-2">{paraGoster(aktifMaliyet)}</p>
               </div>
 
-              <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#111827] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[92px] md:min-h-0">
                 <p className="text-xs text-slate-400">Kâr</p>
                 <p className="text-lg mt-2 text-yellow-400">{paraGoster(aktifKar)}</p>
               </div>
 
-              <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#111827] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[92px] md:min-h-0">
                 <p className="text-xs text-slate-400">Kazanç</p>
                 <p className="text-lg mt-2 text-blue-400">%{aktifKarYuzde.toFixed(1)}</p>
               </div>
@@ -404,11 +649,11 @@ function teklifTakipDurumu(i: any) {
 
             {/* METRIX_SALES_AI_ALERT_FORCE */}
             {aktifIs && (
-              <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
+              <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-3 md:p-4">
                 {(() => {
                   const takip = teklifTakipDurumu(aktifIs)
                   return (
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Satış Takip Uyarısı</p>
                         <p className={`mt-2 text-xl font-black ${takip.renk}`}>{takip.baslik}</p>
@@ -442,7 +687,7 @@ function teklifTakipDurumu(i: any) {
 
                       <button
                         onClick={aktifTakipMesajiKopyala}
-                        className="shrink-0 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold hover:bg-slate-700"
+                        className="w-full md:w-auto shrink-0 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold hover:bg-slate-700"
                       >
                         Akıllı Takip Mesajı Kopyala
                       </button>
@@ -455,13 +700,13 @@ function teklifTakipDurumu(i: any) {
 
 
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[96px] md:min-h-0">
                 <p className="text-xs text-slate-400">Taş / Ürün</p>
                 <p className="mt-2 text-sm">{aktifIs.urunAdi || '-'}</p>
                 <p className="mt-1 text-xs text-slate-500">{aktifIs.malzemeTipi || '-'}</p>
               </div>
 
-              <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[96px] md:min-h-0">
                 <p className="text-xs text-slate-400">Kaç Plaka Lazım?</p>
                 <p className="mt-2 text-xl">{Number(aktifIs.kullanilanPlakaSayisi || 0)} plaka</p>
                 <p className="mt-1 text-xs text-slate-500">
@@ -469,7 +714,7 @@ function teklifTakipDurumu(i: any) {
                 </p>
               </div>
 
-              <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[96px] md:min-h-0">
                 <p className="text-xs text-slate-400">Taş Durumu</p>
                 <p className={`mt-2 text-lg ${
                   aktifIs.tasDurumu === 'alinacak'
@@ -488,19 +733,19 @@ function teklifTakipDurumu(i: any) {
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[96px] md:min-h-0">
                 <p className="text-xs text-slate-400">Toplam Süre</p>
                 <p className="mt-2 text-xl">{Number(aktifIs.toplamSureDakika || 0).toFixed(0)} dk</p>
               </div>
 
-              <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[96px] md:min-h-0">
                 <p className="text-xs text-slate-400">Atölye İş Yükü</p>
                 <p className={`mt-2 text-xl ${isYuku > 100 ? 'text-red-400' : isYuku > 70 ? 'text-amber-400' : 'text-emerald-400'}`}>
                   %{isYuku}
                 </p>
               </div>
 
-              <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl">
+              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl min-h-[96px] md:min-h-0">
                 <p className="text-xs text-slate-400">Tahsilat</p>
                 <p className="mt-2 text-xl text-cyan-400">{paraGoster(Number(aktifIs.tahsilat || 0))}</p>
               </div>
@@ -516,7 +761,7 @@ function teklifTakipDurumu(i: any) {
         )}
       </div>
 
-      <div className="w-[25%] p-6 border-l border-slate-800 flex flex-col gap-4">
+      <div className="hidden md:flex md:w-[25%] p-6 border-l border-slate-800 flex-col gap-4">
         <button
           onClick={() => router.push('/dashboard/yeni-is-v3')}
           className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold"
@@ -599,6 +844,35 @@ function teklifTakipDurumu(i: any) {
           ⏱ Akıllı Takip Mesajı Kopyala
         </button>
       </div>
+
+      {/* MOBILE_ACTIONS_DRAWER_NATIVE */}
+      {mobileActionsOpen && (
+        <div className="fixed inset-0 z-[200] md:hidden">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setMobileActionsOpen(false)} />
+          <div className="absolute right-0 top-0 h-full w-[86vw] max-w-[360px] overflow-y-auto border-l border-slate-800 bg-[#030712] p-4 text-white shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Aksiyon</p>
+                <h2 className="truncate text-lg font-black">{aktifIs?.musteriAdi || 'İş seçilmedi'}</h2>
+              </div>
+              <button onClick={() => setMobileActionsOpen(false)} className="rounded-xl border border-slate-700 px-3 py-2 text-sm">Kapat</button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button onClick={() => router.push('/dashboard/yeni-is-v3')} className="rounded-2xl bg-blue-600 px-5 py-4 font-bold">+ Yeni İş Oluştur</button>
+              <button disabled={!aktifIs} onClick={() => router.push(`/is/detay?id=${aktifIs?.id}`)} className="rounded-2xl bg-emerald-600 px-5 py-4 font-bold disabled:bg-slate-700">Satış Paneli</button>
+              <button disabled={!aktifIs} onClick={() => { setPlakaAcik(true); setMobileActionsOpen(false); }} className="rounded-2xl bg-indigo-600 px-5 py-4 font-bold disabled:bg-slate-700">Plaka Optimizasyonu</button>
+              <button disabled={!aktifIs} onClick={() => { setTahsilatDeger(String(aktifIs?.tahsilat || "")); setTahsilatAcik(true); setMobileActionsOpen(false); }} className="rounded-2xl bg-amber-600 px-5 py-4 font-bold disabled:bg-slate-700">Tahsilat</button>
+              <button disabled={!aktifIs} onClick={() => window.open(`/api/isler/${aktifIs?.id}/pdf`, "_blank")} className="rounded-2xl bg-slate-700 px-5 py-4 font-bold disabled:bg-slate-800">PDF Teklif</button>
+              <button disabled={!aktifIs?.teklifNo} onClick={aktifWhatsappGonder} className="rounded-2xl bg-green-600 px-5 py-4 font-bold disabled:opacity-40">📲 WhatsApp ile Gönder</button>
+              <button disabled={!aktifIs?.teklifNo} onClick={aktifLinkKopyala} className="rounded-2xl bg-slate-800 px-5 py-4 font-bold disabled:opacity-40">🔗 Linki Kopyala</button>
+              <button disabled={!aktifIs} onClick={aktifRevizeEt} className="rounded-2xl bg-purple-600 px-5 py-4 font-bold disabled:opacity-40">✏️ Revize Teklif</button>
+              <button disabled={!aktifIs?.teklifNo} onClick={aktifTakipMesajiKopyala} className="rounded-2xl bg-amber-600 px-5 py-4 font-bold disabled:opacity-40">⏱ Akıllı Takip Mesajı Kopyala</button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {plakaAcik && (
         <div
