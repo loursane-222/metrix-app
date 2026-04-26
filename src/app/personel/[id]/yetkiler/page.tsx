@@ -15,10 +15,10 @@ export default function YetkiPage({ params }: { params: { id: string } }) {
   const [permissions, setPermissions] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`/api/admin/menu-permissions?userId=${params.id}`)
+    fetch(`/api/admin/menu-permissions?userId=${id}`)
       .then((res) => res.json())
       .then((data) => setPermissions(data));
-  }, [params.id]);
+  }, [id]);
 
   function getPermission(menuKey: string) {
     return (
@@ -55,7 +55,7 @@ export default function YetkiPage({ params }: { params: { id: string } }) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        userId: params.id,
+        userId: id,
         permissions,
       }),
     });
