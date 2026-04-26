@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function IsDetayPage() {
+function IsDetayContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
 
@@ -293,4 +293,13 @@ export default function IsDetayPage() {
       )}
     </div>
   );
+}
+
+
+export default function IsDetayPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Yükleniyor...</div>}>
+      <IsDetayContent />
+    </Suspense>
+  )
 }
