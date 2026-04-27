@@ -14,7 +14,6 @@ type Props = {
 export default function PremiumEkstreModal({ aktif, analiz, onClose, tl, pct, musteriAdi }: Props) {
   const [pdfHazirlaniyor, setPdfHazirlaniyor] = useState(false);
   const [atolye, setAtolye] = useState<any>(null);
-  const [odemeTonu, setOdemeTonu] = useState<"yumusak" | "dengeli" | "net">("dengeli");
 
   useEffect(() => {
     fetch("/api/atolye", { cache: "no-store", credentials: "include" })
@@ -26,46 +25,19 @@ export default function PremiumEkstreModal({ aktif, analiz, onClose, tl, pct, mu
   const firmaAdi = atolye?.atolyeAdi?.trim() || "Metrix Tezgah";
   const logoUrl = atolye?.logoUrl?.trim() || "";
 
-  function formatAdSoyad(ad) {
-    if (!ad) return "";
-    return ad
-      .toLowerCase()
-      .split(" ")
-      .map(k => k.charAt(0).toUpperCase() + k.slice(1))
-      .join(" ");
-  }
-
-  function formatAdSoyad(ad: string) {
-    if (!ad) return "";
-    return ad
-      .toLocaleLowerCase("tr-TR")
-      .split(" ")
-      .filter(Boolean)
-      .map((k) => k.charAt(0).toLocaleUpperCase("tr-TR") + k.slice(1))
-      .join(" ");
-  }
-
   function aiOdemeNotu() {
     const bakiye = Number(analiz?.bakiye || 0);
-    const ad = formatAdSoyad(musteriAdi(aktif));
+    const ad = musteriAdi(aktif);
 
     if (bakiye > 0) {
-      if (odemeTonu === "yumusak") {
-        return `Sayın ${ad}, hesabınızda ${tl(bakiye)} güncel bakiye görünmektedir. Uygun olduğunuzda ödeme planınızı bizimle paylaşmanızı rica ederiz.`;
-      }
-
-      if (odemeTonu === "net") {
-        return `Sayın ${ad}, hesabınızda ${tl(bakiye)} açık bakiye bulunmaktadır. Hesap mutabakatının tamamlanabilmesi için ödeme planınızı en kısa sürede bizimle paylaşmanızı rica ederiz.`;
-      }
-
-      return `Sayın ${ad}, hesabınızda ${tl(bakiye)} güncel bakiye görünmektedir. Ödeme planınızı bizimle paylaşırsanız hesap mutabakatınızı hızlıca tamamlayabiliriz.`;
+      return `${ad} hesabınızda ${tl(bakiye)} güncel bakiye görünmektedir. Uygun olduğunuzda ödeme planınızı bizimle paylaşmanızı rica ederiz. Ödemeniz tamamlandığında sistem kayıtlarımız aynı gün güncellenecektir.`;
     }
 
     if (bakiye < 0) {
-      return `Sayın ${ad}, hesabınızda alacak bakiyesi görünmektedir. Kayıtlarımızı güncel tutmak adına gerekli mahsuplaşma için bizimle iletişime geçebilirsiniz.`;
+      return `${ad} hesabınızda alacak bakiyesi görünmektedir. Kayıtlarımızı güncel tutmak adına gerekli mahsuplaşma için bizimle iletişime geçebilirsiniz.`;
     }
 
-    return `Sayın ${ad}, hesabınız güncel olarak kapalı görünmektedir. Düzenli iş birliğiniz için teşekkür ederiz.`;
+    return `${ad} hesabınız güncel olarak kapalı görünmektedir. Düzenli iş birliğiniz için teşekkür ederiz.`;
   }
 
   const hareketler = useMemo(() => {
@@ -144,7 +116,7 @@ export default function PremiumEkstreModal({ aktif, analiz, onClose, tl, pct, mu
 
   function whatsappPaylas() {
     const mesaj = encodeURIComponent(
-      `Merhaba, ${musteriAdi(aktif)} güncel hesap ekstreniz:\n\nOnaylı Ciro: ${tl(analiz.ciro)}\nTahsilat: ${tl(analiz.tahsilat)}\nGüncel Bakiye: ${tl(analiz.bakiye)}\n\n${aiOdemeNotu()}`
+      `Merhaba, ${musteriAdi(aktif)} güncel hesap ekstreniz:\n\nOnaylı Ciro: ${tl(analiz.ciro)}\nTahsilat: ${tl(analiz.tahsilat)}\nGüncel Bakiye: ${tl(analiz.bakiye)}`
     );
     window.open(`https://wa.me/?text=${mesaj}`, "_blank");
   }
@@ -163,21 +135,6 @@ export default function PremiumEkstreModal({ aktif, analiz, onClose, tl, pct, mu
             <p className="mt-1 text-xs text-slate-400">
               Güncel bakiye, onaylı işler ve tahsilat hareketleri
             </p>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Ödeme tonu
-              </span>
-              <select
-                value={odemeTonu}
-                onChange={(e) => setOdemeTonu(e.target.value as "yumusak" | "dengeli" | "net")}
-                className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white outline-none"
-              >
-                <option value="yumusak" className="bg-slate-900">Yumuşak</option>
-                <option value="dengeli" className="bg-slate-900">Dengeli</option>
-                <option value="net" className="bg-slate-900">Net</option>
-              </select>
-            </div>
           </div>
 
           <button
