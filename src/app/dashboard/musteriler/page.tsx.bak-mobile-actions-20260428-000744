@@ -372,7 +372,7 @@ export default function MusterilerPage() {
         </div>
       </div>
 
-      <main className={`w-full md:w-[50%] px-4 pb-28 pt-[88px] md:p-6 overflow-y-auto md:overflow-hidden flex-col gap-5 ${mobileView === "detail" ? "flex" : "hidden md:flex"}`}>
+      <main className={`w-full md:w-[50%] p-4 md:p-6 overflow-y-auto md:overflow-hidden flex-col gap-5 ${mobileView === "detail" ? "flex" : "hidden md:flex"}`}>
         <div className="flex items-start justify-between gap-3">
           <button
             onClick={() => { setMobileView('list'); setActionsOpen(false) }}
@@ -388,7 +388,7 @@ export default function MusterilerPage() {
             </p>
           </div>
 
-          <div className="hidden md:flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end gap-2">
     <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${a.kategoriClass}`}>
       {a.kategori} Müşteri
     </span>
@@ -400,19 +400,6 @@ export default function MusterilerPage() {
       ✏️ Düzenle
     </button>
   </div>
-        </div>
-
-        <div className="md:hidden grid grid-cols-2 gap-3">
-          <span className={`flex items-center justify-center rounded-2xl border px-4 py-3 text-sm font-semibold ${a.kategoriClass}`}>
-            {a.kategori} Müşteri
-          </span>
-
-          <button
-            onClick={() => setYeniAcik(true)}
-            className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-white"
-          >
-            ✏️ Düzenle
-          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -496,7 +483,7 @@ export default function MusterilerPage() {
 
       <button
         onClick={() => setActionsOpen(true)}
-        className="md:hidden fixed bottom-5 right-5 z-[120] rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-[0_18px_50px_rgba(37,99,235,0.45)]"
+        className="md:hidden fixed top-4 right-4 z-[120] rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold shadow-xl"
       >
         Aksiyon
       </button>
