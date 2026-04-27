@@ -1,0 +1,33 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+type CurrentUser = {
+  userId?: string | null;
+  email?: string | null;
+  aktif?: boolean;
+};
+
+export default function AbonelikPage() {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/auth/current-user", { credentials: "include" })
+      .then(() => setLoading(false))
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#030712] text-slate-400">
+        Yükleniyor...
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen flex items-center justify-center bg-[#030712] text-white">
+      <h1>ABONELİK SAYFASI ÇALIŞIYOR</h1>
+    </div>
+  );
+}

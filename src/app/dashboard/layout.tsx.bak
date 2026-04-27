@@ -1,0 +1,20 @@
+import Sidebar from "@/components/dashboard/Sidebar";
+import DailyPlanPopup from "@/components/dashboard/DailyPlanPopup";
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-[100dvh] bg-[#0B1120] overflow-x-hidden">
+      <Sidebar />
+      <main className="min-h-[100dvh] md:ml-72 bg-[#0B1120] overflow-x-hidden">
+        <div className="min-h-[100dvh] w-full">
+          <DailyPlanPopup />
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}

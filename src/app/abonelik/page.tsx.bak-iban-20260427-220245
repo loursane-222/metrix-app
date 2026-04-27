@@ -1,0 +1,158 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+const IBAN = "TR00 0000 0000 0000 0000 0000 00";
+const ALICI = "METRIX TEZGAH";
+const FIYAT = "149 USD";
+
+export default function AbonelikPage() {
+  const [email, setEmail] = useState("");
+  const [modal, setModal] = useState(false);
+  const [copied, setCopied] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/current-user", { credentials: "include", cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setEmail(d?.email || ""))
+      .catch(() => {});
+  }, []);
+
+  async function copy(text: string, label: string) {
+    await navigator.clipboard.writeText(text);
+    setCopied(label + " kopyalandı");
+    setTimeout(() => setCopied(""), 1800);
+  }
+
+  function whatsapp() {
+    const msg = encodeURIComponent(
+      `Merhaba, Metrix aboneliğimi aktif etmek istiyorum.\n\nPaket: Premium\nTutar: ${FIYAT}\nE-posta: ${email || "-"}\n\nÖdeme yaptıktan sonra hesabımın aktif edilmesini rica ederim.`
+    );
+    window.open(`https://wa.me/?text=${msg}`, "_blank");
+  }
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    window.location.href = "/login";
+  }
+
+  return (
+    <div className="min-h-[100dvh] bg-[#030712] text-white overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.28),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.22),transparent_34%)]" />
+
+      <main className="relative z-10 mx-auto flex min-h-[100dvh] max-w-7xl items-center px-5 py-8">
+        <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <section className="rounded-[34px] border border-white/10 bg-white/[0.06] p-7 shadow-[0_30px_90px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
+            <div className="mb-6 flex items-center gap-3">
+              <img src="/icon.png" className="h-14 w-14 rounded-2xl object-cover" />
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-white/40">Metrix Tezgah</p>
+                <h1 className="text-lg font-bold">Premium Erişim Kilitli</h1>
+              </div>
+            </div>
+
+            <span className="inline-flex rounded-full border border-amber-300/20 bg-amber-400/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-amber-200">
+              Hesabın onay bekliyor
+            </span>
+
+            <h2 className="mt-6 max-w-3xl text-4xl font-black leading-[1.05] sm:text-5xl">
+              Metrix’i aktif kullanmak için aboneliğini başlat.
+            </h2>
+
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
+              Teklif, müşteri, iş programı, maliyet ve tahsilat modüllerini kullanabilmek için ödeme sonrası hesabın admin tarafından aktif edilir.
+            </p>
+
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              {[
+                "WhatsApp’tan teklif onaylama",
+                "AI destekli satış onaylatma",
+                "PDF teklif ve müşteri takibi",
+                "Günlük iş programı ve operasyon kontrolü",
+                "Maliyet, kâr ve tahsilat yönetimi",
+                "Mobil ve masaüstü premium kullanım",
+              ].map((x) => (
+                <div key={x} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300">✓</span>
+                  <span>{x}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button onClick={() => setModal(true)} className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-7 py-4 text-sm font-black shadow-[0_18px_50px_rgba(37,99,235,0.35)]">
+                Aboneliği Aç
+              </button>
+              <button onClick={logout} className="rounded-2xl border border-white/10 bg-white/5 px-7 py-4 text-sm font-semibold text-slate-200">
+                Çıkış Yap
+              </button>
+            </div>
+
+            <p className="mt-5 text-xs text-slate-500">Giriş yapan hesap: {email || "—"}</p>
+          </section>
+
+          <aside className="rounded-[34px] border border-white/10 bg-[#08111f]/85 p-7 shadow-[0_30px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-200">Tek Paket</p>
+            <div className="mt-5 flex items-end gap-2">
+              <span className="text-6xl font-black">149$</span>
+              <span className="mb-2 text-sm text-slate-400">/ ay</span>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-300">
+              Mermer ve porselen tezgah atölyeleri için operasyon, satış ve kârlılık kontrol sistemi.
+            </p>
+            <button onClick={() => setModal(true)} className="mt-7 w-full rounded-2xl bg-white px-5 py-4 text-sm font-black text-slate-950">
+              Ödeme Bilgilerini Göster
+            </button>
+            <p className="mt-4 text-xs leading-5 text-slate-500">
+              Ödeme sonrası hesabın admin panelinden aktif edilir.
+            </p>
+          </aside>
+        </div>
+      </main>
+
+      {modal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[30px] border border-white/10 bg-[#0B1120] p-6 shadow-[0_40px_100px_rgba(0,0,0,0.6)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-blue-300">Ödeme Bilgileri</p>
+                <h3 className="mt-2 text-2xl font-black">Premium Abonelik</h3>
+              </div>
+              <button onClick={() => setModal(false)} className="rounded-xl border border-white/10 px-3 py-2 text-white/60">✕</button>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <p className="text-xs text-slate-500">Tutar</p>
+                <p className="mt-1 text-xl font-black">{FIYAT}</p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <p className="text-xs text-slate-500">Alıcı</p>
+                <div className="mt-1 flex items-center justify-between gap-3">
+                  <p className="font-bold">{ALICI}</p>
+                  <button onClick={() => copy(ALICI, "Alıcı")} className="text-xs text-blue-300">Kopyala</button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <p className="text-xs text-slate-500">IBAN</p>
+                <div className="mt-1 flex items-center justify-between gap-3">
+                  <p className="break-all font-mono text-sm font-bold">{IBAN}</p>
+                  <button onClick={() => copy(IBAN, "IBAN")} className="shrink-0 text-xs text-blue-300">Kopyala</button>
+                </div>
+              </div>
+
+              {copied && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{copied}</div>}
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button onClick={whatsapp} className="rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-bold">WhatsApp ile Paylaş</button>
+              <button onClick={() => setModal(false)} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-semibold">Kapat</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
