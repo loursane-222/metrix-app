@@ -5,33 +5,6 @@ import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 import { PlakaPlanlayiciV2 } from '@/components/plaka-planlayici/PlakaPlanlayiciV2'
 
-
-function whatsappTeklifGonder(is) {
-  if (!is?.musteriTelefonu) {
-    alert("Müşteri telefon numarası yok.");
-    return;
-  }
-
-  // telefon temizleme
-  let phone = is.musteriTelefonu.replace(/\D/g, "");
-  if (phone.startsWith("0")) phone = "90" + phone.slice(1);
-  if (!phone.startsWith("90")) phone = "90" + phone;
-
-  const teklifLink = `${window.location.origin}/teklif/${is.teklifNo}`;
-
-  const mesaj = `Merhaba ${is.musteriAdi || ""},
-
-Sizin için hazırladığımız teklifi aşağıdaki linkten inceleyebilirsiniz:
-
-${teklifLink}
-
-Herhangi bir sorunuz olursa memnuniyetle yardımcı olurum.`;
-
-  const url = `https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}`;
-
-  window.open(url, "_blank");
-}
-
 export default function IslerPage() {
   const router = useRouter()
 
