@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import PushPermission from '@/components/push/PushPermission'
+
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const router = useRouter();
@@ -100,7 +102,9 @@ export default function DashboardPage() {
 
       {/* DESKTOP DASHBOARD */}
       <div className="hidden md:flex min-h-screen w-full bg-[#030712] text-slate-200 p-6 flex-col gap-6">
-        <div className="grid grid-cols-4 gap-4">
+        <PushPermission />
+
+<div className="grid grid-cols-4 gap-4">
           <div className="bg-[#0B1120] p-5 rounded-xl border border-slate-800">
             <p className="text-xs text-slate-400">Toplam Ciro</p>
             <p className="text-2xl">{data.finans.toplamCiro.toLocaleString("tr-TR")}₺</p>
@@ -124,7 +128,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-12 gap-6 flex-1">
+        <PushPermission />
+
+<div className="grid grid-cols-12 gap-6 flex-1">
           <div className="col-span-5 bg-[#0B1120] p-6 rounded-xl border border-slate-800">
             <h2 className="text-sm text-slate-400 mb-4">Kapanabilir Teklifler</h2>
 
