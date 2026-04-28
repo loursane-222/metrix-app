@@ -19,48 +19,28 @@ export async function GET() {
     );
 
     const { payload } = await jwtVerify(token, secret);
-    const role = (payload as any).role || "admin";
-
-    if (role === "personel") {
-      return NextResponse.json({
-        userId: (payload as any).id,
-        email: (payload as any).email,
-        role,
-        personelId: (payload as any).personelId || null,
-        atolyeId: (payload as any).atolyeId || null,
-        aktif: true,
-      });
-    }
 
     const user = await prisma.user.findUnique({
       where: { id: payload.id as string },
-      include: { atolye: true },
+      select: {
+        id: true,
+        email: true,
+        aktif: true,
+        abonelikBitis: true
+      }
     });
 
     if (!user) {
       return NextResponse.json({ userId: null }, { status: 401 });
     }
 
-    let atolye = user.atolye;
-
-    if (!atolye) {
-      atolye = await prisma.atolye.create({
-        data: {
-          userId: user.id,
-          atolyeAdi: user.ad ? `${user.ad} Atölyesi` : "Yeni Atölye",
-          email: user.email,
-        },
-      });
-    }
-
     return NextResponse.json({
       userId: user.id,
       email: user.email,
-      role: "admin",
       aktif: user.aktif,
-      abonelikBitis: user.abonelikBitis,
-      atolyeId: atolye.id,
+      abonelikBitis: user.abonelikBitis
     });
+
   } catch (e) {
     console.error("current-user error:", e);
     return NextResponse.json({ userId: null }, { status: 401 });

@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
 
     const sifreliParola = await bcrypt.hash(password, 10)
 
+    // 30 günlük deneme süresi
     const abonelikBitis = new Date()
     abonelikBitis.setDate(abonelikBitis.getDate() + 30)
 
@@ -31,21 +32,13 @@ export async function POST(req: NextRequest) {
         ad,
         email,
         password: sifreliParola,
-        aktif: true,
+        aktif: false,
         abonelikBitis,
-        atolye: {
-          create: {
-            atolyeAdi: ad ? `${ad} Atölyesi` : 'Yeni Atölye',
-            email,
-          },
-        },
       },
-      include: { atolye: true },
     })
 
     return NextResponse.json({ mesaj: 'Kayıt başarılı!', kullaniciId: kullanici.id })
-  } catch (e: any) {
-    console.error('REGISTER ERROR:', e)
-    return NextResponse.json({ hata: e?.message || 'Bir hata oluştu.' }, { status: 500 })
+  } catch {
+    return NextResponse.json({ hata: 'Bir hata oluştu.' }, { status: 500 })
   }
 }
