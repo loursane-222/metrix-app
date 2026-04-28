@@ -1,8 +1,18 @@
 'use client'
 
+async function safeJsonResponse(res) {
+  try {
+    const text = await res.text()
+    if (!text) return {}
+    return JSON.parse(text)
+  } catch {
+    return {}
+  }
+}
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import html2pdf from 'html2pdf.js'
+import PremiumEkstreModal from '@/components/musteriler/PremiumEkstreModal'
 
 function tl(v: any) {
   const n = Number(v || 0)
@@ -21,12 +31,13 @@ function pct(v: any) {
 }
 
 function musteriAdi(m: any) {
-  return (m?.firmaAdi || 'İsimsiz Müşteri') || [m?.ad, m?.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'
+  if (!m) return 'Müşteri yok'
+  return m?.firmaAdi || [m?.ad, m?.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'
 }
 
 function analiz(m: any) {
   const isler = m?.isler || []
-  const tahsilatlar = (m?.tahsilatlar || [])
+  const tahsilatlar = m?.tahsilatlar || []
 
   const teklifSayisi = isler.length
   const onayli = isler.filter((i: any) => i.durum === 'onaylandi')
@@ -37,8 +48,8 @@ function analiz(m: any) {
   const kayipSayisi = kayip.length
   const bekleyenSayisi = bekleyen.length
 
-  const ciro = onayli.reduce?.((a: number, i: any) => a + Number(i.satisFiyati || 0), 0)
-  const tahsilat = tahsilatlar.reduce?.((a: number, t: any) => a + Number(t.tutar || 0), 0)
+  const ciro = onayli.reduce((a: number, i: any) => a + Number(i.satisFiyati || 0), 0)
+  const tahsilat = tahsilatlar.reduce((a: number, t: any) => a + Number(t.tutar || 0), 0)
 
   const acilis = Number(m?.acilisBakiyesi || 0) * (m?.bakiyeTipi === 'alacak' ? -1 : 1)
   const bakiye = ciro - tahsilat + acilis
@@ -120,14 +131,14 @@ export default function MusterilerPage() {
 
   async function listeYukle(secilecekId?: string) {
     const r = await fetch('/api/musteriler')
-    const d = await r.json()
-    const liste = d.musteriler || []
+    const d = await safeJsonResponse(r)
+    const liste = (d.musteriler || []).filter(Boolean)
     setMusteriler(liste)
 
     if (secilecekId) {
-      setAktif(liste.find((m: any) => m?.id === secilecekId) || liste[0] || null)
+      setAktif(liste.find((m: any) => m.id === secilecekId) || liste[0] || null)
     } else {
-      setAktif((prev: any) => prev ? liste.find((m: any) => m?.id === prev.id) || liste[0] || null : liste[0] || null)
+      setAktif((prev: any) => prev ? liste.find((m: any) => m.id === prev.id) || liste[0] || null : liste[0] || null)
     }
   }
 
@@ -155,7 +166,7 @@ export default function MusterilerPage() {
         body: formData,
       })
 
-      const json = await res.json()
+      const json = await safeJsonResponse(res)
 
       if (!res.ok) {
         const detay = Array.isArray(json.hatalar) && json.hatalar.length > 0
@@ -181,7 +192,7 @@ export default function MusterilerPage() {
   }
 
   async function tahsilatKaydet() {
-    if (!tahsilatForm?.tutar) {
+    if (!tahsilatForm.tutar) {
       alert('Tutar gir.')
       return
     }
@@ -191,10 +202,10 @@ export default function MusterilerPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         musteriId: aktif.id,
-        tutar: Number(tahsilatForm?.tutar),
-        tur: tahsilatForm?.tur,
-        tarih: tahsilatForm?.tarih,
-        personelId: tahsilatForm?.personelId
+        tutar: Number(tahsilatForm.tutar),
+        tur: tahsilatForm.tur,
+        tarih: tahsilatForm.tarih,
+        personelId: tahsilatForm.personelId
       })
     })
 
@@ -212,7 +223,7 @@ export default function MusterilerPage() {
   async function yeniMusteriKaydet(e: React.FormEvent) {
     e.preventDefault()
 
-    if (!for(m?.firmaAdi || 'İsimsiz Müşteri').trim() && !form?.ad.trim()) {
+    if (!form.firmaAdi.trim() && !form.ad.trim()) {
       alert('Firma adı veya ad girmelisin.')
       return
     }
@@ -225,11 +236,11 @@ export default function MusterilerPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          acilisBakiyesi: Number(form?.acilisBakiyesi || 0),
+          acilisBakiyesi: Number(form.acilisBakiyesi || 0),
         }),
       })
 
-      const json = await res.json()
+      const json = await safeJsonResponse(res)
 
       if (!res.ok) {
         alert(json.hata || json.error || 'Müşteri oluşturulamadı.')
@@ -259,11 +270,11 @@ export default function MusterilerPage() {
 
     return musteriler.filter((m) => {
       return [
-        (m?.firmaAdi || 'İsimsiz Müşteri'),
-        m?.ad,
-        m?.soyad,
-        m?.telefon,
-        m?.email,
+        m.firmaAdi,
+        m.ad,
+        m.soyad,
+        m.telefon,
+        m.email,
       ].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR').includes(q)
     })
   }, [musteriler, arama])
@@ -295,120 +306,16 @@ export default function MusterilerPage() {
     }
   }, [musteriler])
 
-  const a = aktif ? analiz(aktif) : null
+  const a = aktif ? analiz(aktif) : { teklifSayisi:0,onaySayisi:0,kayipSayisi:0,bekleyenSayisi:0,ciro:0,tahsilat:0,bakiye:0,onayOrani:0,tahsilatOrani:0,kategori:'Yeni',kategoriClass:'',risk:'' }
 
-  function pdfIndir() {
-    const el = document.getElementById("ekstre-pdf")
-    if (!el) return
+  // müşteri yoksa sayfayı kesme, sadece boş liste göster
 
-    html2pdf().from(el).save("ekstre.pdf")
-  }
-
-  function whatsappGonder() {
-    const mesaj = encodeURIComponent(
-      `${musteriAdi(aktif)} için güncel ekstre:
-
-Ciro: ${tl(a.ciro)}
-Tahsilat: ${tl(a.tahsilat)}
-Bakiye: ${tl(a.bakiye)}`
-    )
-    window.open(`https://wa.me/?text=${mesaj}`, "_blank")
-  }
-
-
-  if (!aktif || !a) {
-    return (
-
-{ekstreAcik && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-[#0B1120] p-6 rounded-2xl w-full max-w-lg">
-
-      <div id="ekstre-pdf">
-
-        <h2 className="text-xl font-bold mb-4">Müşteri Ekstresi</h2>
-
-        <p><b>{musteriAdi(aktif)}</b></p>
-
-        <div className="mt-4 space-y-2">
-          <p>Ciro: {tl(a.ciro)}</p>
-          <p>Tahsilat: {tl(a.tahsilat)}</p>
-          <p>Bakiye: {tl(a.bakiye)}</p>
-        </div>
-
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button onClick={pdfIndir} className="bg-blue-600 py-3 rounded-xl font-bold">
-          PDF indir
-        </button>
-
-        <button onClick={whatsappGonder} className="bg-emerald-600 py-3 rounded-xl font-bold">
-          WhatsApp gönder
-        </button>
-      </div>
-
-      <button
-        onClick={() => setEkstreAcik(false)}
-        className="mt-4 w-full border border-white/10 py-3 rounded-xl"
-      >
-        kapat
-      </button>
-
-    </div>
-  </div>
-)}
-
-      <div className="h-screen bg-[#030712] text-white flex items-center justify-center">
-        Müşteri bulunamadı.
-      </div>
-    )
-  }
 
   return (
-
-{ekstreAcik && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-[#0B1120] p-6 rounded-2xl w-full max-w-lg">
-
-      <div id="ekstre-pdf">
-
-        <h2 className="text-xl font-bold mb-4">Müşteri Ekstresi</h2>
-
-        <p><b>{musteriAdi(aktif)}</b></p>
-
-        <div className="mt-4 space-y-2">
-          <p>Ciro: {tl(a.ciro)}</p>
-          <p>Tahsilat: {tl(a.tahsilat)}</p>
-          <p>Bakiye: {tl(a.bakiye)}</p>
-        </div>
-
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button onClick={pdfIndir} className="bg-blue-600 py-3 rounded-xl font-bold">
-          PDF indir
-        </button>
-
-        <button onClick={whatsappGonder} className="bg-emerald-600 py-3 rounded-xl font-bold">
-          WhatsApp gönder
-        </button>
-      </div>
-
-      <button
-        onClick={() => setEkstreAcik(false)}
-        className="mt-4 w-full border border-white/10 py-3 rounded-xl"
-      >
-        kapat
-      </button>
-
-    </div>
-  </div>
-)}
-
     <div className="relative h-screen flex bg-[#030712] text-white overflow-hidden w-full max-w-full overflow-x-hidden">
 
       <div className={`w-full md:w-[25%] border-r border-slate-800 flex-col ${mobileView === "list" ? "flex" : "hidden md:flex"}`}>
-        <div className="border-b border-slate-800 px-5 pb-5 pt-[104px] md:p-5">
+        <div className="p-5 border-b border-slate-800">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">CRM</p>
           <h1 className="text-2xl mt-2">Müşteriler</h1>
 
@@ -428,54 +335,14 @@ Bakiye: ${tl(a.bakiye)}`
         </div>
 
         <div className="overflow-y-auto flex-1 p-3 space-y-2">
-          {filtreli.map((m) => { if(!m) return null; return m => {
+          {filtreli.map((m) => {
             const ma = analiz(m)
             return (
-
-{ekstreAcik && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-[#0B1120] p-6 rounded-2xl w-full max-w-lg">
-
-      <div id="ekstre-pdf">
-
-        <h2 className="text-xl font-bold mb-4">Müşteri Ekstresi</h2>
-
-        <p><b>{musteriAdi(aktif)}</b></p>
-
-        <div className="mt-4 space-y-2">
-          <p>Ciro: {tl(a.ciro)}</p>
-          <p>Tahsilat: {tl(a.tahsilat)}</p>
-          <p>Bakiye: {tl(a.bakiye)}</p>
-        </div>
-
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button onClick={pdfIndir} className="bg-blue-600 py-3 rounded-xl font-bold">
-          PDF indir
-        </button>
-
-        <button onClick={whatsappGonder} className="bg-emerald-600 py-3 rounded-xl font-bold">
-          WhatsApp gönder
-        </button>
-      </div>
-
-      <button
-        onClick={() => setEkstreAcik(false)}
-        className="mt-4 w-full border border-white/10 py-3 rounded-xl"
-      >
-        kapat
-      </button>
-
-    </div>
-  </div>
-)}
-
               <button
-                key={m?.id}
+                key={m.id}
                 onClick={() => { setAktif(m); setMobileView('detail') }}
                 className={`w-full text-left rounded-xl border p-4 transition ${
-                  aktif?.id === m?.id
+                  aktif?.id === m.id
                     ? 'bg-[#111827] border-blue-500/50'
                     : 'bg-[#0B1120] border-slate-800 hover:bg-[#111827]'
                 }`}
@@ -511,13 +378,13 @@ Bakiye: ${tl(a.bakiye)}`
         </div>
       </div>
 
-      <main className={`w-full md:w-[50%] px-4 pb-10 pt-[104px] md:p-6 overflow-y-auto md:overflow-hidden flex-col gap-5 ${mobileView === "detail" ? "flex" : "hidden md:flex"}`}>
+      <main className={`w-full md:w-[50%] px-4 pb-28 pt-[88px] md:p-6 overflow-y-auto md:overflow-hidden flex-col gap-5 ${mobileView === "detail" ? "flex" : "hidden md:flex"}`}>
         <div className="flex items-start justify-between gap-3">
           <button
             onClick={() => { setMobileView('list'); setActionsOpen(false) }}
-            className="md:hidden shrink-0 rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold text-white"
+            className="md:hidden shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-sm text-white"
           >
-            ← Liste
+            ←
           </button>
           <div className="min-w-0 flex-1">
             <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Müşteri Detayı</p>
@@ -539,6 +406,19 @@ Bakiye: ${tl(a.bakiye)}`
       ✏️ Düzenle
     </button>
   </div>
+        </div>
+
+        <div className="md:hidden grid grid-cols-2 gap-3">
+          <span className={`flex items-center justify-center rounded-2xl border px-4 py-3 text-sm font-semibold ${a.kategoriClass}`}>
+            {a.kategori} Müşteri
+          </span>
+
+          <button
+            onClick={() => setYeniAcik(true)}
+            className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-white"
+          >
+            ✏️ Düzenle
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -622,7 +502,7 @@ Bakiye: ${tl(a.bakiye)}`
 
       <button
         onClick={() => setActionsOpen(true)}
-        className="md:hidden fixed right-4 top-[calc(env(safe-area-inset-top)+92px)] z-[120] rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold shadow-xl"
+        className="md:hidden fixed bottom-5 right-5 z-[120] rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-[0_18px_50px_rgba(37,99,235,0.45)]"
       >
         Aksiyon
       </button>
@@ -718,6 +598,17 @@ Bakiye: ${tl(a.bakiye)}`
         </div>
       </aside>
 
+      {ekstreAcik && (
+        <PremiumEkstreModal
+          aktif={aktif}
+          analiz={a}
+          onClose={() => setEkstreAcik(false)}
+          tl={tl}
+          pct={pct}
+          musteriAdi={musteriAdi}
+        />
+      )}
+
       {tahsilatAcik && (
   <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4">
     <div className="w-full max-w-md bg-[#0B1120] border border-slate-800 rounded-2xl p-6">
@@ -726,13 +617,13 @@ Bakiye: ${tl(a.bakiye)}`
 
       <input
         placeholder="Tutar"
-        value={tahsilatForm?.tutar}
+        value={tahsilatForm.tutar}
         onChange={(e) => setTahsilatForm({...tahsilatForm, tutar: e.target.value})}
         className="w-full mb-3 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
       />
 
       <select
-        value={tahsilatForm?.tur}
+        value={tahsilatForm.tur}
         onChange={(e) => setTahsilatForm({...tahsilatForm, tur: e.target.value})}
         className="w-full mb-3 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
       >
@@ -744,7 +635,7 @@ Bakiye: ${tl(a.bakiye)}`
       <div className="relative mb-3">
       <input
         type="date"
-        value={tahsilatForm?.tarih}
+        value={tahsilatForm.tarih}
         onChange={(e) => setTahsilatForm({...tahsilatForm, tarih: e.target.value})}
         className="w-full px-4 py-3 pr-12 bg-[#111827] border border-slate-700 rounded-xl"
       />
@@ -762,7 +653,7 @@ Bakiye: ${tl(a.bakiye)}`
     </div>
 
       <select
-        value={tahsilatForm?.personelId}
+        value={tahsilatForm.personelId}
         onChange={(e) => setTahsilatForm({...tahsilatForm, personelId: e.target.value})}
         className="w-full mb-4 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
       >
@@ -808,17 +699,17 @@ Bakiye: ${tl(a.bakiye)}`
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Firma Adı" value={for(m?.firmaAdi || 'İsimsiz Müşteri')} onChange={(v: string) => setForm({ ...form, firmaAdi: v })} />
-              <Input label="Telefon" value={form?.telefon} onChange={(v: string) => setForm({ ...form, telefon: v })} />
-              <Input label="Ad" value={form?.ad} onChange={(v: string) => setForm({ ...form, ad: v })} />
-              <Input label="Soyad" value={form?.soyad} onChange={(v: string) => setForm({ ...form, soyad: v })} />
-              <Input label="E-posta" value={form?.email} onChange={(v: string) => setForm({ ...form, email: v })} />
-              <Input label="Açılış Bakiyesi" value={form?.acilisBakiyesi} onChange={(v: string) => setForm({ ...form, acilisBakiyesi: v })} />
+              <Input label="Firma Adı" value={form.firmaAdi} onChange={(v: string) => setForm({ ...form, firmaAdi: v })} />
+              <Input label="Telefon" value={form.telefon} onChange={(v: string) => setForm({ ...form, telefon: v })} />
+              <Input label="Ad" value={form.ad} onChange={(v: string) => setForm({ ...form, ad: v })} />
+              <Input label="Soyad" value={form.soyad} onChange={(v: string) => setForm({ ...form, soyad: v })} />
+              <Input label="E-posta" value={form.email} onChange={(v: string) => setForm({ ...form, email: v })} />
+              <Input label="Açılış Bakiyesi" value={form.acilisBakiyesi} onChange={(v: string) => setForm({ ...form, acilisBakiyesi: v })} />
 
               <label className="block col-span-2">
                 <p className="text-xs text-slate-400 mb-2">Bakiye Tipi</p>
                 <select
-                  value={form?.bakiyeTipi}
+                  value={form.bakiyeTipi}
                   onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}
                   className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
                 >
@@ -853,46 +744,6 @@ Bakiye: ${tl(a.bakiye)}`
 
 function Input({ label, value, onChange }: any) {
   return (
-
-{ekstreAcik && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-[#0B1120] p-6 rounded-2xl w-full max-w-lg">
-
-      <div id="ekstre-pdf">
-
-        <h2 className="text-xl font-bold mb-4">Müşteri Ekstresi</h2>
-
-        <p><b>{musteriAdi(aktif)}</b></p>
-
-        <div className="mt-4 space-y-2">
-          <p>Ciro: {tl(a.ciro)}</p>
-          <p>Tahsilat: {tl(a.tahsilat)}</p>
-          <p>Bakiye: {tl(a.bakiye)}</p>
-        </div>
-
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button onClick={pdfIndir} className="bg-blue-600 py-3 rounded-xl font-bold">
-          PDF indir
-        </button>
-
-        <button onClick={whatsappGonder} className="bg-emerald-600 py-3 rounded-xl font-bold">
-          WhatsApp gönder
-        </button>
-      </div>
-
-      <button
-        onClick={() => setEkstreAcik(false)}
-        className="mt-4 w-full border border-white/10 py-3 rounded-xl"
-      >
-        kapat
-      </button>
-
-    </div>
-  </div>
-)}
-
     <label className="block">
       <p className="text-xs text-slate-400 mb-2">{label}</p>
       <input
@@ -906,46 +757,6 @@ function Input({ label, value, onChange }: any) {
 
 function MiniCard({ label, value, tone = 'text-white' }: any) {
   return (
-
-{ekstreAcik && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-[#0B1120] p-6 rounded-2xl w-full max-w-lg">
-
-      <div id="ekstre-pdf">
-
-        <h2 className="text-xl font-bold mb-4">Müşteri Ekstresi</h2>
-
-        <p><b>{musteriAdi(aktif)}</b></p>
-
-        <div className="mt-4 space-y-2">
-          <p>Ciro: {tl(a.ciro)}</p>
-          <p>Tahsilat: {tl(a.tahsilat)}</p>
-          <p>Bakiye: {tl(a.bakiye)}</p>
-        </div>
-
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button onClick={pdfIndir} className="bg-blue-600 py-3 rounded-xl font-bold">
-          PDF indir
-        </button>
-
-        <button onClick={whatsappGonder} className="bg-emerald-600 py-3 rounded-xl font-bold">
-          WhatsApp gönder
-        </button>
-      </div>
-
-      <button
-        onClick={() => setEkstreAcik(false)}
-        className="mt-4 w-full border border-white/10 py-3 rounded-xl"
-      >
-        kapat
-      </button>
-
-    </div>
-  </div>
-)}
-
     <div className="rounded-xl bg-[#0B1120] border border-slate-800 p-3">
       <p className="text-[10px] text-slate-500">{label}</p>
       <p className={`text-sm mt-1 font-semibold ${tone}`}>{value}</p>
@@ -955,46 +766,6 @@ function MiniCard({ label, value, tone = 'text-white' }: any) {
 
 function BigCard({ label, value, tone = 'text-white' }: any) {
   return (
-
-{ekstreAcik && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-[#0B1120] p-6 rounded-2xl w-full max-w-lg">
-
-      <div id="ekstre-pdf">
-
-        <h2 className="text-xl font-bold mb-4">Müşteri Ekstresi</h2>
-
-        <p><b>{musteriAdi(aktif)}</b></p>
-
-        <div className="mt-4 space-y-2">
-          <p>Ciro: {tl(a.ciro)}</p>
-          <p>Tahsilat: {tl(a.tahsilat)}</p>
-          <p>Bakiye: {tl(a.bakiye)}</p>
-        </div>
-
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button onClick={pdfIndir} className="bg-blue-600 py-3 rounded-xl font-bold">
-          PDF indir
-        </button>
-
-        <button onClick={whatsappGonder} className="bg-emerald-600 py-3 rounded-xl font-bold">
-          WhatsApp gönder
-        </button>
-      </div>
-
-      <button
-        onClick={() => setEkstreAcik(false)}
-        className="mt-4 w-full border border-white/10 py-3 rounded-xl"
-      >
-        kapat
-      </button>
-
-    </div>
-  </div>
-)}
-
     <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
       <p className="text-xs text-slate-400">{label}</p>
       <p className={`text-2xl mt-3 font-semibold ${tone}`}>{value}</p>
@@ -1006,46 +777,6 @@ function Progress({ label, value }: any) {
   const safe = Math.max(0, Math.min(100, Number(value || 0)))
 
   return (
-
-{ekstreAcik && (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div className="bg-[#0B1120] p-6 rounded-2xl w-full max-w-lg">
-
-      <div id="ekstre-pdf">
-
-        <h2 className="text-xl font-bold mb-4">Müşteri Ekstresi</h2>
-
-        <p><b>{musteriAdi(aktif)}</b></p>
-
-        <div className="mt-4 space-y-2">
-          <p>Ciro: {tl(a.ciro)}</p>
-          <p>Tahsilat: {tl(a.tahsilat)}</p>
-          <p>Bakiye: {tl(a.bakiye)}</p>
-        </div>
-
-      </div>
-
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button onClick={pdfIndir} className="bg-blue-600 py-3 rounded-xl font-bold">
-          PDF indir
-        </button>
-
-        <button onClick={whatsappGonder} className="bg-emerald-600 py-3 rounded-xl font-bold">
-          WhatsApp gönder
-        </button>
-      </div>
-
-      <button
-        onClick={() => setEkstreAcik(false)}
-        className="mt-4 w-full border border-white/10 py-3 rounded-xl"
-      >
-        kapat
-      </button>
-
-    </div>
-  </div>
-)}
-
     <div>
       <div className="flex justify-between text-xs mb-2">
         <span className="text-slate-400">{label}</span>
