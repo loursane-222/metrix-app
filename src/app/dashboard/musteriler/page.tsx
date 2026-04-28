@@ -603,7 +603,7 @@ Detaylar için bizimle iletişime geçebilirsiniz.`
 
   return (
     <main className="min-h-screen bg-[#030712] text-white pt-16 lg:pt-0">
-      <div className="mx-auto max-w-[1920px] px-3 py-3 lg:h-screen lg:overflow-hidden">
+      <div className="mx-auto max-w-none px-3 py-3 lg:h-screen lg:overflow-hidden">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-emerald-300/80">Metrix CRM</p>
@@ -618,7 +618,7 @@ Detaylar için bizimle iletişime geçebilirsiniz.`
           </div>
         </div>
 
-        <div className="grid gap-3 lg:h-[calc(100vh-118px)] lg:grid-cols-[280px_minmax(0,1fr)_250px] xl:grid-cols-[300px_minmax(0,1fr)_270px] 2xl:grid-cols-[320px_minmax(0,1fr)_290px]">
+        <div className="grid gap-2 lg:h-[calc(100vh-118px)] lg:grid-cols-[260px_minmax(0,1fr)_235px] xl:grid-cols-[280px_minmax(0,1fr)_250px] 2xl:grid-cols-[300px_minmax(0,1fr)_270px]">
           <Card className="flex min-h-[520px] flex-col overflow-hidden lg:min-h-0">
             <div className="border-b border-white/10 p-4">
               <div className="flex items-center justify-between gap-3">
@@ -667,7 +667,7 @@ Detaylar için bizimle iletişime geçebilirsiniz.`
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">{musteriAdi(m)}</p>
                           <p className="mt-1 truncate text-xs text-slate-500">{m.telefon || m.email || 'İletişim bilgisi yok'}</p>
                         </div>
@@ -698,37 +698,37 @@ Detaylar için bizimle iletişime geçebilirsiniz.`
               </div>
             ) : (
               <div className="grid h-full grid-rows-[auto_auto_auto_1fr] gap-2">
-                <div className="flex flex-col gap-2 rounded-3xl border border-white/10 bg-black/20 p-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
+                <div className="flex min-w-0 flex-col gap-2 rounded-3xl border border-white/10 bg-black/20 p-3 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs uppercase tracking-[0.24em] text-emerald-300/80">Seçili müşteri</p>
                     <h2 className="mt-1 truncate text-xl xl:text-2xl font-semibold">{musteriAdi(aktif)}</h2>
                     <p className="mt-1 truncate text-sm text-slate-400">{[aktif.telefon, aktif.email].filter(Boolean).join(' · ') || 'İletişim bilgisi yok'}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <button onClick={() => setEkstreAcik(true)} className="rounded-2xl border border-blue-400/30 bg-blue-400/10 px-4 py-2 text-sm font-semibold text-blue-200">
+                    <button onClick={() => setEkstreAcik(true)} className="shrink-0 rounded-2xl border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-xs xl:text-sm font-semibold text-blue-200">
                       PDF Ekstre
                     </button>
-                    <button onClick={duzenleAc} className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold">
+                    <button onClick={duzenleAc} className="shrink-0 rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-xs xl:text-sm font-semibold">
                       Düzenle
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
                   <MiniStat label="Toplam Verilen Teklif" value={a.teklifSayisi} />
                   <MiniStat label="Teklif Cirosu" value={tl(a.verilenTeklifCiro)} tone="text-blue-300" />
                   <MiniStat label="Onaylanan Teklif" value={a.onaySayisi} tone="text-emerald-300" />
                   <MiniStat label="Onaylı Ciro" value={tl(a.onayliCiro)} tone="text-emerald-300" />
                 </div>
 
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
                   <MiniStat label="Onay Yüzdesi" value={pct(a.onayOrani)} tone="text-blue-300" />
                   <MiniStat label="Tahsilat" value={tl(a.tahsilat)} tone="text-emerald-300" />
                   <MiniStat label="Tahsilat Oranı" value={pct(a.tahsilatOrani)} tone="text-purple-300" />
                   <MiniStat label="Bakiye" value={tl(a.bakiye)} tone={a.bakiye > 0 ? 'text-amber-300' : 'text-emerald-300'} />
                 </div>
 
-                <div className="grid min-h-0 gap-2 xl:grid-cols-[0.9fr_1.1fr]">
+                <div className="grid min-h-0 gap-2 xl:grid-cols-[0.82fr_1.18fr]">
                   <div className="rounded-3xl border border-white/10 bg-black/20 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -752,7 +752,7 @@ Detaylar için bizimle iletişime geçebilirsiniz.`
                       </div>
                       <button
                         onClick={() => router.push(`/dashboard/yeni-is-v3?musteriId=${aktif.id}&musteriAdi=${encodeURIComponent(musteriAdi(aktif))}`)}
-                        className="rounded-2xl bg-emerald-500 px-3 py-2 text-xs font-bold text-slate-950"
+                        className="shrink-0 rounded-2xl bg-emerald-500 px-2.5 py-2 text-[11px] font-bold text-slate-950"
                       >
                         Teklif aç
                       </button>
@@ -781,7 +781,7 @@ Detaylar için bizimle iletişime geçebilirsiniz.`
             )}
           </Card>
 
-          <Card className="p-3 lg:overflow-y-auto">
+          <Card className="p-2.5 lg:overflow-y-auto">
             <div className="space-y-3">
               <button onClick={yeniAc} className="w-full rounded-2xl bg-emerald-500 px-4 py-3 text-left font-bold text-slate-950 shadow-lg shadow-emerald-500/10">
                 + Yeni Müşteri
