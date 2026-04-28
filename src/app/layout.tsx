@@ -1,3 +1,4 @@
+import PushPermission from "@/components/push/PushPermission";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -31,6 +32,7 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
+              <PushPermission />
       </body>
     </html>
   );
