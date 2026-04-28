@@ -21,12 +21,13 @@ function pct(v: any) {
 }
 
 function musteriAdi(m: any) {
-  return (m?.firmaAdi || 'İsimsiz Müşteri') || [m?.ad, m?.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'
+  if (!m) return 'İsimsiz müşteri'
+  return m?.firmaAdi || [m?.ad, m?.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'
 }
 
 function analiz(m: any) {
   const isler = m?.isler || []
-  const tahsilatlar = (m?.tahsilatlar || [])
+  const tahsilatlar = m?.tahsilatlar || []
 
   const teklifSayisi = isler.length
   const onayli = isler.filter((i: any) => i.durum === 'onaylandi')
@@ -37,8 +38,8 @@ function analiz(m: any) {
   const kayipSayisi = kayip.length
   const bekleyenSayisi = bekleyen.length
 
-  const ciro = onayli.reduce?.((a: number, i: any) => a + Number(i.satisFiyati || 0), 0)
-  const tahsilat = tahsilatlar.reduce?.((a: number, t: any) => a + Number(t.tutar || 0), 0)
+  const ciro = onayli.reduce((a: number, i: any) => a + Number(i.satisFiyati || 0), 0)
+  const tahsilat = tahsilatlar.reduce((a: number, t: any) => a + Number(t.tutar || 0), 0)
 
   const acilis = Number(m?.acilisBakiyesi || 0) * (m?.bakiyeTipi === 'alacak' ? -1 : 1)
   const bakiye = ciro - tahsilat + acilis
@@ -121,13 +122,13 @@ export default function MusterilerPage() {
   async function listeYukle(secilecekId?: string) {
     const r = await fetch('/api/musteriler')
     const d = await r.json()
-    const liste = d.musteriler || []
+    const liste = Array.isArray(d.musteriler) ? d.musteriler.filter(Boolean) : []
     setMusteriler(liste)
 
     if (secilecekId) {
-      setAktif(liste.find((m: any) => m?.id === secilecekId) || liste[0] || null)
+      setAktif(liste.find((m: any) => m.id === secilecekId) || liste[0] || null)
     } else {
-      setAktif((prev: any) => prev ? liste.find((m: any) => m?.id === prev.id) || liste[0] || null : liste[0] || null)
+      setAktif((prev: any) => prev ? liste.find((m: any) => m.id === prev.id) || liste[0] || null : liste[0] || null)
     }
   }
 
@@ -181,7 +182,7 @@ export default function MusterilerPage() {
   }
 
   async function tahsilatKaydet() {
-    if (!tahsilatForm?.tutar) {
+    if (!tahsilatForm.tutar) {
       alert('Tutar gir.')
       return
     }
@@ -191,10 +192,10 @@ export default function MusterilerPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         musteriId: aktif.id,
-        tutar: Number(tahsilatForm?.tutar),
-        tur: tahsilatForm?.tur,
-        tarih: tahsilatForm?.tarih,
-        personelId: tahsilatForm?.personelId
+        tutar: Number(tahsilatForm.tutar),
+        tur: tahsilatForm.tur,
+        tarih: tahsilatForm.tarih,
+        personelId: tahsilatForm.personelId
       })
     })
 
@@ -212,7 +213,7 @@ export default function MusterilerPage() {
   async function yeniMusteriKaydet(e: React.FormEvent) {
     e.preventDefault()
 
-    if (!for(m?.firmaAdi || 'İsimsiz Müşteri').trim() && !form?.ad.trim()) {
+    if (!form.firmaAdi.trim() && !form.ad.trim()) {
       alert('Firma adı veya ad girmelisin.')
       return
     }
@@ -225,7 +226,7 @@ export default function MusterilerPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          acilisBakiyesi: Number(form?.acilisBakiyesi || 0),
+          acilisBakiyesi: Number(form.acilisBakiyesi || 0),
         }),
       })
 
@@ -259,11 +260,11 @@ export default function MusterilerPage() {
 
     return musteriler.filter((m) => {
       return [
-        (m?.firmaAdi || 'İsimsiz Müşteri'),
-        m?.ad,
-        m?.soyad,
-        m?.telefon,
-        m?.email,
+        m.firmaAdi,
+        m.ad,
+        m.soyad,
+        m.telefon,
+        m.email,
       ].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR').includes(q)
     })
   }, [musteriler, arama])
@@ -428,7 +429,7 @@ Bakiye: ${tl(a.bakiye)}`
         </div>
 
         <div className="overflow-y-auto flex-1 p-3 space-y-2">
-          {filtreli.map((m) => { if(!m) return null; return m => {
+          {filtreli.map((m) => {
             const ma = analiz(m)
             return (
 
@@ -472,10 +473,10 @@ Bakiye: ${tl(a.bakiye)}`
 )}
 
               <button
-                key={m?.id}
+                key={m.id}
                 onClick={() => { setAktif(m); setMobileView('detail') }}
                 className={`w-full text-left rounded-xl border p-4 transition ${
-                  aktif?.id === m?.id
+                  aktif?.id === m.id
                     ? 'bg-[#111827] border-blue-500/50'
                     : 'bg-[#0B1120] border-slate-800 hover:bg-[#111827]'
                 }`}
@@ -726,13 +727,13 @@ Bakiye: ${tl(a.bakiye)}`
 
       <input
         placeholder="Tutar"
-        value={tahsilatForm?.tutar}
+        value={tahsilatForm.tutar}
         onChange={(e) => setTahsilatForm({...tahsilatForm, tutar: e.target.value})}
         className="w-full mb-3 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
       />
 
       <select
-        value={tahsilatForm?.tur}
+        value={tahsilatForm.tur}
         onChange={(e) => setTahsilatForm({...tahsilatForm, tur: e.target.value})}
         className="w-full mb-3 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
       >
@@ -744,7 +745,7 @@ Bakiye: ${tl(a.bakiye)}`
       <div className="relative mb-3">
       <input
         type="date"
-        value={tahsilatForm?.tarih}
+        value={tahsilatForm.tarih}
         onChange={(e) => setTahsilatForm({...tahsilatForm, tarih: e.target.value})}
         className="w-full px-4 py-3 pr-12 bg-[#111827] border border-slate-700 rounded-xl"
       />
@@ -762,7 +763,7 @@ Bakiye: ${tl(a.bakiye)}`
     </div>
 
       <select
-        value={tahsilatForm?.personelId}
+        value={tahsilatForm.personelId}
         onChange={(e) => setTahsilatForm({...tahsilatForm, personelId: e.target.value})}
         className="w-full mb-4 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
       >
@@ -808,17 +809,17 @@ Bakiye: ${tl(a.bakiye)}`
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Firma Adı" value={for(m?.firmaAdi || 'İsimsiz Müşteri')} onChange={(v: string) => setForm({ ...form, firmaAdi: v })} />
-              <Input label="Telefon" value={form?.telefon} onChange={(v: string) => setForm({ ...form, telefon: v })} />
-              <Input label="Ad" value={form?.ad} onChange={(v: string) => setForm({ ...form, ad: v })} />
-              <Input label="Soyad" value={form?.soyad} onChange={(v: string) => setForm({ ...form, soyad: v })} />
-              <Input label="E-posta" value={form?.email} onChange={(v: string) => setForm({ ...form, email: v })} />
-              <Input label="Açılış Bakiyesi" value={form?.acilisBakiyesi} onChange={(v: string) => setForm({ ...form, acilisBakiyesi: v })} />
+              <Input label="Firma Adı" value={form.firmaAdi} onChange={(v: string) => setForm({ ...form, firmaAdi: v })} />
+              <Input label="Telefon" value={form.telefon} onChange={(v: string) => setForm({ ...form, telefon: v })} />
+              <Input label="Ad" value={form.ad} onChange={(v: string) => setForm({ ...form, ad: v })} />
+              <Input label="Soyad" value={form.soyad} onChange={(v: string) => setForm({ ...form, soyad: v })} />
+              <Input label="E-posta" value={form.email} onChange={(v: string) => setForm({ ...form, email: v })} />
+              <Input label="Açılış Bakiyesi" value={form.acilisBakiyesi} onChange={(v: string) => setForm({ ...form, acilisBakiyesi: v })} />
 
               <label className="block col-span-2">
                 <p className="text-xs text-slate-400 mb-2">Bakiye Tipi</p>
                 <select
-                  value={form?.bakiyeTipi}
+                  value={form.bakiyeTipi}
                   onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}
                   className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
                 >
