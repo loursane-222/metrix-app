@@ -31,7 +31,8 @@ function pct(v: any) {
 }
 
 function musteriAdi(m: any) {
-  return m.firmaAdi || [m.ad, m.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'
+  if (!m) return 'Müşteri yok'
+  return m?.firmaAdi || [m?.ad, m?.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'
 }
 
 function analiz(m: any) {
@@ -131,7 +132,7 @@ export default function MusterilerPage() {
   async function listeYukle(secilecekId?: string) {
     const r = await fetch('/api/musteriler')
     const d = await safeJsonResponse(r)
-    const liste = d.musteriler || []
+    const liste = (d.musteriler || []).filter(Boolean)
     setMusteriler(liste)
 
     if (secilecekId) {
@@ -308,10 +309,7 @@ export default function MusterilerPage() {
   const a = aktif ? analiz(aktif) : { teklifSayisi:0,onaySayisi:0,kayipSayisi:0,bekleyenSayisi:0,ciro:0,tahsilat:0,bakiye:0,onayOrani:0,tahsilatOrani:0,kategori:'Yeni',kategoriClass:'',risk:'' }
 
   // müşteri yoksa sayfayı kesme, sadece boş liste göster
-if (!aktif) {
-  console.log('müşteri yok ama sayfa çalışıyor');
-  // aktif müşteri yok ama sayfa çalışmaya devam edecek
-}
+
 
   return (
     <div className="relative h-screen flex bg-[#030712] text-white overflow-hidden w-full max-w-full overflow-x-hidden">
