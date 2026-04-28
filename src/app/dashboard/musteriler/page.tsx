@@ -307,13 +307,10 @@ export default function MusterilerPage() {
 
   const a = aktif ? analiz(aktif) : null
 
-  if (!aktif || !a) {
-    return (
-      <div className="h-screen bg-[#030712] text-white flex items-center justify-center">
-        Müşteri bulunamadı.
-      </div>
-    )
-  }
+  // müşteri yoksa sayfayı kesme, sadece boş liste göster
+if (!aktif) {
+  // aktif müşteri yok ama sayfa çalışmaya devam edecek
+}
 
   return (
     <div className="relative h-screen flex bg-[#030712] text-white overflow-hidden w-full max-w-full overflow-x-hidden">
