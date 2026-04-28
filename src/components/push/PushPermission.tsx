@@ -53,9 +53,17 @@ export default function PushPermission() {
 
       const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
 
+      await navigator.serviceWorker.ready;
+
+      if (!registration.active) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+
+      const readyRegistration = await navigator.serviceWorker.ready;
+
       const token = await getToken(messaging, {
         vapidKey: VAPID_KEY,
-        serviceWorkerRegistration: registration,
+        serviceWorkerRegistration: readyRegistration,
       });
 
       if (!token) {
