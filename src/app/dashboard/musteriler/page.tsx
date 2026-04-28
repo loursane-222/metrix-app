@@ -305,10 +305,11 @@ export default function MusterilerPage() {
     }
   }, [musteriler])
 
-  const a = aktif ? analiz(aktif) : null
+  const a = aktif ? analiz(aktif) : { teklifSayisi:0,onaySayisi:0,kayipSayisi:0,bekleyenSayisi:0,ciro:0,tahsilat:0,bakiye:0,onayOrani:0,tahsilatOrani:0,kategori:'Yeni',kategoriClass:'',risk:'' }
 
   // müşteri yoksa sayfayı kesme, sadece boş liste göster
 if (!aktif) {
+  console.log('müşteri yok ama sayfa çalışıyor');
   // aktif müşteri yok ama sayfa çalışmaya devam edecek
 }
 
