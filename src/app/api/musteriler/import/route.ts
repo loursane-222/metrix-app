@@ -13,116 +13,88 @@ async function kullaniciAl() {
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
     const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string; email: string }
+    return payload as { id: string }
   } catch {
     return null
   }
 }
 
-function metin(v: unknown) {
-  if (v === null || v === undefined) return ''
-  return String(v).trim()
+function temiz(v: any) {
+  return String(v || '').trim()
 }
 
-function sayi(v: unknown) {
+function num(v: any) {
   const n = Number(v)
-  return Number.isFinite(n) ? n : 0
+  return isNaN(n) ? 0 : n
 }
 
 export async function POST(req: NextRequest) {
   const kullanici = await kullaniciAl()
-  if (!kullanici) {
-    return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-  }
+  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz' }, { status: 401 })
 
   const atolye = await prisma.atolye.findUnique({
     where: { userId: kullanici.id }
   })
 
   if (!atolye) {
-    return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
+    return NextResponse.json({ hata: 'Atölye bulunamadı. Önce sistem girişini tamamla.' }, { status: 404 })
   }
 
   const formData = await req.formData()
   const file = formData.get('file')
 
   if (!file || !(file instanceof File)) {
-    return NextResponse.json({ hata: 'Dosya bulunamadı.' }, { status: 400 })
+    return NextResponse.json({ hata: 'Dosya yok' }, { status: 400 })
   }
 
-  const arrayBuffer = await file.arrayBuffer()
-  const uint8Array = new Uint8Array(arrayBuffer)
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await file.arrayBuffer() as any)
 
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(uint8Array as any)
+  const ws = wb.worksheets[0]
+  if (!ws) return NextResponse.json({ hata: 'Sheet yok' }, { status: 400 })
 
-  const ws = workbook.worksheets[0]
-  if (!ws) {
-    return NextResponse.json({ hata: 'Excel sayfası bulunamadı.' }, { status: 400 })
-  }
+  const headers = (ws.getRow(1).values as any[])
+    .slice(1)
+    .map(h => temiz(h).toLowerCase())
 
-  const headerRow = ws.getRow(1)
-  const headers = headerRow.values as Array<string>
-
-  const beklenen = ['firmaAdi', 'ad', 'soyad', 'telefon', 'email', 'acilisBakiyesi', 'bakiyeTipi']
-
-  const bulunan = headers.slice(1).map(h => String(h || '').trim())
-  const uygun = beklenen.every((h, i) => bulunan[i] === h)
-
-  if (!uygun) {
-    return NextResponse.json({
-      hata: 'Excel şablonu geçersiz. Lütfen sistemden indirilen şablonu kullanın.',
-      bulunanKolonlar: bulunan,
-      beklenenKolonlar: beklenen
-    }, { status: 400 })
-  }
+  // 🔥 AKILLI MAP
+  const map: any = {}
+  headers.forEach((h, i) => {
+    if (h.includes('firma')) map.firmaAdi = i + 1
+    if (h === 'ad') map.ad = i + 1
+    if (h === 'soyad') map.soyad = i + 1
+    if (h.includes('telefon')) map.telefon = i + 1
+    if (h.includes('mail')) map.email = i + 1
+    if (h.includes('bakiye')) map.acilisBakiyesi = i + 1
+    if (h.includes('tip')) map.bakiyeTipi = i + 1
+  })
 
   let eklenen = 0
   let atlanan = 0
-  const hatalar: string[] = []
+  let hatalar: string[] = []
 
-  for (let rowNumber = 2; rowNumber <= ws.rowCount; rowNumber++) {
-    const row = ws.getRow(rowNumber)
+  for (let i = 2; i <= ws.rowCount; i++) {
+    const row = ws.getRow(i)
 
-    const firmaAdi = metin(row.getCell(1).value)
-    const ad = metin(row.getCell(2).value)
-    const soyad = metin(row.getCell(3).value)
-    const telefon = metin(row.getCell(4).value)
-    const email = metin(row.getCell(5).value)
-    const acilisBakiyesi = sayi(row.getCell(6).value)
-    const bakiyeTipi = metin(row.getCell(7).value).toLowerCase()
-
-    const tamamenBos =
-      !firmaAdi && !ad && !soyad && !telefon && !email && !acilisBakiyesi && !bakiyeTipi
-
-    if (tamamenBos) {
-      continue
-    }
+    const firmaAdi = temiz(row.getCell(map.firmaAdi).value)
+    const ad = temiz(row.getCell(map.ad).value)
+    const soyad = temiz(row.getCell(map.soyad).value)
+    const telefon = temiz(row.getCell(map.telefon).value)
+    const email = temiz(row.getCell(map.email).value)
+    const bakiye = num(row.getCell(map.acilisBakiyesi).value)
+    const tip = temiz(row.getCell(map.bakiyeTipi).value).toLowerCase() || 'borc'
 
     if (!firmaAdi && !ad && !soyad) {
-      atlanan += 1
-      hatalar.push(`${rowNumber}. satır: Firma adı veya ad/soyad boş olamaz.`)
+      atlanan++
       continue
     }
 
-    if (bakiyeTipi && bakiyeTipi !== 'borc' && bakiyeTipi !== 'alacak') {
-      atlanan += 1
-      hatalar.push(`${rowNumber}. satır: bakiyeTipi sadece "borc" veya "alacak" olabilir.`)
-      continue
-    }
-
-    const mevcut = await prisma.musteri.findFirst({
-      where: {
-        atolyeId: atolye.id,
-        firmaAdi,
-        ad,
-        soyad,
-        email,
-      }
+    const varMi = await prisma.musteri.findFirst({
+      where: { atolyeId: atolye.id, firmaAdi, ad, soyad, email }
     })
 
-    if (mevcut) {
-      atlanan += 1
+    if (varMi) {
+      atlanan++
       continue
     }
 
@@ -134,18 +106,18 @@ export async function POST(req: NextRequest) {
         soyad,
         telefon,
         email,
-        acilisBakiyesi,
-        bakiyeTipi: bakiyeTipi || 'borc'
+        acilisBakiyesi: bakiye,
+        bakiyeTipi: tip === 'alacak' ? 'alacak' : 'borc'
       }
     })
 
-    eklenen += 1
+    eklenen++
   }
 
   return NextResponse.json({
-    mesaj: 'İçe aktarma tamamlandı.',
+    mesaj: 'OK',
     eklenen,
     atlanan,
-    hatalar,
+    hatalar
   })
 }
