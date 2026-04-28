@@ -17,6 +17,7 @@
     "cloudinary": "^2.9.0",
     "dayjs": "^1.11.20",
     "exceljs": "^4.4.0",
+    "firebase": "^12.12.1",
     "html2pdf.js": "^0.10.2",
     "jose": "^6.0.10",
     "jsonwebtoken": "^9.0.3",
@@ -28,7 +29,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-draggable": "^4.5.0",
-    "tailwindcss": "^3.4.19"
+    "tailwindcss": "^3.4.19",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

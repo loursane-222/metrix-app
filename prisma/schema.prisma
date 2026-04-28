@@ -17,6 +17,8 @@ model User {
   createdAt     DateTime  @default(now())
 
   atolye Atolye?
+
+  pushTokens PushToken[]
 }
 
 model Atolye {
@@ -317,4 +319,13 @@ model FazAtama {
 
   @@unique([schedulePhaseId, personelId])
   @@map("faz_atamalar")
+}
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
