@@ -1,8 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-
-async function safeJsonResponse(res: Response) {
+async function safeJsonResponse(res) {
   try {
     const text = await res.text()
     if (!text) return {}
@@ -12,14 +10,113 @@ async function safeJsonResponse(res: Response) {
   }
 }
 
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import PremiumEkstreModal from '@/components/musteriler/PremiumEkstreModal'
+
+function tl(v: any) {
+  const n = Number(v || 0)
+  return n.toLocaleString('tr-TR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }) + ' ₺'
+}
+
+function pct(v: any) {
+  const n = Number(v || 0)
+  return '%' + n.toLocaleString('tr-TR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  })
+}
+
+function musteriAdi(m: any) {
+  return m.firmaAdi || [m.ad, m.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'
+}
+
+function analiz(m: any) {
+  const isler = m?.isler || []
+  const tahsilatlar = m?.tahsilatlar || []
+
+  const teklifSayisi = isler.length
+  const onayli = isler.filter((i: any) => i.durum === 'onaylandi')
+  const kayip = isler.filter((i: any) => i.durum === 'kaybedildi')
+  const bekleyen = isler.filter((i: any) => i.durum === 'teklif_verildi')
+
+  const onaySayisi = onayli.length
+  const kayipSayisi = kayip.length
+  const bekleyenSayisi = bekleyen.length
+
+  const ciro = onayli.reduce((a: number, i: any) => a + Number(i.satisFiyati || 0), 0)
+  const tahsilat = tahsilatlar.reduce((a: number, t: any) => a + Number(t.tutar || 0), 0)
+
+  const acilis = Number(m?.acilisBakiyesi || 0) * (m?.bakiyeTipi === 'alacak' ? -1 : 1)
+  const bakiye = ciro - tahsilat + acilis
+
+  const onayOrani = teklifSayisi > 0 ? (onaySayisi / teklifSayisi) * 100 : 0
+  const tahsilatOrani = ciro > 0 ? (tahsilat / ciro) * 100 : 0
+
+  let kategori = 'Yeni'
+  let kategoriClass = 'bg-slate-500/10 text-slate-300 border-slate-500/30'
+  let risk = 'Veri az. Takip et.'
+
+  if (ciro > 150000 && tahsilatOrani >= 80 && onayOrani >= 50) {
+    kategori = 'Premium'
+    kategoriClass = 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+    risk = 'Güçlü müşteri. Öncelikli teklif ver.'
+  } else if (bakiye > 100000 && tahsilatOrani < 50) {
+    kategori = 'Riskli'
+    kategoriClass = 'bg-red-500/10 text-red-300 border-red-500/30'
+    risk = 'Tahsilat riski yüksek. Yeni işte ödeme şartı sıkı tutulmalı.'
+  } else if (onayOrani >= 40) {
+    kategori = 'Potansiyel'
+    kategoriClass = 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+    risk = 'Satış potansiyeli var. Düzenli takip edilmeli.'
+  } else if (teklifSayisi >= 3 && onayOrani < 30) {
+    kategori = 'Zor'
+    kategoriClass = 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+    risk = 'Çok teklif, düşük dönüş. Fiyat/ikna stratejisi değişmeli.'
+  }
+
+  return {
+    teklifSayisi,
+    onaySayisi,
+    kayipSayisi,
+    bekleyenSayisi,
+    ciro,
+    tahsilat,
+    bakiye,
+    onayOrani,
+    tahsilatOrani,
+    kategori,
+    kategoriClass,
+    risk,
+  }
+}
+
 export default function MusterilerPage() {
+  const router = useRouter()
+
   const [musteriler, setMusteriler] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [aktif, setAktif] = useState<any>(null)
+  const [arama, setArama] = useState('')
   const [yeniAcik, setYeniAcik] = useState(false)
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [excelYukleniyor, setExcelYukleniyor] = useState(false)
   const [excelMesaji, setExcelMesaji] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const [ekstreAcik, setEkstreAcik] = useState(false)
+
+  const [tahsilatAcik, setTahsilatAcik] = useState(false)
+  const [personeller, setPersoneller] = useState<any[]>([])
+  const [tahsilatForm, setTahsilatForm] = useState({
+    tutar: '',
+    tur: 'nakit',
+    tarih: new Date().toISOString().slice(0,10),
+    personelId: ''
+  })
 
   const [form, setForm] = useState({
     firmaAdi: '',
@@ -31,20 +128,96 @@ export default function MusterilerPage() {
     bakiyeTipi: 'borc',
   })
 
-  async function listeYukle() {
-    setLoading(true)
-    try {
-      const r = await fetch('/api/musteriler', { cache: 'no-store' })
-      const d = await safeJsonResponse(r)
-      setMusteriler(Array.isArray(d.musteriler) ? d.musteriler : [])
-    } finally {
-      setLoading(false)
+  async function listeYukle(secilecekId?: string) {
+    const r = await fetch('/api/musteriler')
+    const d = await safeJsonResponse(r)
+    const liste = d.musteriler || []
+    setMusteriler(liste)
+
+    if (secilecekId) {
+      setAktif(liste.find((m: any) => m.id === secilecekId) || liste[0] || null)
+    } else {
+      setAktif((prev: any) => prev ? liste.find((m: any) => m.id === prev.id) || liste[0] || null : liste[0] || null)
     }
   }
 
   useEffect(() => {
     listeYukle()
+
+    fetch('/api/personel')
+      .then(r => r.json())
+      .then(d => setPersoneller(d.personeller || []))
   }, [])
+
+  async function excelSecildi(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setExcelYukleniyor(true)
+    setExcelMesaji('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/musteriler/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const json = await safeJsonResponse(res)
+
+      if (!res.ok) {
+        const detay = Array.isArray(json.hatalar) && json.hatalar.length > 0
+          ? `\n\n${json.hatalar.join('\n')}`
+          : ''
+
+        setExcelMesaji(json.hata ? `${json.hata}${detay}` : 'Excel yükleme başarısız.')
+        return
+      }
+
+      const uyarilar = Array.isArray(json.hatalar) && json.hatalar.length > 0
+        ? `\n\nUyarılar:\n${json.hatalar.join('\n')}`
+        : ''
+
+      setExcelMesaji(`Excel yüklendi. Eklenen: ${json.eklenen || 0}, Atlanan: ${json.atlanan || 0}${uyarilar}`)
+      await listeYukle()
+    } catch (err: any) {
+      setExcelMesaji(err.message || 'Excel yükleme sırasında hata oluştu.')
+    } finally {
+      setExcelYukleniyor(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function tahsilatKaydet() {
+    if (!tahsilatForm.tutar) {
+      alert('Tutar gir.')
+      return
+    }
+
+    await fetch('/api/tahsilat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        musteriId: aktif.id,
+        tutar: Number(tahsilatForm.tutar),
+        tur: tahsilatForm.tur,
+        tarih: tahsilatForm.tarih,
+        personelId: tahsilatForm.personelId
+      })
+    })
+
+    setTahsilatAcik(false)
+    setTahsilatForm({
+      tutar: '',
+      tur: 'nakit',
+      tarih: new Date().toISOString().slice(0,10),
+      personelId: ''
+    })
+
+    await listeYukle(aktif.id)
+  }
 
   async function yeniMusteriKaydet(e: React.FormEvent) {
     e.preventDefault()
@@ -84,176 +257,486 @@ export default function MusterilerPage() {
         bakiyeTipi: 'borc',
       })
 
-      await listeYukle()
+      await listeYukle(json.musteri?.id)
     } finally {
       setKaydediliyor(false)
     }
   }
 
-  async function excelSecildi(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const filtreli = useMemo(() => {
+    const q = arama.toLocaleLowerCase('tr-TR').trim()
+    if (!q) return musteriler
 
-    setExcelYukleniyor(true)
-    setExcelMesaji('')
+    return musteriler.filter((m) => {
+      return [
+        m.firmaAdi,
+        m.ad,
+        m.soyad,
+        m.telefon,
+        m.email,
+      ].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR').includes(q)
+    })
+  }, [musteriler, arama])
 
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
+  const genel = useMemo(() => {
+    const toplamMusteri = musteriler.length
+    let toplamCiro = 0
+    let toplamTahsilat = 0
+    let toplamAlacak = 0
+    let toplamTeklif = 0
 
-      const res = await fetch('/api/musteriler/import', {
-        method: 'POST',
-        body: formData,
-      })
+    musteriler.forEach((m) => {
+      const a = analiz(m)
+      toplamCiro += a.ciro
+      toplamTahsilat += a.tahsilat
+      toplamAlacak += Math.max(0, a.bakiye)
+      toplamTeklif += a.teklifSayisi
+    })
 
-      const json = await safeJsonResponse(res)
+    const tahsilatOrani = toplamCiro > 0 ? (toplamTahsilat / toplamCiro) * 100 : 0
 
-      if (!res.ok) {
-        setExcelMesaji(json.hata || 'Excel yükleme başarısız.')
-        return
-      }
-
-      setExcelMesaji(`Excel yüklendi. Eklenen: ${json.eklenen || 0}, Atlanan: ${json.atlanan || 0}`)
-      await listeYukle()
-    } catch (err: any) {
-      setExcelMesaji(err.message || 'Excel yükleme sırasında hata oluştu.')
-    } finally {
-      setExcelYukleniyor(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+    return {
+      toplamMusteri,
+      toplamCiro,
+      toplamTahsilat,
+      toplamAlacak,
+      toplamTeklif,
+      tahsilatOrani,
     }
-  }
+  }, [musteriler])
+
+  const a = aktif ? analiz(aktif) : { teklifSayisi:0,onaySayisi:0,kayipSayisi:0,bekleyenSayisi:0,ciro:0,tahsilat:0,bakiye:0,onayOrani:0,tahsilatOrani:0,kategori:'Yeni',kategoriClass:'',risk:'' }
+
+  // müşteri yoksa sayfayı kesme, sadece boş liste göster
+if (!aktif) {
+  console.log('müşteri yok ama sayfa çalışıyor');
+  // aktif müşteri yok ama sayfa çalışmaya devam edecek
+}
 
   return (
-    <div className="min-h-screen bg-[#030712] text-white p-5 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-          <div>
-            <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">CRM</p>
-            <h1 className="text-2xl md:text-4xl font-semibold mt-2">Müşteriler</h1>
-            <p className="text-slate-400 mt-2">Müşteri kayıtlarını, bakiyeleri ve teklif geçmişlerini yönetin.</p>
+    <div className="relative h-screen flex bg-[#030712] text-white overflow-hidden w-full max-w-full overflow-x-hidden">
+
+      <div className={`w-full md:w-[25%] border-r border-slate-800 flex-col ${mobileView === "list" ? "flex" : "hidden md:flex"}`}>
+        <div className="p-5 border-b border-slate-800">
+          <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">CRM</p>
+          <h1 className="text-2xl mt-2">Müşteriler</h1>
+
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <MiniCard label="Müşteri" value={genel.toplamMusteri} />
+            <MiniCard label="Teklif" value={genel.toplamTeklif} />
+            <MiniCard label="Alacak" value={tl(genel.toplamAlacak)} tone="text-amber-300" />
+            <MiniCard label="Tahsilat" value={pct(genel.tahsilatOrani)} tone="text-emerald-300" />
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              onClick={() => setYeniAcik(true)}
-              className="rounded-2xl bg-white text-slate-950 px-5 py-3 font-bold hover:bg-slate-200"
-            >
-              + Yeni Müşteri
-            </button>
+          <input
+            value={arama}
+            onChange={(e) => setArama(e.target.value)}
+            placeholder="Ara..."
+            className="mt-4 w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
+          />
+        </div>
 
-            <a
-              href="/api/musteriler/sablon"
-              className="rounded-2xl border border-slate-700 px-5 py-3 font-bold text-center hover:bg-slate-900"
-            >
-              Excel Şablon İndir
-            </a>
+        <div className="overflow-y-auto flex-1 p-3 space-y-2">
+          {filtreli.map((m) => {
+            const ma = analiz(m)
+            return (
+              <button
+                key={m.id}
+                onClick={() => { setAktif(m); setMobileView('detail') }}
+                className={`w-full text-left rounded-xl border p-4 transition ${
+                  aktif?.id === m.id
+                    ? 'bg-[#111827] border-blue-500/50'
+                    : 'bg-[#0B1120] border-slate-800 hover:bg-[#111827]'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{musteriAdi(m)}</p>
+                    <p className="text-xs text-slate-500 mt-1">{ma.teklifSayisi} iş · {tl(ma.ciro)}</p>
+                  </div>
 
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-2xl border border-slate-700 px-5 py-3 font-bold hover:bg-slate-900"
-            >
-              {excelYukleniyor ? 'Excel Yükleniyor...' : 'Excel Yükle'}
-            </button>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${ma.kategoriClass}`}>
+                    {ma.kategori}
+                  </span>
+                </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={excelSecildi}
-              className="hidden"
-            />
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className={ma.bakiye > 0 ? 'text-amber-300' : 'text-emerald-300'}>
+                    {(
+      ma.teklifSayisi === 0
+        ? 'Yeni'
+        : ma.bakiye > 0
+        ? 'Borçlu'
+        : ma.bakiye < 0
+        ? 'Alacaklı'
+        : 'Kapalı'
+    )}
+                  </span>
+                  <span className="text-slate-400">{pct(ma.onayOrani)} onay</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <main className={`w-full md:w-[50%] px-4 pb-28 pt-[88px] md:p-6 overflow-y-auto md:overflow-hidden flex-col gap-5 ${mobileView === "detail" ? "flex" : "hidden md:flex"}`}>
+        <div className="flex items-start justify-between gap-3">
+          <button
+            onClick={() => { setMobileView('list'); setActionsOpen(false) }}
+            className="md:hidden shrink-0 rounded-xl border border-slate-700 px-3 py-2 text-sm text-white"
+          >
+            ←
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Müşteri Detayı</p>
+            <h2 className="text-3xl mt-2 font-semibold">{musteriAdi(aktif)}</h2>
+            <p className="text-sm text-slate-400 mt-2">
+              {[aktif.telefon, aktif.email].filter(Boolean).join(' · ') || 'İletişim bilgisi yok'}
+            </p>
+          </div>
+
+          <div className="hidden md:flex flex-col items-end gap-2">
+    <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${a.kategoriClass}`}>
+      {a.kategori} Müşteri
+    </span>
+
+    <button
+      onClick={() => setYeniAcik(true)}
+      className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold hover:bg-slate-800"
+    >
+      ✏️ Düzenle
+    </button>
+  </div>
+        </div>
+
+        <div className="md:hidden grid grid-cols-2 gap-3">
+          <span className={`flex items-center justify-center rounded-2xl border px-4 py-3 text-sm font-semibold ${a.kategoriClass}`}>
+            {a.kategori} Müşteri
+          </span>
+
+          <button
+            onClick={() => setYeniAcik(true)}
+            className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-white"
+          >
+            ✏️ Düzenle
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <BigCard label="Onaylı Ciro" value={tl(a.ciro)} tone="text-emerald-300" />
+          <BigCard label="Tahsilat" value={tl(a.tahsilat)} tone="text-cyan-300" />
+          <BigCard label="Bakiye" value={tl(a.bakiye)} tone={a.bakiye > 0 ? 'text-amber-300' : 'text-emerald-300'} />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <BigCard label="Teklif" value={a.teklifSayisi} />
+          <BigCard label="Onay" value={a.onaySayisi} tone="text-emerald-300" />
+          <BigCard label="Kayıp" value={a.kayipSayisi} tone="text-red-300" />
+          <BigCard label="Onay Oranı" value={pct(a.onayOrani)} tone="text-blue-300" />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+            <p className="text-sm text-slate-400 mb-4">Müşteri Performansı</p>
+
+            <div className="space-y-4">
+              <Progress label="Tahsilat Oranı" value={a.tahsilatOrani} />
+              <Progress label="Teklif Onay Oranı" value={a.onayOrani} />
+            </div>
+          </div>
+
+          <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+            <p className="text-sm text-slate-400 mb-4">Risk Analizi</p>
+            <p className="text-lg font-semibold">{a.risk}</p>
+            <p className="text-sm text-slate-500 mt-3">
+              Açık bakiye: {tl(a.bakiye)} · Bekleyen teklif: {a.bekleyenSayisi}
+            </p>
           </div>
         </div>
 
+        <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5 flex-1 overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-slate-400">Son İşler</p>
+            <button
+              onClick={() => router.push('/dashboard/isler')}
+              className="text-xs text-blue-300 hover:text-blue-200"
+            >
+              Tüm işleri gör
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {(aktif.isler || []).slice(0, 5).map((i: any) => (
+              <div key={i.id} className="grid grid-cols-1 md:grid-cols-[1fr_120px_100px] gap-2 md:gap-0 md:items-center rounded-xl bg-[#111827] px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">{i.teklifNo}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                  <p className="text-xs text-slate-500">{i.urunAdi || 'Ürün bilgisi yok'}</p>
+                  {i.kirilanTasPlaka > 0 && (
+                    <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] text-red-300">
+                      Kırılan Taş: {i.kirilanTasPlaka}
+                    </span>
+                  )}
+
+                  {i.tasDurumu && (
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${
+                      i.tasDurumu === 'alinacak'
+                        ? 'bg-amber-500/10 text-amber-300'
+                        : 'bg-emerald-500/10 text-emerald-300'
+                    }`}>
+                      {i.tasDurumu === 'alinacak' ? 'Taş alınacak' : 'Taş stokta'}
+                    </span>
+                  )}
+                </div>
+                </div>
+                <p className="text-sm text-emerald-300">{tl(i.satisFiyati)}</p>
+                <p className="text-xs text-slate-400">{i.durum}</p>
+              </div>
+            ))}
+
+            {(aktif.isler || []).length === 0 && (
+              <p className="text-sm text-slate-500">Bu müşteriye ait iş yok.</p>
+            )}
+          </div>
+        </div>
+      </main>
+
+      <button
+        onClick={() => setActionsOpen(true)}
+        className="md:hidden fixed bottom-5 right-5 z-[120] rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-[0_18px_50px_rgba(37,99,235,0.45)]"
+      >
+        Aksiyon
+      </button>
+
+      {actionsOpen && (
+        <div
+          onClick={() => setActionsOpen(false)}
+          className="md:hidden fixed inset-0 z-[125] bg-black/60"
+        />
+      )}
+
+      <aside className={`fixed md:static top-0 right-0 z-[130] h-full w-[82%] max-w-[380px] md:max-w-none md:w-[25%] bg-[#030712] border-l border-slate-800 p-6 flex flex-col gap-4 overflow-y-auto transform transition-transform duration-300 ${actionsOpen ? "translate-x-0" : "translate-x-full md:translate-x-0"}`}>
+        <button
+          onClick={() => setActionsOpen(false)}
+          className="md:hidden mb-2 rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold"
+        >
+          Kapat
+        </button>
+        <button
+          onClick={() => setYeniAcik(true)}
+          className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold"
+        >
+          + Yeni Müşteri
+        </button>
+
+        <a
+          href="/api/musteriler/sablon"
+          className="bg-slate-700 hover:bg-slate-600 p-4 rounded-xl font-semibold text-center"
+        >
+          Excel Şablon İndir
+        </a>
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={excelYukleniyor}
+          className="bg-cyan-700 hover:bg-cyan-600 p-4 rounded-xl font-semibold disabled:bg-slate-700"
+        >
+          {excelYukleniyor ? 'Excel Yükleniyor...' : 'Excel Yükle'}
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx"
+          onChange={excelSecildi}
+          className="hidden"
+        />
+
         {excelMesaji && (
-          <div className="mb-5 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100 whitespace-pre-wrap">
+          <div className="whitespace-pre-wrap rounded-2xl border border-slate-800 bg-[#0B1120] p-4 text-xs text-slate-300">
             {excelMesaji}
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <MiniCard label="Toplam müşteri" value={musteriler.length} />
-          <MiniCard label="Aktif ekran" value="CRM" />
-          <MiniCard label="Excel aktarım" value="Hazır" />
-          <MiniCard label="Durum" value={loading ? 'Yükleniyor' : 'Aktif'} />
+        <button
+          onClick={() => router.push(`/dashboard/yeni-is-v3?musteriId=${aktif.id}&musteriAdi=${encodeURIComponent(musteriAdi(aktif))}`)}
+          className="bg-green-600 hover:bg-green-500 p-4 rounded-xl font-semibold"
+        >
+          + Yeni İş
+        </button>
+
+        <button
+          onClick={() => setTahsilatAcik(true)}
+          className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold"
+        >
+          Tahsilat Gir
+        </button>
+
+        <button
+          onClick={() => setEkstreAcik(true)}
+          className="bg-purple-600 hover:bg-purple-500 p-4 rounded-xl font-semibold"
+        >
+          PDF Ekstre
+        </button>
+
+        <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+          <p className="text-sm text-slate-400">Satış Tavsiyesi</p>
+          <p className="mt-3 text-lg font-semibold">
+            {a.kategori === 'Premium'
+              ? 'Bu müşteriye hızlı teklif + öncelikli takip.'
+              : a.kategori === 'Riskli'
+              ? 'Peşinat almadan yeni işe girme.'
+              : a.kategori === 'Zor'
+              ? 'Fiyat yerine değer anlatımı gerekli.'
+              : 'Takipte kal, sıcak müşteri olabilir.'}
+          </p>
         </div>
 
-        <div className="rounded-3xl border border-slate-800 bg-[#08111f] overflow-hidden">
-          {loading ? (
-            <div className="p-10 text-center text-slate-400">Müşteriler yükleniyor...</div>
-          ) : musteriler.length === 0 ? (
-            <div className="p-10 md:p-16 text-center">
-              <div className="mx-auto w-16 h-16 rounded-3xl bg-slate-800 flex items-center justify-center text-2xl mb-5">
-                +
-              </div>
-              <h2 className="text-2xl font-semibold">Henüz müşteri yok</h2>
-              <p className="text-slate-400 mt-2 max-w-xl mx-auto">
-                İlk müşterini ekleyerek teklif, tahsilat ve müşteri geçmişini bu hesapta ayrı takip etmeye başlayabilirsin.
-              </p>
-              <button
-                onClick={() => setYeniAcik(true)}
-                className="mt-6 rounded-2xl bg-white text-slate-950 px-6 py-3 font-bold hover:bg-slate-200"
-              >
-                İlk müşteriyi ekle
-              </button>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-800">
-              {musteriler.map((m) => (
-                <div key={m.id} className="p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-lg">
-                      {m.firmaAdi || [m.ad, m.soyad].filter(Boolean).join(' ') || 'İsimsiz müşteri'}
-                    </p>
-                    <p className="text-sm text-slate-400">
-                      {[m.telefon, m.email].filter(Boolean).join(' · ') || 'İletişim bilgisi yok'}
-                    </p>
-                  </div>
-                  <div className="text-sm text-slate-400">
-                    Açılış bakiyesi: {Number(m.acilisBakiyesi || 0).toLocaleString('tr-TR')} ₺
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+          <p className="text-sm text-slate-400">Portföy İçindeki Durum</p>
+          <p className="mt-3 text-2xl font-semibold text-emerald-300">{tl(a.ciro)}</p>
+          <p className="text-xs text-slate-500 mt-2">Bu müşteriden gelen onaylı ciro</p>
         </div>
+      </aside>
+
+      {ekstreAcik && (
+        <PremiumEkstreModal
+          aktif={aktif}
+          analiz={a}
+          onClose={() => setEkstreAcik(false)}
+          tl={tl}
+          pct={pct}
+          musteriAdi={musteriAdi}
+        />
+      )}
+
+      {tahsilatAcik && (
+  <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4">
+    <div className="w-full max-w-md bg-[#0B1120] border border-slate-800 rounded-2xl p-6">
+
+      <h2 className="text-lg font-semibold mb-4">Tahsilat Gir</h2>
+
+      <input
+        placeholder="Tutar"
+        value={tahsilatForm.tutar}
+        onChange={(e) => setTahsilatForm({...tahsilatForm, tutar: e.target.value})}
+        className="w-full mb-3 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
+      />
+
+      <select
+        value={tahsilatForm.tur}
+        onChange={(e) => setTahsilatForm({...tahsilatForm, tur: e.target.value})}
+        className="w-full mb-3 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
+      >
+        <option value="nakit">Nakit</option>
+        <option value="cek">Çek</option>
+        <option value="kart">Kredi Kartı</option>
+      </select>
+
+      <div className="relative mb-3">
+      <input
+        type="date"
+        value={tahsilatForm.tarih}
+        onChange={(e) => setTahsilatForm({...tahsilatForm, tarih: e.target.value})}
+        className="w-full px-4 py-3 pr-12 bg-[#111827] border border-slate-700 rounded-xl"
+      />
+
+      <button
+        type="button"
+        onClick={(e) => {
+          const input = e.currentTarget.parentElement.querySelector('input')
+          if (input && input.showPicker) input.showPicker()
+        }}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+      >
+        📅
+      </button>
+    </div>
+
+      <select
+        value={tahsilatForm.personelId}
+        onChange={(e) => setTahsilatForm({...tahsilatForm, personelId: e.target.value})}
+        className="w-full mb-4 px-4 py-3 bg-[#111827] border border-slate-700 rounded-xl"
+      >
+        <option value="">Personel seç</option>
+        {personeller.map(p => (
+          <option key={p.id} value={p.id}>{p.ad}</option>
+        ))}
+      </select>
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => setTahsilatAcik(false)}
+          className="flex-1 border border-slate-700 py-3 rounded-xl"
+        >
+          Vazgeç
+        </button>
+
+        <button
+          onClick={tahsilatKaydet}
+          className="flex-1 bg-emerald-600 py-3 rounded-xl"
+        >
+          Kaydet
+        </button>
       </div>
 
-      {yeniAcik && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={yeniMusteriKaydet} className="w-full max-w-2xl rounded-3xl border border-slate-800 bg-[#08111f] p-6">
-            <div className="flex items-start justify-between gap-4 mb-5">
-              <div>
-                <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Yeni kayıt</p>
-                <h2 className="text-2xl font-semibold mt-1">Yeni Müşteri</h2>
-              </div>
-              <button type="button" onClick={() => setYeniAcik(false)} className="text-slate-400 hover:text-white text-2xl">×</button>
+    </div>
+  </div>
+)}
+
+{yeniAcik && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setYeniAcik(false)}
+        >
+          <form
+            onSubmit={yeniMusteriKaydet}
+            className="w-full max-w-xl rounded-2xl border border-slate-800 bg-[#0B1120] p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5">
+              <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">CRM</p>
+              <h2 className="mt-2 text-xl font-semibold">Yeni Müşteri</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Input label="Firma adı" value={form.firmaAdi} onChange={(v) => setForm({ ...form, firmaAdi: v })} />
-              <Input label="Telefon" value={form.telefon} onChange={(v) => setForm({ ...form, telefon: v })} />
-              <Input label="Ad" value={form.ad} onChange={(v) => setForm({ ...form, ad: v })} />
-              <Input label="Soyad" value={form.soyad} onChange={(v) => setForm({ ...form, soyad: v })} />
-              <Input label="E-posta" value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
-              <Input label="Açılış bakiyesi" value={form.acilisBakiyesi} onChange={(v) => setForm({ ...form, acilisBakiyesi: v })} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input label="Firma Adı" value={form.firmaAdi} onChange={(v: string) => setForm({ ...form, firmaAdi: v })} />
+              <Input label="Telefon" value={form.telefon} onChange={(v: string) => setForm({ ...form, telefon: v })} />
+              <Input label="Ad" value={form.ad} onChange={(v: string) => setForm({ ...form, ad: v })} />
+              <Input label="Soyad" value={form.soyad} onChange={(v: string) => setForm({ ...form, soyad: v })} />
+              <Input label="E-posta" value={form.email} onChange={(v: string) => setForm({ ...form, email: v })} />
+              <Input label="Açılış Bakiyesi" value={form.acilisBakiyesi} onChange={(v: string) => setForm({ ...form, acilisBakiyesi: v })} />
+
+              <label className="block col-span-2">
+                <p className="text-xs text-slate-400 mb-2">Bakiye Tipi</p>
+                <select
+                  value={form.bakiyeTipi}
+                  onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}
+                  className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
+                >
+                  <option value="borc">Borç</option>
+                  <option value="alacak">Alacak</option>
+                </select>
+              </label>
             </div>
 
-            <select
-              value={form.bakiyeTipi}
-              onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}
-              className="mt-3 w-full rounded-2xl bg-[#030712] border border-slate-700 px-4 py-3 outline-none"
-            >
-              <option value="borc">Borç</option>
-              <option value="alacak">Alacak</option>
-            </select>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setYeniAcik(false)}
+                className="rounded-xl border border-slate-700 px-4 py-3 text-slate-300 hover:bg-slate-800"
+              >
+                Vazgeç
+              </button>
 
-            <button
-              disabled={kaydediliyor}
-              className="mt-5 w-full rounded-2xl bg-white text-slate-950 px-5 py-3 font-bold hover:bg-slate-200 disabled:opacity-50"
-            >
-              {kaydediliyor ? 'Kaydediliyor...' : 'Müşteriyi Kaydet'}
-            </button>
+              <button
+                disabled={kaydediliyor}
+                className="rounded-xl bg-emerald-600 px-4 py-3 font-semibold hover:bg-emerald-500 disabled:bg-slate-700"
+              >
+                {kaydediliyor ? 'Kaydediliyor...' : 'Müşteriyi Kaydet'}
+              </button>
+            </div>
           </form>
         </div>
       )}
@@ -261,24 +744,52 @@ export default function MusterilerPage() {
   )
 }
 
-function MiniCard({ label, value }: { label: string; value: any }) {
+function Input({ label, value, onChange }: any) {
   return (
-    <div className="rounded-3xl border border-slate-800 bg-[#08111f] p-5">
-      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="text-2xl font-semibold mt-2">{value}</p>
+    <label className="block">
+      <p className="text-xs text-slate-400 mb-2">{label}</p>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
+      />
+    </label>
+  )
+}
+
+function MiniCard({ label, value, tone = 'text-white' }: any) {
+  return (
+    <div className="rounded-xl bg-[#0B1120] border border-slate-800 p-3">
+      <p className="text-[10px] text-slate-500">{label}</p>
+      <p className={`text-sm mt-1 font-semibold ${tone}`}>{value}</p>
     </div>
   )
 }
 
-function Input({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function BigCard({ label, value, tone = 'text-white' }: any) {
   return (
-    <label className="block">
-      <span className="text-xs text-slate-400">{label}</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-2xl bg-[#030712] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
-      />
-    </label>
+    <div className="bg-[#0B1120] border border-slate-800 rounded-2xl p-5">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className={`text-2xl mt-3 font-semibold ${tone}`}>{value}</p>
+    </div>
+  )
+}
+
+function Progress({ label, value }: any) {
+  const safe = Math.max(0, Math.min(100, Number(value || 0)))
+
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-2">
+        <span className="text-slate-400">{label}</span>
+        <span className="text-slate-300">{pct(safe)}</span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-blue-500"
+          style={{ width: `${safe}%` }}
+        />
+      </div>
+    </div>
   )
 }
