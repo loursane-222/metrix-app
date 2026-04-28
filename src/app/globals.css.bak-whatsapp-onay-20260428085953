@@ -90,26 +90,3 @@ html, body {
 * {
   max-width: 100%;
 }
-
-
-/* METRIX_ATOLYE_SCROLL_FIX */
-@media (max-width: 768px) {
-  .metrix-atolye-scroll-panel,
-  [data-metrix-atolye-scroll-panel="true"] {
-    max-height: 62dvh !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .metrix-atolye-scroll-panel::-webkit-scrollbar,
-  [data-metrix-atolye-scroll-panel="true"]::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .metrix-atolye-scroll-panel::-webkit-scrollbar-thumb,
-  [data-metrix-atolye-scroll-panel="true"]::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.45);
-    border-radius: 999px;
-  }
-}

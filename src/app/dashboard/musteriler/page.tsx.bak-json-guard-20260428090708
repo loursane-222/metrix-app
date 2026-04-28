@@ -1,15 +1,5 @@
 'use client'
 
-async function safeJsonResponse(res) {
-  try {
-    const text = await res.text()
-    if (!text) return {}
-    return JSON.parse(text)
-  } catch {
-    return {}
-  }
-}
-
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PremiumEkstreModal from '@/components/musteriler/PremiumEkstreModal'
@@ -130,7 +120,7 @@ export default function MusterilerPage() {
 
   async function listeYukle(secilecekId?: string) {
     const r = await fetch('/api/musteriler')
-    const d = await safeJsonResponse(r)
+    const d = await r.json()
     const liste = d.musteriler || []
     setMusteriler(liste)
 
@@ -165,7 +155,7 @@ export default function MusterilerPage() {
         body: formData,
       })
 
-      const json = await safeJsonResponse(res)
+      const json = await res.json()
 
       if (!res.ok) {
         const detay = Array.isArray(json.hatalar) && json.hatalar.length > 0
@@ -239,7 +229,7 @@ export default function MusterilerPage() {
         }),
       })
 
-      const json = await safeJsonResponse(res)
+      const json = await res.json()
 
       if (!res.ok) {
         alert(json.hata || json.error || 'Müşteri oluşturulamadı.')

@@ -1,6 +1,5 @@
 import { getSchedulesForMonth } from "@/app/actions/schedule";
 import { PremiumWorkCalendar } from "@/components/schedule/PremiumWorkCalendar";
-import { WhatsappOnayPopup } from "@/components/schedule/WhatsappOnayPopup";
 
 export const metadata = {
   title: "İş Programı | Metrix",
@@ -20,7 +19,6 @@ export default async function Page() {
 
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 md:p-3">
-      <WhatsappOnayPopup />
       <PremiumWorkCalendar
         initialSchedules={schedules}
         initialYear={year}

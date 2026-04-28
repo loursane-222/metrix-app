@@ -8,29 +8,29 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
+  id            String   @id @default(cuid())
+  email         String   @unique
   password      String
-  ad            String    @default("")
-  aktif         Boolean   @default(true)
+  ad            String   @default("")
+  aktif         Boolean  @default(true)
   abonelikBitis DateTime?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime @default(now())
 
   atolye Atolye?
 }
 
 model Atolye {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id])
 
-  atolyeAdi   String @default("")
-  sehir       String @default("")
-  ilce        String @default("")
-  telefon     String @default("")
-  email       String @default("")
-  adres       String @default("")
-  logoUrl     String @default("")
+  atolyeAdi String @default("")
+  sehir     String @default("")
+  ilce      String @default("")
+  telefon   String @default("")
+  email     String @default("")
+  adres     String @default("")
+  logoUrl   String @default("")
   kurulusYili Int    @default(0)
 
   toplamMaas  Decimal @default(0)
@@ -109,17 +109,17 @@ model Arac {
 }
 
 model Musteri {
-  id       String @id @default(cuid())
-  atolyeId String
-  atolye   Atolye @relation(fields: [atolyeId], references: [id])
+  id        String   @id @default(cuid())
+  atolyeId  String
+  atolye    Atolye   @relation(fields: [atolyeId], references: [id])
 
-  firmaAdi       String  @default("")
-  ad             String  @default("")
-  soyad          String  @default("")
-  telefon        String  @default("")
-  email          String  @default("")
-  acilisBakiyesi Decimal @default(0)
-  bakiyeTipi     String  @default("borc")
+  firmaAdi        String   @default("")
+  ad              String   @default("")
+  soyad           String   @default("")
+  telefon         String   @default("")
+  email           String   @default("")
+  acilisBakiyesi  Decimal  @default(0)
+  bakiyeTipi      String   @default("borc")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -129,18 +129,18 @@ model Musteri {
 }
 
 model Tahsilat {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   musteriId String
-  musteri   Musteri @relation(fields: [musteriId], references: [id], onDelete: Cascade)
+  musteri   Musteri  @relation(fields: [musteriId], references: [id], onDelete: Cascade)
 
-  tarih DateTime
-  tutar Decimal  @default(0)
+  tarih     DateTime
+  tutar     Decimal  @default(0)
 
   createdAt DateTime @default(now())
 }
 
 model Is {
-  versiyon Int    @default(1)
+  versiyon Int @default(1)
   id       String @id @default(cuid())
   atolyeId String
   atolye   Atolye @relation(fields: [atolyeId], references: [id])
@@ -154,14 +154,14 @@ model Is {
   malzemeTipi String
   musteriTipi String
 
-  plakaFiyatiEuro   Decimal
-  metrajMtul        Decimal
-  birMtulDakika     Decimal
-  tezgahArasiMtul   Decimal @default(0)
-  tezgahArasiDakika Decimal @default(0)
-  adaTezgahMtul     Decimal @default(0)
-  adaTezgahDakika   Decimal @default(0)
-  kullanilanKur     Decimal @default(0)
+  plakaFiyatiEuro    Decimal
+  metrajMtul         Decimal
+  birMtulDakika      Decimal
+  tezgahArasiMtul    Decimal @default(0)
+  tezgahArasiDakika  Decimal @default(0)
+  adaTezgahMtul      Decimal @default(0)
+  adaTezgahDakika    Decimal @default(0)
+  kullanilanKur      Decimal @default(0)
 
   plakaGenislikCm    Decimal @default(0)
   plakaUzunlukCm     Decimal @default(0)
@@ -186,22 +186,19 @@ model Is {
 
   teklifGecerlilikTarihi DateTime?
 
-  teklifGoruntulenmeSayisi    Int       @default(0)
+  teklifGoruntulenmeSayisi Int @default(0)
   teklifIlkGoruntulenmeTarihi DateTime?
   teklifSonGoruntulenmeTarihi DateTime?
-  kirilanTasPlaka             Decimal   @default(0)
-  hataliKesimPlaka            Decimal   @default(0)
+  kirilanTasPlaka        Decimal @default(0)
+  hataliKesimPlaka       Decimal @default(0)
 
   durum String @default("teklif_verildi")
 
   tasDurumu String?
 
-  whatsappOnay       Boolean @default(false)
-  whatsappOnayOkundu Boolean @default(false)
-
   isTarihi DateTime?
 
-  tahsilat         Decimal   @default(0)
+  tahsilat         Decimal  @default(0)
   onaylanmaTarihi  DateTime?
   kaybedilmeTarihi DateTime?
   notlar           String?
@@ -209,8 +206,8 @@ model Is {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  operasyonlar IsOperasyon[]
-  workSchedule WorkSchedule?
+  operasyonlar  IsOperasyon[]
+  workSchedule  WorkSchedule?
 }
 
 model IsOperasyon {
@@ -237,15 +234,15 @@ enum PhaseType {
 }
 
 model WorkSchedule {
-  id   String @id @default(cuid())
-  isId String @unique
-  is   Is     @relation(fields: [isId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  isId      String   @unique
+  is        Is       @relation(fields: [isId], references: [id], onDelete: Cascade)
 
   startDate DateTime?
   endDate   DateTime?
   notes     String?
 
-  phases SchedulePhase[]
+  phases    SchedulePhase[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -262,27 +259,28 @@ model SchedulePhase {
   plannedStart DateTime?
   plannedEnd   DateTime?
 
-  isCompleted Boolean   @default(false)
-  completedAt DateTime?
-  completedBy String?
+  isCompleted  Boolean   @default(false)
+  completedAt  DateTime?
+  completedBy  String?
 
-  isOverridden Boolean @default(false)
+  isOverridden Boolean   @default(false)
   overrideNote String?
   notes        String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([workScheduleId, phase])
 
   fazAtamalar FazAtama[]
 
-  @@unique([workScheduleId, phase])
   @@map("schedule_phases")
 }
 
 model Personel {
-  id       String @id @default(cuid())
-  atolyeId String
-  atolye   Atolye @relation(fields: [atolyeId], references: [id])
+  id         String   @id @default(cuid())
+  atolyeId   String
+  atolye     Atolye   @relation(fields: [atolyeId], references: [id])
 
   ad            String
   soyad         String

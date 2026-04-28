@@ -428,7 +428,7 @@ export default function AtolyePage() {
             <SideButton active={aktifSol === 'kapasite'} onClick={() => setAktifSol('kapasite')} title="Kapasite" sub="Plaka, mtül, teklif" />
           </div>
 
-          <div className="mt-4 min-h-0 flex-1 rounded-2xl border border-slate-800 bg-[#111827] p-3 max-h-[58dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] md:max-h-none md:overflow-y-auto metrix-atolye-scroll-panel">
+          <div className="mt-4 flex-1 rounded-2xl border border-slate-800 bg-[#111827] p-3 overflow-hidden metrix-atolye-scroll-panel">
             {aktifSol === 'kimlik' && (
               <div className="grid gap-2">
                 <Input label="Atölye Adı" value={form.atolyeAdi} onChange={v => setAlan('atolyeAdi', v)} />

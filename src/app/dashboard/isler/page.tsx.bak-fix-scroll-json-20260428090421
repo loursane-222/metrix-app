@@ -249,11 +249,8 @@ function teklifTakipDurumu(i: any) {
   const [tahsilatDeger, setTahsilatDeger] = useState("")
 
   useEffect(() => {
-    fetch('/api/isler').then(async r => {
-        const text = await r.text()
-        if (!text) return []
-        try { return JSON.parse(text) } catch { return [] }
-      })
+    fetch('/api/isler')
+      .then(r => r.json())
       .then(v => {
         const liste = Array.isArray(v) ? v : (v.isler || [])
         setIsler(liste)
