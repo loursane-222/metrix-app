@@ -95,60 +95,6 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
     setSchedules(Array.isArray(data) ? data : []);
   }
 
-  async function loadTasAtamalar(list = schedules) {
-    const ids = Array.from(new Set((list || []).map((x: any) => x?.is?.id).filter(Boolean)));
-    if (!ids.length) {
-      setTasAtamalar({});
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/tas-gorev-personel?isIds=${encodeURIComponent(ids.join(","))}`, {
-        cache: "no-store",
-        credentials: "include",
-      });
-      const data = await res.json();
-      setTasAtamalar(data?.atamalar || {});
-    } catch {
-      setTasAtamalar({});
-    }
-  }
-
-  async function saveTasAtama(kapat = false) {
-    if (!tasModal?.schedule?.is?.id) return;
-
-    const res = await fetch("/api/tas-gorev-personel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        isId: tasModal.schedule.is.id,
-        personelId: tasAlacakPersonelId || null,
-      }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      alert(data?.hata || "Personel ataması kaydedilemedi.");
-      return;
-    }
-
-    const atama = data?.atama || {};
-    setTasAtamalar((prev: any) => ({
-      ...prev,
-      [tasModal.schedule.is.id]: {
-        isId: tasModal.schedule.is.id,
-        personelId: atama.personelId || tasAlacakPersonelId || "",
-        ad: atama.ad || "",
-        soyad: atama.soyad || "",
-        gorevi: atama.gorevi || "",
-      },
-    }));
-
-    await refresh();
-    if (kapat) setTasModal(null);
-  }
-
   async function navigate(dir: "prev" | "next") {
     let nextMonth = month + (dir === "next" ? 1 : -1);
     let nextYear = year;
@@ -338,10 +284,6 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
     }
   }
 
-  useEffect(() => {
-    loadTasAtamalar(schedules);
-  }, [schedules]);
-
   const visibleHeaders = range === "TODAY"
     ? [DAYS[((today.getDay() || 7) - 1)]]
     : DAYS;
@@ -459,10 +401,7 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
                                   return;
                                 }
 
-                                if (x.kind === "tas") {
-                  setTasModal(x);
-                  setTasAlacakPersonelId(x.tasAtama?.personelId || "");
-                } else if (x.phase === "IMALAT" && !x.completed) {
+                                if (x.phase === "IMALAT" && !x.completed) {
                                   setImalatTamamModal(x);
                                   setKirilanVarMi(false);
                                   setKirilanAdet("0");
@@ -628,17 +567,15 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
             <div className="mt-5 grid gap-3">
               <button
                 onClick={async () => {
-                  await saveTasAtama(false);
-                }}
-                className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-left hover:bg-blue-100"
-              >
-                <p className="font-bold text-blue-700">Personeli Kaydet</p>
-                <p className="text-xs text-slate-500">Taş durumunu değiştirmeden sadece atamayı kaydeder.</p>
-              </button>
-
-              <button
-                onClick={async () => {
-                  await saveTasAtama(false);
+                  await fetch("/api/tas-gorev-personel", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      isId: tasModal.schedule?.is?.id,
+                      personelId: tasAlacakPersonelId || null,
+                    }),
+                  });
                   await updateTasDurumu({ isId: tasModal.schedule.is.id, tasDurumu: "alinacak" });
                   await refresh();
                   setTasModal(null);
@@ -651,7 +588,15 @@ export function PremiumWorkCalendar({ initialSchedules, initialYear, initialMont
 
               <button
                 onClick={async () => {
-                  await saveTasAtama(false);
+                  await fetch("/api/tas-gorev-personel", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      isId: tasModal.schedule?.is?.id,
+                      personelId: tasAlacakPersonelId || null,
+                    }),
+                  });
                   await updateTasDurumu({ isId: tasModal.schedule.is.id, tasDurumu: "alindi" });
                   await refresh();
                   setTasModal(null);
