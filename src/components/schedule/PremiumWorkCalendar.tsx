@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { ScheduleModal } from "./ScheduleModal";
 import ScheduleCreateModal from "./ScheduleCreateModal";
+import ScheduleAiInsight from "./ScheduleAiInsight";
 
 dayjs.locale("tr");
 
@@ -465,6 +466,8 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
         <DensityCard title="Montaj Yoğunluğu" value={density.montaj} tone="text-emerald-300" helper={`${stats.montaj}/${stats.total || 0} iş`} />
         <DensityCard title="Genel Yoğunluk" value={density.genel} tone="text-purple-300" helper={`${stats.total}/21 kapasite`} />
       </div>
+
+      <ScheduleAiInsight schedules={schedules} weekStart={startOfWeek.toISOString()} />
 
       <button
         onClick={() => setShowCreate(true)}
