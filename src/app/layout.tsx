@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import AppVersionGuard from "@/components/AppVersionGuard";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -23,7 +24,8 @@ export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
-}>) {
+}>
+) {
   return (
     <html lang="tr">
       <head>
@@ -31,6 +33,7 @@ export default function RootLayout({
 
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        <AppVersionGuard />
         {children}
               <PushPermission />
       </body>
