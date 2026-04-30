@@ -51,6 +51,26 @@ function atStartOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0);
 }
 
+function isBusinessDayStrict(d: Date) {
+  const day = d.getDay();
+  return day >= 1 && day <= 5;
+}
+
+function pushToBusinessDay(d: Date) {
+  const n = new Date(d);
+  while (!isBusinessDayStrict(n)) {
+    n.setDate(n.getDate() + 1);
+  }
+  return n;
+}
+
+function safeDate(value: any, fallback: Date) {
+  if (!value) return fallback;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return fallback;
+  return pushToBusinessDay(d);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const atolyeId = await ownerAtolyeIdAl();
@@ -75,9 +95,16 @@ export async function POST(req: NextRequest) {
 
     const today = new Date();
     const base = isBusinessDay(today) ? today : addBusinessDays(today, 1);
-    const olcu = atStartOfDay(base);
-    const imalat = atStartOfDay(addBusinessDays(olcu, 1));
-    const montaj = atStartOfDay(addBusinessDays(imalat, 1));
+
+    const defaultOlcu = atStartOfDay(base);
+    const defaultImalat = atStartOfDay(addBusinessDays(defaultOlcu, 1));
+    const defaultMontaj = atStartOfDay(addBusinessDays(defaultImalat, 1));
+
+    const plan = body.plan || {};
+
+    const olcu = safeDate(plan.OLCU, defaultOlcu);
+    const imalat = safeDate(plan.IMALAT, defaultImalat);
+    const montaj = safeDate(plan.MONTAJ, defaultMontaj);
 
     const schedule = await prisma.workSchedule.create({
       data: {
