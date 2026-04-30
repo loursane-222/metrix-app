@@ -1,0 +1,182 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import dayjs from "dayjs";
+
+type ViewMode = "day" | "week" | "month";
+
+export function PremiumWorkCalendar({
+  initialSchedules = [],
+}: any) {
+  const [view, setView] = useState<ViewMode>("week");
+  const [currentDate, setCurrentDate] = useState(dayjs());
+
+  // 🔥 SERVER DATA → TASK MAP
+  const tasks = useMemo(() => {
+    const mapped: any[] = [];
+
+    initialSchedules.forEach((s: any) => {
+      const isAdi = s.is?.musteriAdi || "İş";
+
+      s.phases?.forEach((p: any) => {
+        if (p.plannedStart) {
+          mapped.push({
+            id: p.id,
+            title: isAdi,
+            phase: p.phase,
+            date: p.plannedStart,
+          });
+        }
+      });
+    });
+
+    return mapped;
+  }, [initialSchedules]);
+
+  const startOfWeek = currentDate.startOf("week").add(1, "day");
+
+  const days = Array.from({ length: 7 }).map((_, i) =>
+    startOfWeek.add(i, "day")
+  );
+
+  const getTasksForDay = (date: any) => {
+    return tasks.filter((t) =>
+      dayjs(t.date).isSame(date, "day")
+    );
+  };
+
+  const phaseColor = (phase: string) => {
+    if (phase === "OLCU") return "border-blue-500";
+    if (phase === "IMALAT") return "border-yellow-500";
+    if (phase === "MONTAJ") return "border-green-500";
+    return "border-gray-500";
+  };
+
+  return (
+    <div className="w-full text-white">
+
+      {/* HEADER */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-xl font-semibold">
+          İş Programı
+        </div>
+
+        <div className="flex gap-2">
+          {["day", "week", "month"].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v as ViewMode)}
+              className={`px-3 py-1 rounded-lg text-sm ${
+                view === v
+                  ? "bg-blue-600"
+                  : "bg-gray-800"
+              }`}
+            >
+              {v === "day"
+                ? "Günlük"
+                : v === "week"
+                ? "Haftalık"
+                : "Aylık"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* NAV */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() =>
+            setCurrentDate(currentDate.subtract(1, view))
+          }
+          className="px-3 py-1 bg-gray-800 rounded"
+        >
+          ←
+        </button>
+
+        <button
+          onClick={() => setCurrentDate(dayjs())}
+          className="px-3 py-1 bg-gray-700 rounded"
+        >
+          Bugün
+        </button>
+
+        <button
+          onClick={() =>
+            setCurrentDate(currentDate.add(1, view))
+          }
+          className="px-3 py-1 bg-gray-800 rounded"
+        >
+          →
+        </button>
+      </div>
+
+      {/* WEEK VIEW */}
+      {view === "week" && (
+        <div className="grid md:grid-cols-7 gap-2 overflow-x-auto">
+          {days.map((d, i) => {
+            const dayTasks = getTasksForDay(d);
+
+            return (
+              <div
+                key={i}
+                className="bg-[#111827] rounded-xl p-2 min-w-[180px]"
+              >
+                <div className="text-sm mb-2 text-gray-300">
+                  {d.format("ddd DD")}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {dayTasks.map((t) => (
+                    <div
+                      key={t.id}
+                      className={`p-2 rounded-lg border-l-4 ${phaseColor(
+                        t.phase
+                      )} bg-[#1f2937]`}
+                    >
+                      <div className="text-sm font-medium">
+                        {t.title}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {t.phase}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* MOBILE DAY VIEW */}
+      {view === "day" && (
+        <div className="flex flex-col gap-3">
+          {getTasksForDay(currentDate).map((t) => (
+            <div
+              key={t.id}
+              className={`p-4 rounded-xl border-l-4 ${phaseColor(
+                t.phase
+              )} bg-[#111827]`}
+            >
+              <div className="font-semibold">
+                {t.title}
+              </div>
+              <div className="text-sm text-gray-400">
+                {t.phase}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* MONTH */}
+      {view === "month" && (
+        <div className="text-center text-gray-500 py-10">
+          Aylık görünüm yakında
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default PremiumWorkCalendar;

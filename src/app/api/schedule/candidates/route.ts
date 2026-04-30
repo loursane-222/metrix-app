@@ -1,0 +1,68 @@
+import { NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
+import { cookies } from "next/headers";
+import { jwtVerify } from "jose";
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+const prisma = globalForPrisma.prisma || new PrismaClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
+async function ownerAtolyeIdAl() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("metrix-token")?.value;
+  if (!token) return null;
+
+  try {
+    const secret = new TextEncoder().encode(
+      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
+    );
+
+    const { payload } = await jwtVerify(token, secret);
+
+    const user = await prisma.user.findUnique({
+      where: { id: (payload as any).id },
+      include: { atolye: true },
+    });
+
+    return user?.atolye?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function GET() {
+  const atolyeId = await ownerAtolyeIdAl();
+  if (!atolyeId) {
+    return NextResponse.json({ error: "Sadece ana hesap yeni iş oluşturabilir" }, { status: 403 });
+  }
+
+  const jobs = await prisma.is.findMany({
+    where: {
+      atolyeId,
+      workSchedule: null,
+      OR: [
+        { whatsappOnay: true },
+        { durum: "onaylandi" },
+        { durum: "onaylandı" },
+        { durum: "ONAYLANDI" },
+        { durum: "whatsapp_onayli" },
+        { durum: "whatsapp_onaylı" },
+      ],
+    },
+    select: {
+      id: true,
+      teklifNo: true,
+      musteriAdi: true,
+      urunAdi: true,
+      durum: true,
+      whatsappOnay: true,
+      createdAt: true,
+      toplamSureDakika: true,
+      satisFiyati: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  return NextResponse.json(jobs);
+}

@@ -1,0 +1,166 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import dayjs from "dayjs";
+
+type ViewMode = "day" | "week" | "month";
+
+export function PremiumWorkCalendar() {
+  const [view, setView] = useState<ViewMode>("week");
+  const [currentDate, setCurrentDate] = useState(dayjs());
+  const [tasks, setTasks] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/schedule")
+      .then((r) => r.json())
+      .then((data) => {
+        const mapped = [];
+
+        data.forEach((item: any) => {
+          const isAdi = item.is?.musteriAdi || "İş";
+
+          item.phases?.forEach((p: any) => {
+            if (p.plannedStart) {
+              mapped.push({
+                id: p.id,
+                title: isAdi,
+                phase: p.phase,
+                date: p.plannedStart,
+              });
+            }
+          });
+        });
+
+        setTasks(mapped);
+      });
+  }, []);
+
+  const startOfWeek = currentDate.startOf("week").add(1, "day");
+
+  const days = Array.from({ length: 7 }).map((_, i) =>
+    startOfWeek.add(i, "day")
+  );
+
+  const getTasksForDay = (date: any) => {
+    return tasks.filter((t: any) =>
+      dayjs(t.date).isSame(date, "day")
+    );
+  };
+
+  return (
+    <div className="w-full h-full flex flex-col gap-4">
+
+      <div className="flex items-center justify-between">
+        <div className="text-lg font-semibold">
+          {currentDate.format("MMMM YYYY")}
+        </div>
+
+        <div className="flex gap-2">
+          {["day", "week", "month"].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v as ViewMode)}
+              className={`px-3 py-1 rounded-lg text-sm ${
+                view === v
+                  ? "bg-black text-white"
+                  : "bg-gray-100"
+              }`}
+            >
+              {v === "day"
+                ? "Günlük"
+                : v === "week"
+                ? "Haftalık"
+                : "Aylık"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={() =>
+            setCurrentDate(currentDate.subtract(1, view))
+          }
+          className="px-3 py-1 bg-gray-100 rounded"
+        >
+          ←
+        </button>
+
+        <button
+          onClick={() => setCurrentDate(dayjs())}
+          className="px-3 py-1 bg-gray-200 rounded"
+        >
+          Bugün
+        </button>
+
+        <button
+          onClick={() =>
+            setCurrentDate(currentDate.add(1, view))
+          }
+          className="px-3 py-1 bg-gray-100 rounded"
+        >
+          →
+        </button>
+      </div>
+
+      {view === "week" && (
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-2 overflow-x-auto">
+          {days.map((d, i) => {
+            const dayTasks = getTasksForDay(d);
+
+            return (
+              <div
+                key={i}
+                className="min-w-[200px] bg-white rounded-xl p-2 border"
+              >
+                <div className="text-sm font-semibold mb-2">
+                  {d.format("ddd DD")}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {dayTasks.map((t: any) => (
+                    <div
+                      key={t.id}
+                      className="p-2 rounded-lg bg-gray-100 text-xs"
+                    >
+                      <div className="font-medium">
+                        {t.title}
+                      </div>
+                      <div className="text-gray-500">
+                        {t.phase}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {view === "day" && (
+        <div className="flex flex-col gap-2">
+          {getTasksForDay(currentDate).map((t: any) => (
+            <div
+              key={t.id}
+              className="p-3 bg-white rounded-lg border"
+            >
+              <div className="font-semibold">{t.title}</div>
+              <div className="text-sm text-gray-500">
+                {t.phase}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {view === "month" && (
+        <div className="text-center text-gray-500 py-10">
+          Aylık görünüm (yakında bağlanacak)
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default PremiumWorkCalendar;

@@ -14,10 +14,14 @@ async function authBilgisiAl(): Promise<{
   userId: string | null;
   atolyeId: string | null;
   email: string | null;
+  isOwner: boolean;
+  personelId: string | null;
 }> {
   const cookieStore = await cookies();
   const token = cookieStore.get("metrix-token")?.value;
-  if (!token) return { userId: null, atolyeId: null, email: null };
+  if (!token) {
+    return { userId: null, atolyeId: null, email: null, isOwner: false, personelId: null };
+  }
 
   try {
     const secret = new TextEncoder().encode(
@@ -31,13 +35,40 @@ async function authBilgisiAl(): Promise<{
       include: { atolye: true },
     });
 
+    if (!user) {
+      return { userId: null, atolyeId: null, email: null, isOwner: false, personelId: null };
+    }
+
+    if (user.atolye?.id) {
+      return {
+        userId: user.id,
+        atolyeId: user.atolye.id,
+        email: user.email,
+        isOwner: true,
+        personelId: null,
+      };
+    }
+
+    const personel = await prisma.personel.findFirst({
+      where: {
+        email: user.email,
+        aktif: true,
+      },
+      select: {
+        id: true,
+        atolyeId: true,
+      },
+    });
+
     return {
-      userId: user?.id || null,
-      atolyeId: user?.atolye?.id || null,
-      email: user?.email || null,
+      userId: user.id,
+      atolyeId: personel?.atolyeId || null,
+      email: user.email,
+      isOwner: false,
+      personelId: personel?.id || null,
     };
   } catch {
-    return { userId: null, atolyeId: null, email: null };
+    return { userId: null, atolyeId: null, email: null, isOwner: false, personelId: null };
   }
 }
 
@@ -47,31 +78,77 @@ async function atolyeIdAl(): Promise<string | null> {
 }
 
 export async function getSchedulesForMonth(year: number, month: number) {
-  const atolyeId = await atolyeIdAl();
-  if (!atolyeId) return [];
+  const auth = await authBilgisiAl();
+  if (!auth.atolyeId) return [];
 
   const startOfMonth = new Date(year, month - 1, 1);
   const endOfMonth = new Date(year, month, 0, 23, 59, 59);
 
-  return prisma.workSchedule.findMany({
-    where: {
-      is: { atolyeId },
-      OR: [
-        { startDate: { gte: startOfMonth, lte: endOfMonth } },
-        { endDate: { gte: startOfMonth, lte: endOfMonth } },
-        { startDate: { lte: startOfMonth }, endDate: { gte: endOfMonth } },
-        {
-          phases: {
-            some: {
-              OR: [
-                { plannedStart: { gte: startOfMonth, lte: endOfMonth } },
-                { plannedEnd: { gte: startOfMonth, lte: endOfMonth } },
-              ],
+  const dateOr = [
+    { startDate: { gte: startOfMonth, lte: endOfMonth } },
+    { endDate: { gte: startOfMonth, lte: endOfMonth } },
+    { startDate: { lte: startOfMonth }, endDate: { gte: endOfMonth } },
+    {
+      phases: {
+        some: {
+          OR: [
+            { plannedStart: { gte: startOfMonth, lte: endOfMonth } },
+            { plannedEnd: { gte: startOfMonth, lte: endOfMonth } },
+          ],
+        },
+      },
+    },
+  ];
+
+  const where: any = {
+    is: { atolyeId: auth.atolyeId },
+    OR: dateOr,
+  };
+
+  if (!auth.isOwner) {
+    if (!auth.personelId) return [];
+    where.phases = {
+      some: {
+        fazAtamalar: {
+          some: {
+            personelId: auth.personelId,
+          },
+        },
+      },
+    };
+  }
+
+  const phasesInclude: any = {
+    orderBy: { phase: "asc" },
+    include: {
+      fazAtamalar: {
+        include: {
+          personel: {
+            select: {
+              id: true,
+              ad: true,
+              soyad: true,
+              gorevi: true,
+              email: true,
             },
           },
         },
-      ],
+      },
     },
+  };
+
+  if (!auth.isOwner) {
+    phasesInclude.where = {
+      fazAtamalar: {
+        some: {
+          personelId: auth.personelId,
+        },
+      },
+    };
+  }
+
+  return prisma.workSchedule.findMany({
+    where,
     include: {
       is: {
         select: {
@@ -89,24 +166,7 @@ export async function getSchedulesForMonth(year: number, month: number) {
           satisFiyati: true,
         },
       },
-      phases: {
-        orderBy: { phase: "asc" },
-        include: {
-          fazAtamalar: {
-            include: {
-              personel: {
-                select: {
-                  id: true,
-                  ad: true,
-                  soyad: true,
-                  gorevi: true,
-                  email: true,
-                },
-              },
-            },
-          },
-        },
-      },
+      phases: phasesInclude,
     },
     orderBy: { startDate: "asc" },
   });
