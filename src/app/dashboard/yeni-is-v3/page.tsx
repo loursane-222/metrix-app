@@ -451,8 +451,12 @@ export default function YeniIsV3Page() {
     String(m.ad || "").toLocaleLowerCase("tr-TR").includes(form.musteriAdi.toLocaleLowerCase("tr-TR"))
   );
 
+  const aktifIndex = Math.max(0, menu.findIndex(([key]) => key === aktifBolum));
+  const oncekiBolum = aktifIndex > 0 ? menu[aktifIndex - 1][0] : null;
+  const sonrakiBolum = aktifIndex < menu.length - 1 ? menu[aktifIndex + 1][0] : null;
+
   return (
-    <div className="h-screen bg-[#030712] text-white overflow-hidden flex">
+<div className="min-h-[100dvh] bg-[#030712] text-white overflow-hidden flex">
       <style jsx global>{`
         .plaka-v2-fix input,
         .plaka-v2-fix select,
@@ -462,13 +466,89 @@ export default function YeniIsV3Page() {
           opacity: 1 !important;
           -webkit-text-fill-color: #0f172a !important;
         }
+
         .plaka-v2-fix option {
           color: #0f172a !important;
           background: #ffffff !important;
         }
+
+        @media (max-width: 767px) {
+          .yeni-is-v3-root > aside {
+            display: none !important;
+          }
+
+          .yeni-is-v3-root > main {
+            width: 100% !important;
+          }
+
+          .plaka-v2-fix {
+            width: 100vw !important;
+            max-width: 100vw !important;
+            overflow-x: hidden !important;
+          }
+
+          .plaka-v2-fix > * {
+            max-width: 100% !important;
+          }
+
+          .plaka-v2-fix .grid,
+          .plaka-v2-fix [class*="grid-cols-"] {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+
+          .plaka-v2-fix input,
+          .plaka-v2-fix select,
+          .plaka-v2-fix textarea {
+            width: 100% !important;
+            min-width: 0 !important;
+            min-height: 48px !important;
+            font-size: 16px !important;
+          }
+
+          .plaka-v2-fix h1,
+          .plaka-v2-fix h2,
+          .plaka-v2-fix h3,
+          .plaka-v2-fix p,
+          .plaka-v2-fix span,
+          .plaka-v2-fix label {
+            word-break: normal !important;
+            overflow-wrap: normal !important;
+            white-space: normal !important;
+          }
+
+          .plaka-v2-fix [class*="tracking"] {
+            letter-spacing: 0.08em !important;
+          }
+
+          .plaka-v2-fix [class*="p-10"],
+          .plaka-v2-fix [class*="p-9"],
+          .plaka-v2-fix [class*="p-8"],
+          .plaka-v2-fix [class*="p-7"],
+          .plaka-v2-fix [class*="p-6"] {
+            padding: 16px !important;
+          }
+
+          .plaka-v2-fix [class*="gap-8"],
+          .plaka-v2-fix [class*="gap-7"],
+          .plaka-v2-fix [class*="gap-6"],
+          .plaka-v2-fix [class*="gap-5"] {
+            gap: 12px !important;
+          }
+
+          .plaka-v2-fix [class*="overflow-x-auto"] {
+            overflow-x: hidden !important;
+          }
+
+          .plaka-v2-fix img,
+          .plaka-v2-fix canvas,
+          .plaka-v2-fix svg {
+            max-width: 100% !important;
+            height: auto !important;
+          }
+        }
       `}</style>
 
-      <aside className="w-[24%] border-r border-slate-800 flex flex-col">
+      <aside className="hidden md:flex w-[24%] border-r border-slate-800 flex-col">
         <div className="p-6 border-b border-slate-800">
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Metrix</p>
           <h1 className="text-2xl mt-2">Yeni İş</h1>
@@ -497,13 +577,72 @@ export default function YeniIsV3Page() {
         </div>
       </aside>
 
-      <main className="w-[51%] p-6 overflow-hidden">
-        <div className="h-full bg-[#0B1120] border border-slate-800 rounded-2xl p-6 overflow-hidden">
+      <main className="relative min-h-[100dvh] w-full md:w-[51%] overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+120px)] pt-[calc(env(safe-area-inset-top)+168px)] md:p-6">
+        {/* MOBILE WIZARD HEADER */}
+        <div className="md:hidden fixed left-0 right-0 top-0 z-[1100] border-b border-slate-800 bg-[#030712]/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] backdrop-blur-xl">
+          <div className="ml-16">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">
+              Yeni İş · Adım {aktifIndex + 1}/4
+            </p>
+            <h1 className="mt-1 text-lg font-black text-white">{menu[aktifIndex][1]}</h1>
+          </div>
+
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {menu.map(([key, label], index) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setAktifBolum(key)}
+                className={`min-w-0 rounded-xl border px-2 py-2 text-center text-[10px] font-black transition ${
+                  aktifBolum === key
+                    ? "border-blue-400 bg-blue-600 text-white"
+                    : index < aktifIndex
+                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
+                    : "border-slate-800 bg-slate-900 text-slate-400"
+                }`}
+              >
+                <span className="block truncate">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+
+        {/* MOBILE WIZARD HEADER */}
+        <div className="md:hidden fixed left-0 right-0 top-0 z-[1100] border-b border-slate-800 bg-[#030712]/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] backdrop-blur-xl">
+          <div className="ml-16">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">
+              Yeni İş · Adım {aktifIndex + 1}/4
+            </p>
+            <h1 className="mt-1 text-lg font-black text-white">{menu[aktifIndex][1]}</h1>
+
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              {menu.map(([key, label], index) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAktifBolum(key)}
+                  className={`min-w-0 rounded-xl border px-2 py-2 text-center text-[10px] font-black transition ${
+                    aktifBolum === key
+                      ? "border-blue-400 bg-blue-600 text-white"
+                      : index < aktifIndex
+                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
+                      : "border-slate-800 bg-slate-900 text-slate-400"
+                  }`}
+                >
+                  <span className="block truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="min-h-full bg-[#0B1120] border border-slate-800 rounded-2xl p-6 overflow-hidden">
           {aktifBolum === "musteri" && (
             <div className="space-y-5">
               <h2 className="text-xl">Müşteri ve İş Bilgisi</h2>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
                   <p className="text-xs text-slate-400 mb-2">Müşteri Adı</p>
                   <input
@@ -567,14 +706,14 @@ export default function YeniIsV3Page() {
 
           {aktifBolum === "malzeme" && (
             <div className="space-y-5">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <h2 className="text-xl">Taş ve Plaka</h2>
-                <button onClick={() => setPlakaAcik(true)} className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-3">
+                <button onClick={() => setPlakaAcik(true)} className="w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold hover:bg-indigo-500 md:w-auto">
                   Plaka Planlayıcı Aç
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Input label="Plaka Fiyatı €" value={form.plakaFiyatiEuro} onChange={(v) => setAlan("plakaFiyatiEuro", v)} />
                 <Input label="Kur" value={form.kullanilanKur} onChange={(v) => setAlan("kullanilanKur", v)} />
                 <Input label="Plaka Sayısı" value={form.manuelPlakaSayisi} onChange={(v) => setAlan("manuelPlakaSayisi", v)} />
@@ -587,14 +726,14 @@ export default function YeniIsV3Page() {
 
           {aktifBolum === "maliyet" && (
             <div className="h-full flex flex-col">
-              <div className="flex items-center justify-between mb-3">
+              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <h2 className="text-xl">Maliyet ve Üretim Süresi</h2>
                 <div className="text-xs text-slate-400">
                   Satır bazlı üretim maliyeti
                 </div>
               </div>
 
-              <div className="grid grid-cols-[1fr_1.2fr_0.75fr] gap-2 mb-2 px-2 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr_0.75fr] gap-2 mb-2 px-2 text-[10px] uppercase tracking-[0.16em] text-slate-500">
                 <div>İşlem / Mtül</div>
                 <div>Makine</div>
                 <div>Süre</div>
@@ -699,19 +838,66 @@ export default function YeniIsV3Page() {
 
           {aktifBolum === "not" && (
             <div className="space-y-5">
-              <h2 className="text-xl">Notlar</h2>
+              <h2 className="text-xl">Notlar ve Canlı Özet</h2>
               <textarea
                 value={form.notlar}
                 onChange={(e) => setAlan("notlar", e.target.value)}
-                className="w-full h-[260px] rounded-xl bg-[#111827] border border-slate-700 p-4 outline-none"
+                className="w-full h-[220px] rounded-xl bg-[#111827] border border-slate-700 p-4 outline-none"
                 placeholder="İş notları..."
               />
+
+              <div className="md:hidden space-y-3 pt-2">
+                <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">Canlı Özet</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <Card label="Teklif Tutarı" value={para(hesap.satis)} color="text-emerald-400" />
+                  <Card label="Toplam Maliyet" value={para(hesap.maliyet)} />
+                  <Card label="Kâr" value={para(hesap.kar)} color="text-yellow-400" />
+                  <Card label="Plaka" value={`${hesap.plakaSayisi} adet`} />
+                  <Card label="Süre" value={`${hesap.toplamDakika.toFixed(0)} dk`} />
+                  <Card label="45 Kesim Maliyeti" value={para(hesap.kesim45Maliyet)} />
+                  <Card label="Pahlama Maliyeti" value={para(hesap.pahlamaMaliyet)} />
+                  <Card label="Yapıştırma Maliyeti" value={para(hesap.yapistirmaMaliyet)} />
+                </div>
+              </div>
             </div>
           )}
         </div>
+
+        {/* MOBILE WIZARD ACTIONS */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-[1200] pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => oncekiBolum ? setAktifBolum(oncekiBolum) : router.push("/dashboard/isler")}
+              className="pointer-events-auto rounded-2xl border border-slate-700 bg-slate-950/95 px-5 py-4 text-sm font-bold text-slate-200 shadow-2xl backdrop-blur-xl"
+            >
+              {oncekiBolum ? "← Geri" : "İşlere Dön"}
+            </button>
+
+            {sonrakiBolum ? (
+              <button
+                type="button"
+                onClick={() => setAktifBolum(sonrakiBolum)}
+                className="pointer-events-auto ml-auto rounded-2xl bg-blue-600 px-8 py-4 text-sm font-black text-white shadow-[0_18px_40px_rgba(37,99,235,0.45)]"
+              >
+                İleri →
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={kaydet}
+                disabled={kaydediliyor}
+                className="pointer-events-auto ml-auto rounded-2xl bg-emerald-600 px-6 py-4 text-sm font-black text-white shadow-[0_18px_40px_rgba(16,185,129,0.36)] disabled:bg-slate-700"
+              >
+                {kaydediliyor ? "Kaydediliyor..." : "Hesapla & Kaydet"}
+              </button>
+            )}
+          </div>
+        </div>
+
       </main>
 
-      <aside className="w-[25%] border-l border-slate-800 p-6 flex flex-col min-h-0">
+      <aside className="hidden md:flex w-[25%] border-l border-slate-800 p-6 flex-col min-h-0">
         <div className="min-h-0 flex-1 overflow-hidden space-y-3">
           <h2 className="text-sm text-slate-400">Canlı Özet</h2>
 
@@ -856,15 +1042,16 @@ export default function YeniIsV3Page() {
       )}
         </div>
       </aside>
+
       {plakaAcik && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={() => setPlakaAcik(false)}>
-          <div className="plaka-v2-fix w-[95vw] h-[95vh] bg-[#030712] rounded-2xl p-4 overflow-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <div>
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-0 md:p-4" onClick={() => setPlakaAcik(false)}>
+          <div className="plaka-v2-fix h-[100dvh] w-full overflow-y-auto rounded-none bg-[#030712] p-3 pb-[calc(env(safe-area-inset-bottom)+90px)] md:h-[95vh] md:w-[95vw] md:rounded-2xl md:p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-30 mb-4 flex items-start justify-between gap-3 border-b border-slate-800 bg-[#030712]/95 pb-3 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+              <div className="min-w-0">
                 <h2 className="text-xl">Plaka Planlayıcı</h2>
                 <p className="text-sm text-slate-400">Ürün, ölçü ve fiyat bilgileri otomatik aktarıldı.</p>
               </div>
-              <button onClick={() => setPlakaAcik(false)} className="border border-slate-700 px-4 py-2 rounded-xl">
+              <button onClick={() => setPlakaAcik(false)} className="shrink-0 rounded-xl border border-slate-700 px-4 py-2">
                 Kapat
               </button>
             </div>
@@ -895,7 +1082,7 @@ function OperationRow({
   makineler,
 }: any) {
   return (
-    <div className="grid grid-cols-[1fr_1.2fr_0.75fr] gap-2 items-end rounded-xl border border-slate-800 bg-[#111827]/60 px-2.5 py-1.5">
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr_0.75fr] gap-2 items-end rounded-xl border border-slate-800 bg-[#111827]/60 px-2.5 py-1.5">
       <label className="block">
         <p className="text-[10px] text-slate-400 mb-1">{label} Mtül</p>
         <input

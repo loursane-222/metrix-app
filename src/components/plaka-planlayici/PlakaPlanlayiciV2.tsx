@@ -392,12 +392,17 @@ export function PlakaPlanlayiciV2({
     }
   }
 
-  function movePiece(e: React.MouseEvent<HTMLDivElement>, result: TipResult, slabIndex: number) {
+  function movePiece(e: React.PointerEvent<HTMLDivElement>, result: TipResult, slabIndex: number) {
     if (!dragging || dragging.tipId !== result.tipId || dragging.slabIndex !== slabIndex) return;
 
+    e.preventDefault();
+
     const board = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.clientX - board.left;
-    const mouseY = e.clientY - board.top;
+    const visualX = e.clientX - board.left;
+    const visualY = e.clientY - board.top;
+
+    const logicalX = (visualX / board.width) * result.plakaGenislik;
+    const logicalY = (visualY / board.height) * result.plakaYukseklik;
 
     setSonuclar((prev) =>
       prev.map((r) => {
@@ -410,15 +415,25 @@ export function PlakaPlanlayiciV2({
 
             return {
               ...slab,
-              yerlesim: slab.yerlesim.map((p, i) =>
-                i === dragging.pieceIndex
-                  ? {
-                      ...p,
-                      x: Math.max(0, Math.round(mouseX / scale - p.genislik / 2)),
-                      y: Math.max(0, Math.round(mouseY / scale - p.yukseklik / 2)),
-                    }
-                  : p
-              ),
+              yerlesim: slab.yerlesim.map((piece, i) => {
+                if (i !== dragging.pieceIndex) return piece;
+
+                const nextX = Math.max(
+                  0,
+                  Math.min(result.plakaGenislik - piece.genislik, Math.round(logicalX - piece.genislik / 2))
+                );
+
+                const nextY = Math.max(
+                  0,
+                  Math.min(result.plakaYukseklik - piece.yukseklik, Math.round(logicalY - piece.yukseklik / 2))
+                );
+
+                return {
+                  ...piece,
+                  x: nextX,
+                  y: nextY,
+                };
+              }),
             };
           }),
         };
@@ -428,6 +443,98 @@ export function PlakaPlanlayiciV2({
 
   return (
     <div className="space-y-6">
+
+<style jsx global>{`
+@media (max-width: 767px) {
+
+  .plaka-mobile-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    padding: 14px !important;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+  }
+
+  .plaka-mobile-row > * {
+    width: 100% !important;
+  }
+
+  .plaka-mobile-row > *:nth-child(1)::before {
+    content: "Parça tipi";
+  }
+
+  .plaka-mobile-row > *:nth-child(2)::before {
+    content: "Uzunluk (cm)";
+  }
+
+  .plaka-mobile-row > *:nth-child(3)::before {
+    content: "Genişlik (cm)";
+  }
+
+  .plaka-mobile-row > *:nth-child(4)::before {
+    content: "Süre (dk/mtül)";
+  }
+
+  .plaka-mobile-row > *::before {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    margin-bottom: 6px;
+    color: #64748b;
+    letter-spacing: .05em;
+  }
+
+  .plaka-mobile-row input,
+  .plaka-mobile-row select {
+    height: 48px !important;
+    font-size: 16px !important;
+  }
+
+}
+`}</style>
+
+
+      <style jsx global>{`
+        @media (max-width: 767px) {
+          .plaka-mobile-row {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 12px !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 24px !important;
+            padding: 16px !important;
+            background: #ffffff !important;
+            margin-bottom: 14px !important;
+          }
+
+          .plaka-mobile-row > * {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          .plaka-mobile-row > *::before {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #64748b;
+          }
+
+          .plaka-mobile-row > *:nth-child(1)::before { content: "Parça tipi"; }
+          .plaka-mobile-row > *:nth-child(2)::before { content: "Uzunluk / mtül"; }
+          .plaka-mobile-row > *:nth-child(3)::before { content: "Genişlik"; }
+          .plaka-mobile-row > *:nth-child(4)::before { content: "1 mtül dk"; }
+
+          .plaka-mobile-head {
+            display: none !important;
+          }
+        }
+      `}</style>
+
       {!embedded && (
         <section className="overflow-hidden rounded-3xl border border-slate-200 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <div className="relative bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.34),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(124,58,237,0.36),_transparent_34%),linear-gradient(135deg,#0f172a_0%,#111827_45%,#1e1b4b_100%)] p-7 text-white">
@@ -492,46 +599,97 @@ export function PlakaPlanlayiciV2({
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="mb-2 grid grid-cols-[1.25fr_.75fr_.75fr_.75fr] gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                    <span>Kesilecek Parça</span>
-                    <span>Uzunluk / mtül</span>
-                    <span>Genişlik</span>
-                    <span>1 mtül dk</span>
-                  </div>
+                  
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    <div className="hidden md:grid md:grid-cols-[1.25fr_.75fr_.75fr_.75fr] gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                      <span>Kesilecek Parça</span>
+                      <span>Uzunluk / mtül</span>
+                      <span>Genişlik</span>
+                      <span>1 mtül dk</span>
+                    </div>
+
                     {tip.rows.map((row, idx) => (
-                      <div key={idx} className="grid grid-cols-[1.25fr_.75fr_.75fr_.75fr] gap-2">
-                        <select
-                          value={row.parcaTuru}
-                          onChange={(e) => {
-                            const selected = e.target.value;
-                            updateRow(tip.id, idx, {
-                              parcaTuru: selected,
-                              genislik: selected.toLowerCase().trim() === "stres alma" ? "" : row.genislik,
-                              sureDakika: row.sureDakika || String(defaultSure(selected)),
-                            });
-                          }}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:bg-white"
-                        >
-                          <option value="">Seçiniz</option>
-                          {PART_OPTIONS.map((p) => (
-                            <option key={p} value={p}>{p}</option>
-                          ))}
-                        </select>
+                      <div key={idx}>
+                        <div className="hidden md:grid md:grid-cols-[1.25fr_.75fr_.75fr_.75fr] gap-2">
+                          <select
+                            value={row.parcaTuru}
+                            onChange={(e) => {
+                              const selected = e.target.value;
+                              updateRow(tip.id, idx, {
+                                parcaTuru: selected,
+                                genislik: selected.toLowerCase().trim() === "stres alma" ? "" : row.genislik,
+                                sureDakika: row.sureDakika || String(defaultSure(selected)),
+                              });
+                            }}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:bg-white"
+                          >
+                            <option value="">Seçiniz</option>
+                            {PART_OPTIONS.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
 
-                        <Cell value={row.uzunluk} onChange={(v) => updateRow(tip.id, idx, { uzunluk: v })} />
-                        {row.parcaTuru.toLowerCase().trim() === "stres alma" ? (
-                          <input
-                            value=""
-                            disabled
-                            placeholder="Gerekmez"
-                            className="rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-400 outline-none"
-                          />
-                        ) : (
-                          <Cell value={row.genislik} onChange={(v) => updateRow(tip.id, idx, { genislik: v })} />
-                        )}
-                        <Cell value={row.sureDakika} onChange={(v) => updateRow(tip.id, idx, { sureDakika: v })} />
+                          <Cell value={row.uzunluk} onChange={(v) => updateRow(tip.id, idx, { uzunluk: v })} />
+                          {row.parcaTuru.toLowerCase().trim() === "stres alma" ? (
+                            <input
+                              value=""
+                              disabled
+                              placeholder="Gerekmez"
+                              className="rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-400 outline-none"
+                            />
+                          ) : (
+                            <Cell value={row.genislik} onChange={(v) => updateRow(tip.id, idx, { genislik: v })} />
+                          )}
+                          <Cell value={row.sureDakika} onChange={(v) => updateRow(tip.id, idx, { sureDakika: v })} />
+                        </div>
+
+                        <div className="md:hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-3 border-b border-slate-100 py-2">
+                            <div className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Parça tipi</div>
+                            <select
+                              value={row.parcaTuru}
+                              onChange={(e) => {
+                                const selected = e.target.value;
+                                updateRow(tip.id, idx, {
+                                  parcaTuru: selected,
+                                  genislik: selected.toLowerCase().trim() === "stres alma" ? "" : row.genislik,
+                                  sureDakika: row.sureDakika || String(defaultSure(selected)),
+                                });
+                              }}
+                              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-base outline-none focus:border-blue-500 focus:bg-white"
+                            >
+                              <option value="">Seçiniz</option>
+                              {PART_OPTIONS.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-3 border-b border-slate-100 py-2">
+                            <div className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Uzunluk cm</div>
+                            <Cell value={row.uzunluk} onChange={(v) => updateRow(tip.id, idx, { uzunluk: v })} />
+                          </div>
+
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-3 border-b border-slate-100 py-2">
+                            <div className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Genişlik cm</div>
+                            {row.parcaTuru.toLowerCase().trim() === "stres alma" ? (
+                              <input
+                                value=""
+                                disabled
+                                placeholder="Gerekmez"
+                                className="w-full rounded-2xl border border-slate-200 bg-slate-100 px-3 py-3 text-base text-slate-400 outline-none"
+                              />
+                            ) : (
+                              <Cell value={row.genislik} onChange={(v) => updateRow(tip.id, idx, { genislik: v })} />
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-3 py-2">
+                            <div className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Süre dk/mtül</div>
+                            <Cell value={row.sureDakika} onChange={(v) => updateRow(tip.id, idx, { sureDakika: v })} />
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -598,13 +756,18 @@ export function PlakaPlanlayiciV2({
                   <h4 className="mb-3 text-lg font-black text-slate-900">{result.tipAdi} / Plaka {slab.index + 1}</h4>
 
                   <div
-                    onMouseMove={(e) => movePiece(e, result, slab.index)}
-                    onMouseUp={() => setDragging(null)}
-                    onMouseLeave={() => setDragging(null)}
-                    className="relative overflow-hidden border-[3px] border-slate-950 bg-cover bg-center shadow-inner"
+                    onPointerMove={(e) => movePiece(e, result, slab.index)}
+                    onPointerUp={() => setDragging(null)}
+                    onPointerLeave={() => setDragging(null)}
+                    className="relative touch-none overflow-hidden border-[3px] border-slate-950 bg-cover bg-center shadow-inner"
                     style={{
-                      width: result.plakaGenislik * scale,
-                      height: result.plakaYukseklik * scale,
+                      width: typeof window !== 'undefined' && window.innerWidth < 768
+                        ? '100%'
+                        : result.plakaGenislik * scale,
+                      height: typeof window !== 'undefined' && window.innerWidth < 768
+                        ? 'auto'
+                        : result.plakaYukseklik * scale,
+                      aspectRatio: `${result.plakaGenislik} / ${result.plakaYukseklik}`,
                       backgroundImage: result.imageUrl
                         ? `url(${result.imageUrl})`
                         : "linear-gradient(135deg,#d9d0c0 0%,#f8f1e7 32%,#b8ad9d 58%,#efe4d2 100%)",
@@ -613,13 +776,13 @@ export function PlakaPlanlayiciV2({
                     {slab.yerlesim.map((p, pieceIndex) => (
                       <div
                         key={p.id}
-                        onMouseDown={() => setDragging({ tipId: result.tipId, slabIndex: slab.index, pieceIndex })}
-                        className="absolute flex cursor-grab flex-col items-center justify-center border-2 border-rose-600 bg-rose-500/25 p-1 text-center text-xs font-black text-slate-950 backdrop-blur-[1px]"
+                        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} setDragging({ tipId: result.tipId, slabIndex: slab.index, pieceIndex }); }}
+                        className="absolute flex touch-none select-none cursor-grab flex-col items-center justify-center border-2 border-rose-600 bg-rose-500/25 p-1 text-center text-xs font-black text-slate-950 backdrop-blur-[1px]"
                         style={{
-                          left: p.x * scale,
-                          top: p.y * scale,
-                          width: p.genislik * scale,
-                          height: p.yukseklik * scale,
+                          left: `${(p.x / result.plakaGenislik) * 100}%`,
+                          top: `${(p.y / result.plakaYukseklik) * 100}%`,
+                          width: `${(p.genislik / result.plakaGenislik) * 100}%`,
+                          height: `${(p.yukseklik / result.plakaYukseklik) * 100}%`,
                         }}
                         title={p.damarGrubu || ""}
                       >
