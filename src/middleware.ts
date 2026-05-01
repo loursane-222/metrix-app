@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
 
-  // Public static / Next assets
+  // Next/static assetleri serbest
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
@@ -14,19 +14,21 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Public pages: müşteri teklif linkleri login istememeli
+  // Public route'lar
   if (
     pathname === '/login' ||
     pathname === '/register' ||
-    pathname.startsWith('/api/auth/login') ||
-    pathname.startsWith('/api/auth/register') ||
+    pathname.startsWith('/api/auth') ||
     pathname.startsWith('/teklif') ||
     pathname.startsWith('/api/teklif')
   ) {
     return NextResponse.next()
   }
 
-  const token = req.cookies.get('token')?.value
+  const token =
+    req.cookies.get('token')?.value ||
+    req.cookies.get('auth_token')?.value ||
+    req.cookies.get('metrix_token')?.value
 
   if (!token) {
     return NextResponse.redirect(new URL('/login', req.url))
@@ -36,7 +38,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
