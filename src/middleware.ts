@@ -5,7 +5,7 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get('metrix-token')?.value
   const pathname = req.nextUrl.pathname
 
-  const acikSayfalar = ['/login', '/register']
+  const acikSayfalar = ['/login', '/register', '/teklif']
   const acikSayfa = acikSayfalar.includes(pathname)
 
   const secret = new TextEncoder().encode(
