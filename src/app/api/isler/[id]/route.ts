@@ -1,3 +1,4 @@
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
@@ -64,13 +65,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  const normalTezgahMtul = Number(body.metrajMtul || 0)
-  const normalTezgahArasiMtul = Number(body.tezgahArasiMtul || 0)
-  const normalAdaTezgahMtul = Number(body.adaTezgahMtul || 0)
+  const normalTezgahMtul = normalizeMtulInput(body.metrajMtul || 0)
+  const normalTezgahArasiMtul = normalizeMtulInput(body.tezgahArasiMtul || 0)
+  const normalAdaTezgahMtul = normalizeMtulInput(body.adaTezgahMtul || 0)
 
-  const ozel1Mtul = Number(body.ozelIscilik1Mtul || 0)
-  const ozel2Mtul = Number(body.ozelIscilik2Mtul || 0)
-  const ozel3Mtul = Number(body.ozelIscilik3Mtul || 0)
+  const ozel1Mtul = normalizeMtulInput(body.ozelIscilik1Mtul || 0)
+  const ozel2Mtul = normalizeMtulInput(body.ozelIscilik2Mtul || 0)
+  const ozel3Mtul = normalizeMtulInput(body.ozelIscilik3Mtul || 0)
 
   const toplamMetraj =
     normalTezgahMtul +
@@ -96,7 +97,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     toplamPlakaSayisi * body.plakaFiyatiEuro * body.kullanilanKur
 
   const toplamSureDakika =
-    normalTezgahMtul * Number(body.birMtulDakika || 0) +
+    normalTezgahMtul * normalizeMtulInput(body.birMtulDakika || 0) +
     normalTezgahArasiMtul * Number(body.tezgahArasiDakika || 0) +
     normalAdaTezgahMtul * Number(body.adaTezgahDakika || 0) +
     ozel1Mtul * Number(body.ozelIscilik1Dakika || 0) +
@@ -110,7 +111,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   let satisFiyati = Number(mevcutIs.satisFiyati)
   let kdvTutari = Number(mevcutIs.kdvTutari)
   let kdvDahilFiyat = Number(mevcutIs.kdvDahilFiyat)
-  let mtulSatisFiyati = Number(mevcutIs.mtulSatisFiyati)
+  let mtulSatisFiyati = normalizeMtulInput(mevcutIs.mtulSatisFiyati)
 
   if (!onaylandi) {
     satisFiyati = toplamMaliyet * (1 + (body.karYuzdesi || 0) / 100)

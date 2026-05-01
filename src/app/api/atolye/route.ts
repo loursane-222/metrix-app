@@ -1,3 +1,4 @@
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
       aylikPorselenPlaka: parseInt(veri.aylikPorselenPlaka) || 0,
       aylikKuvarsPlaka: parseInt(veri.aylikKuvarsPlaka) || 0,
       aylikDogaltasPlaka: parseInt(veri.aylikDogaltasPlaka) || 0,
-      plakaBasinaMtul: parseFloat(veri.plakaBasinaMtul) || 3.20,
+      plakaBasinaMtul: normalizeMtulInput(veri.plakaBasinaMtul) || 3.20,
       kdvOrani: parseInt(veri.kdvOrani) || 20,
       teklifGecerlilik: parseInt(veri.teklifGecerlilik) || 15,
       dakikaMaliyeti,
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
       aylikPorselenPlaka: parseInt(veri.aylikPorselenPlaka) || 0,
       aylikKuvarsPlaka: parseInt(veri.aylikKuvarsPlaka) || 0,
       aylikDogaltasPlaka: parseInt(veri.aylikDogaltasPlaka) || 0,
-      plakaBasinaMtul: parseFloat(veri.plakaBasinaMtul) || 3.20,
+      plakaBasinaMtul: normalizeMtulInput(veri.plakaBasinaMtul) || 3.20,
       kdvOrani: parseInt(veri.kdvOrani) || 20,
       teklifGecerlilik: parseInt(veri.teklifGecerlilik) || 15,
       dakikaMaliyeti,

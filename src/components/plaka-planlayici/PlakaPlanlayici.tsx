@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useRef } from "react";
 
 const YON_SECENEKLERI = ["Enine", "Boyuna", "Serbest"];

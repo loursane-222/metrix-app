@@ -1,5 +1,5 @@
 'use client'
-
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
@@ -89,7 +89,7 @@ export default function IsDuzenle() {
         if (makVeri.makineler) setMakineler(makVeri.makineler)
         if (atolyeVeri.atolye) {
           const a = atolyeVeri.atolye
-          setPlakaBasinaOrtMtul(Number(a.plakaBasinaMtul).toFixed(2))
+          setPlakaBasinaOrtMtul(normalizeMtulInput(a.plakaBasinaMtul).toFixed(2))
           setAtolyeBilgi({
             adi:a.atolyeAdi||'',
             adres:a.adres||'',
@@ -110,20 +110,20 @@ export default function IsDuzenle() {
             malzemeTipi:is.malzemeTipi||'Porselen',
             musteriTipi:is.musteriTipi||'Ev sahibi',
             plakaFiyatiEuro:String(Number(is.plakaFiyatiEuro)||''),
-            metrajMtul:String(Number(is.metrajMtul)||''),
-            birMtulDakika:String(Number(is.birMtulDakika)||''),
-            tezgahArasiMtul:String(Number(is.tezgahArasiMtul)||''),
+            metrajMtul:String(normalizeMtulInput(is.metrajMtul)||''),
+            birMtulDakika:String(normalizeMtulInput(is.birMtulDakika)||''),
+            tezgahArasiMtul:String(normalizeMtulInput(is.tezgahArasiMtul)||''),
             tezgahArasiDakika:String(Number(is.tezgahArasiDakika)||''),
-            adaTezgahMtul:String(Number(is.adaTezgahMtul)||''),
+            adaTezgahMtul:String(normalizeMtulInput(is.adaTezgahMtul)||''),
             adaTezgahDakika:String(Number(is.adaTezgahDakika)||''),
             kullanilanKur:String(Number(is.kullanilanKur)||''),
             karYuzdesi:String(Number(is.karYuzdesi)||'30'),
             notlar:is.notlar||'',
             plakaGenislikCm:String(Number(is.plakaGenislikCm)||''),
             plakaUzunlukCm:String(Number(is.plakaUzunlukCm)||''),
-            plakadanAlinanMtul:String(Number(is.plakadanAlinanMtul)||''),
+            plakadanAlinanMtul:String(normalizeMtulInput(is.plakadanAlinanMtul)||''),
             kirilanTasPlaka:String(Number(is.kirilanTasPlaka)||'0'),
-            hataliKesimPlaka:String(Number(is.hataliKesimPlaka)||'0'),
+            hataliKesimPlaka:String(normalizeMtulInput(is.hataliKesimPlaka)||'0'),
             manuelPlakaSayisi:'',
             ozelIscilik1Mtul:'',
             ozelIscilik1Dakika:'',
@@ -178,16 +178,16 @@ export default function IsDuzenle() {
   const onaylandi = mevcutDurum === 'onaylandi'
 
   const toplamMetrajHesap =
-    (parseFloat(form.metrajMtul) || 0) +
-    (parseFloat(form.tezgahArasiMtul) || 0) +
-    (parseFloat(form.adaTezgahMtul) || 0) +
-    (parseFloat(form.ozelIscilik1Mtul) || 0) +
-    (parseFloat(form.ozelIscilik2Mtul) || 0) +
-    (parseFloat(form.ozelIscilik3Mtul) || 0)
+    (normalizeMtulInput(form.metrajMtul) || 0) +
+    (normalizeMtulInput(form.tezgahArasiMtul) || 0) +
+    (normalizeMtulInput(form.adaTezgahMtul) || 0) +
+    (normalizeMtulInput(form.ozelIscilik1Mtul) || 0) +
+    (normalizeMtulInput(form.ozelIscilik2Mtul) || 0) +
+    (normalizeMtulInput(form.ozelIscilik3Mtul) || 0)
 
   const otomatikPlakaSayisi =
-    (parseFloat(form.plakadanAlinanMtul) || 0) > 0
-      ? Math.ceil(toplamMetrajHesap / (parseFloat(form.plakadanAlinanMtul) || 1))
+    (normalizeMtulInput(form.plakadanAlinanMtul) || 0) > 0
+      ? Math.ceil(toplamMetrajHesap / (normalizeMtulInput(form.plakadanAlinanMtul) || 1))
       : 0
 
   const gosterilenPlakaSayisi =
@@ -223,26 +223,26 @@ export default function IsDuzenle() {
           ...form,
           onaylandi,
           plakaFiyatiEuro:parseFloat(form.plakaFiyatiEuro)||0,
-          metrajMtul:parseFloat(form.metrajMtul)||0,
-          birMtulDakika:parseFloat(form.birMtulDakika)||0,
-          tezgahArasiMtul:parseFloat(form.tezgahArasiMtul)||0,
+          metrajMtul:normalizeMtulInput(form.metrajMtul)||0,
+          birMtulDakika:normalizeMtulInput(form.birMtulDakika)||0,
+          tezgahArasiMtul:normalizeMtulInput(form.tezgahArasiMtul)||0,
           tezgahArasiDakika:parseFloat(form.tezgahArasiDakika)||0,
-          adaTezgahMtul:parseFloat(form.adaTezgahMtul)||0,
+          adaTezgahMtul:normalizeMtulInput(form.adaTezgahMtul)||0,
           adaTezgahDakika:parseFloat(form.adaTezgahDakika)||0,
           kullanilanKur:parseFloat(form.kullanilanKur)||0,
           karYuzdesi:parseFloat(form.karYuzdesi)||0,
           plakaGenislikCm:parseFloat(form.plakaGenislikCm)||0,
           plakaUzunlukCm:parseFloat(form.plakaUzunlukCm)||0,
-          plakadanAlinanMtul:parseFloat(form.plakadanAlinanMtul)||0,
+          plakadanAlinanMtul:normalizeMtulInput(form.plakadanAlinanMtul)||0,
           kirilanTasPlaka:parseFloat(form.kirilanTasPlaka)||0,
-          hataliKesimPlaka:parseFloat(form.hataliKesimPlaka)||0,
+          hataliKesimPlaka:normalizeMtulInput(form.hataliKesimPlaka)||0,
           manuelPlakaSayisi:parseFloat(form.manuelPlakaSayisi)||0,
 
-          ozelIscilik1Mtul:parseFloat(form.ozelIscilik1Mtul)||0,
+          ozelIscilik1Mtul:normalizeMtulInput(form.ozelIscilik1Mtul)||0,
           ozelIscilik1Dakika:parseFloat(form.ozelIscilik1Dakika)||0,
-          ozelIscilik2Mtul:parseFloat(form.ozelIscilik2Mtul)||0,
+          ozelIscilik2Mtul:normalizeMtulInput(form.ozelIscilik2Mtul)||0,
           ozelIscilik2Dakika:parseFloat(form.ozelIscilik2Dakika)||0,
-          ozelIscilik3Mtul:parseFloat(form.ozelIscilik3Mtul)||0,
+          ozelIscilik3Mtul:normalizeMtulInput(form.ozelIscilik3Mtul)||0,
           ozelIscilik3Dakika:parseFloat(form.ozelIscilik3Dakika)||0,
 
           operasyonlar,
@@ -283,13 +283,13 @@ export default function IsDuzenle() {
         is:{
           urunAdi:form.urunAdi,
           malzemeTipi:form.malzemeTipi,
-          metrajMtul:parseFloat(form.metrajMtul)||0,
-          tezgahArasiMtul:parseFloat(form.tezgahArasiMtul)||0,
-          adaTezgahMtul:parseFloat(form.adaTezgahMtul)||0,
+          metrajMtul:normalizeMtulInput(form.metrajMtul)||0,
+          tezgahArasiMtul:normalizeMtulInput(form.tezgahArasiMtul)||0,
+          adaTezgahMtul:normalizeMtulInput(form.adaTezgahMtul)||0,
           toplamMetraj:sonuc.toplamMetraj,
           plakaGenislikCm:parseFloat(form.plakaGenislikCm)||0,
           plakaUzunlukCm:parseFloat(form.plakaUzunlukCm)||0,
-          plakadanAlinanMtul:parseFloat(form.plakadanAlinanMtul)||0,
+          plakadanAlinanMtul:normalizeMtulInput(form.plakadanAlinanMtul)||0,
           kullanilanPlakaSayisi:sonuc.kullanilanPlakaSayisi,
           plakaFiyatiEuro:parseFloat(form.plakaFiyatiEuro)||0,
           kullanilanKur:parseFloat(form.kullanilanKur)||0,
@@ -303,13 +303,13 @@ export default function IsDuzenle() {
           kdvTutari:sonuc.kdvTutari,
           kdvDahilFiyat:sonuc.kdvDahilFiyat,
           mtulSatisFiyati:sonuc.mtulSatisFiyati,
-          ozelIscilik1Mtul:parseFloat(form.ozelIscilik1Mtul)||0,
+          ozelIscilik1Mtul:normalizeMtulInput(form.ozelIscilik1Mtul)||0,
           ozelIscilik1Dakika:parseFloat(form.ozelIscilik1Dakika)||0,
           ozelIscilik1Aciklama:form.ozelIscilik1Aciklama,
-          ozelIscilik2Mtul:parseFloat(form.ozelIscilik2Mtul)||0,
+          ozelIscilik2Mtul:normalizeMtulInput(form.ozelIscilik2Mtul)||0,
           ozelIscilik2Dakika:parseFloat(form.ozelIscilik2Dakika)||0,
           ozelIscilik2Aciklama:form.ozelIscilik2Aciklama,
-          ozelIscilik3Mtul:parseFloat(form.ozelIscilik3Mtul)||0,
+          ozelIscilik3Mtul:normalizeMtulInput(form.ozelIscilik3Mtul)||0,
           ozelIscilik3Dakika:parseFloat(form.ozelIscilik3Dakika)||0,
           ozelIscilik3Aciklama:form.ozelIscilik3Aciklama,
           notlar:form.notlar,

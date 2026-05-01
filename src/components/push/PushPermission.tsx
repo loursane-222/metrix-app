@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { initializeApp, getApps } from "firebase/app";
 import { getMessaging, getToken, isSupported } from "firebase/messaging";

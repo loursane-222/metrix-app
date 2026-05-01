@@ -1,3 +1,4 @@
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
@@ -43,9 +44,9 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
     if (!mevcut) return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
 
-    const tezgahMtul = Number(mevcut.metrajMtul || 0)
-    const arasiMtul = Number(mevcut.tezgahArasiMtul || 0)
-    const adaMtul = Number(mevcut.adaTezgahMtul || 0)
+    const tezgahMtul = normalizeMtulInput(mevcut.metrajMtul || 0)
+    const arasiMtul = normalizeMtulInput(mevcut.tezgahArasiMtul || 0)
+    const adaMtul = normalizeMtulInput(mevcut.adaTezgahMtul || 0)
 
     const agirlikliMtul = tezgahMtul + arasiMtul * 0.75 + adaMtul * 1.5
 

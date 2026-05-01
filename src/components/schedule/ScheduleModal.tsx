@@ -1,5 +1,5 @@
 "use client";
-
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { useState, useTransition, useEffect } from "react";
 import { PhaseBadge } from "./PhaseBadge";
 import { upsertWorkSchedule } from "@/app/actions/schedule";
@@ -103,7 +103,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }: ScheduleModalProps
   }
 
   function getSelectedIsAnalysis(is: any) {
-    const mtul = Number(is?.metrajMtul || 0);
+    const mtul = normalizeMtulInput(is?.metrajMtul || 0);
     const toplamDakika = Number(is?.toplamSureDakika || 0);
     const satis = Number(is?.satisFiyati || 0);
     const maliyet = Number(is?.toplamMaliyet || 0);

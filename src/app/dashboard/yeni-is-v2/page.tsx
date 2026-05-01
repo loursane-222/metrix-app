@@ -1,5 +1,5 @@
 "use client";
-
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { useEffect, useState } from "react";
 
 export default function YeniIsV2() {
@@ -75,9 +75,9 @@ export default function YeniIsV2() {
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <h2 className="text-xl font-black text-slate-900">Metraj Özeti</h2>
           <div className="mt-5 space-y-3">
-            <Row label="Tezgah" value={Number(data.tezgahMtul || 0)} />
-            <Row label="Tezgah Arası" value={Number(data.tezgahArasiMtul || 0)} />
-            <Row label="Ada Tezgah" value={Number(data.adaTezgahMtul || 0)} />
+            <Row label="Tezgah" value={normalizeMtulInput(data.tezgahMtul || 0)} />
+            <Row label="Tezgah Arası" value={normalizeMtulInput(data.tezgahArasiMtul || 0)} />
+            <Row label="Ada Tezgah" value={normalizeMtulInput(data.adaTezgahMtul || 0)} />
           </div>
 
           <div className="mt-6 border-t border-slate-200 pt-5">

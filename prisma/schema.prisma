@@ -329,3 +329,13 @@ model PushToken {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model Notification {
+  id          String   @id @default(cuid())
+  type        String
+  title       String
+  description String?
+  actionUrl   String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}

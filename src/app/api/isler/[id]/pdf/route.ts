@@ -1,3 +1,4 @@
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import QRCode from 'qrcode'
@@ -53,14 +54,14 @@ export async function GET(
       : ''
 
     const toplamMetraj =
-      Number(is.metrajMtul || 0) +
-      Number(is.tezgahArasiMtul || 0) +
-      Number(is.adaTezgahMtul || 0)
+      normalizeMtulInput(is.metrajMtul || 0) +
+      normalizeMtulInput(is.tezgahArasiMtul || 0) +
+      normalizeMtulInput(is.adaTezgahMtul || 0)
 
     const satis = Number(is.satisFiyati || 0)
-    const bazMtul = Number(is.metrajMtul || 0)
-    const arasiMtul = Number(is.tezgahArasiMtul || 0)
-    const adaMtul = Number(is.adaTezgahMtul || 0)
+    const bazMtul = normalizeMtulInput(is.metrajMtul || 0)
+    const arasiMtul = normalizeMtulInput(is.tezgahArasiMtul || 0)
+    const adaMtul = normalizeMtulInput(is.adaTezgahMtul || 0)
 
     const weightedTotal = bazMtul * 1 + arasiMtul * 0.75 + adaMtul * 1.5
     const bazFiyat = weightedTotal > 0 ? satis / weightedTotal : 0

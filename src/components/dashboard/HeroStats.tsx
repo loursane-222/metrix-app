@@ -1,5 +1,4 @@
 "use client";
-
 import Card from "../ui/Card";
 
 export default function HeroStats() {

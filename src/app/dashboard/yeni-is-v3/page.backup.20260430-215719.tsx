@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PlakaPlanlayiciV2, type AIPlakaAktarSonucu } from "@/components/plaka-planlayici/PlakaPlanlayiciV2";

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createNotificationSafe } from "@/lib/notifications";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -27,6 +28,13 @@ export async function POST(
         whatsappOnay: true,
         whatsappOnayOkundu: false,
       },
+    });
+
+    await createNotificationSafe({
+      type: "ACTION",
+      title: "Müşteri teklifi onayladı",
+      description: "Onaylanan teklif için ölçü ve taş stok sürecini kontrol edin.",
+      actionUrl: "/isler",
     });
 
     return NextResponse.redirect(new URL(`/teklif/${teklifNo}/tesekkur`, req.url), 303);

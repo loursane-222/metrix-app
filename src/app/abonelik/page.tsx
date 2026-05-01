@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 
 const IBAN = "TR83 0006 2000 2690 0006 6417 03";

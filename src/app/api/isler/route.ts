@@ -1,3 +1,4 @@
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
@@ -112,17 +113,17 @@ export async function POST(req: NextRequest) {
   }
 
   const dakikaMaliyeti = Number(atolye.dakikaMaliyeti) || 0
-  const gercekPlakaMtul = parseFloat(plakadanAlinanMtul) || Number(atolye.plakaBasinaMtul) || 3.20
+  const gercekPlakaMtul = normalizeMtulInput(plakadanAlinanMtul) || normalizeMtulInput(atolye.plakaBasinaMtul) || 3.20
   const kdvOrani = Number(atolye.kdvOrani) || 20
   const teklifGecerlilik = Number(atolye.teklifGecerlilik) || 15
 
-  const normalTezgahMtul = parseFloat(metrajMtul) || 0
-  const normalTezgahArasiMtul = parseFloat(tezgahArasiMtul) || 0
-  const normalAdaTezgahMtul = parseFloat(adaTezgahMtul) || 0
+  const normalTezgahMtul = normalizeMtulInput(metrajMtul) || 0
+  const normalTezgahArasiMtul = normalizeMtulInput(tezgahArasiMtul) || 0
+  const normalAdaTezgahMtul = normalizeMtulInput(adaTezgahMtul) || 0
 
-  const ozel1Mtul = parseFloat(ozelIscilik1Mtul) || 0
-  const ozel2Mtul = parseFloat(ozelIscilik2Mtul) || 0
-  const ozel3Mtul = parseFloat(ozelIscilik3Mtul) || 0
+  const ozel1Mtul = normalizeMtulInput(ozelIscilik1Mtul) || 0
+  const ozel2Mtul = normalizeMtulInput(ozelIscilik2Mtul) || 0
+  const ozel3Mtul = normalizeMtulInput(ozelIscilik3Mtul) || 0
 
   const toplamMetraj =
     normalTezgahMtul +
@@ -133,7 +134,7 @@ export async function POST(req: NextRequest) {
     ozel3Mtul
 
   const temelSureDakika =
-    normalTezgahMtul * (parseFloat(birMtulDakika) || 0) +
+    normalTezgahMtul * (normalizeMtulInput(birMtulDakika) || 0) +
     normalTezgahArasiMtul * (parseFloat(tezgahArasiDakika) || 0) +
     normalAdaTezgahMtul * (parseFloat(adaTezgahDakika) || 0) +
     ozel1Mtul * (parseFloat(ozelIscilik1Dakika) || 0) +
@@ -196,7 +197,7 @@ export async function POST(req: NextRequest) {
       musteriTipi,
       plakaFiyatiEuro: parseFloat(plakaFiyatiEuro) || 0,
       metrajMtul: normalTezgahMtul,
-      birMtulDakika: parseFloat(birMtulDakika) || 0,
+      birMtulDakika: normalizeMtulInput(birMtulDakika) || 0,
       tezgahArasiMtul: normalTezgahArasiMtul,
       tezgahArasiDakika: parseFloat(tezgahArasiDakika) || 0,
       adaTezgahMtul: normalAdaTezgahMtul,
@@ -237,7 +238,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (tumIsler.length > 0) {
-    const ortalama = tumIsler.reduce((acc, i) => acc + Number(i.plakadanAlinanMtul), 0) / tumIsler.length
+    const ortalama = tumIsler.reduce((acc, i) => acc + normalizeMtulInput(i.plakadanAlinanMtul), 0) / tumIsler.length
     await prisma.atolye.update({
       where: { id: atolye.id },
       data: { plakaBasinaMtul: ortalama },

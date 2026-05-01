@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PlakaPlanlayiciV2, type AIPlakaAktarSonucu } from "@/components/plaka-planlayici/PlakaPlanlayiciV2";
@@ -131,9 +132,20 @@ export default function YeniIsV3Page() {
   }
 
   function makineMaliyet(id: string) {
-    const m = makineler.find((x) => x.id === id);
-    return Number(m?.dakikalikMaliyet || 0);
-  }
+  const m = makineler.find((x) => x.id === id);
+  if (!m) return 0;
+
+  const val =
+    m.dakikalikMaliyet ??
+    m.dkMaliyet ??
+    m.dakikaMaliyet ??
+    m.hesaplananDakikaMaliyeti ??
+    m.minuteCost ??
+    m.costPerMinute ??
+    0;
+
+  return Number(val) || 0;
+}
 
   function aiAktar(sonuc: AIPlakaAktarSonucu) {
     setForm((p) => ({
@@ -1088,6 +1100,7 @@ function OperationRow({
         <input
           value={mtul}
           onChange={(e) => setMtul(e.target.value)}
+          onBlur={(e) => setMtul(normalizeMtulDisplay(e.target.value))}
           className="w-full h-9 rounded-lg bg-[#0B1120] border border-slate-700 px-3 text-sm outline-none focus:border-blue-500"
         />
       </label>
@@ -1102,7 +1115,14 @@ function OperationRow({
           {makineler.length === 0 && <option value="">Makine yok</option>}
           {makineler.map((m: any) => (
             <option key={m.id} value={m.id}>
-              {m.makineAdi} · {Number(m.dakikalikMaliyet || 0).toFixed(2)}₺/dk
+              {m.makineAdi} · {Number(
+  m.dakikalikMaliyet ??
+  m.dkMaliyet ??
+  m.dakikaMaliyet ??
+  m.hesaplananDakikaMaliyeti ??
+  m.minuteCost ??
+  0
+).toFixed(2)}₺/dk
             </option>
           ))}
         </select>
@@ -1163,7 +1183,14 @@ function SelectMakine({ label, value, onChange, makineler }: any) {
         {makineler.length === 0 && <option value="">Makine yok</option>}
         {makineler.map((m: any) => (
           <option key={m.id} value={m.id}>
-            {m.makineAdi} · {Number(m.dakikalikMaliyet || 0).toFixed(2)}₺/dk
+            {m.makineAdi} · {Number(
+  m.dakikalikMaliyet ??
+  m.dkMaliyet ??
+  m.dakikaMaliyet ??
+  m.hesaplananDakikaMaliyeti ??
+  m.minuteCost ??
+  0
+).toFixed(2)}₺/dk
           </option>
         ))}
       </select>

@@ -1,5 +1,5 @@
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { PrismaClient } from "@prisma/client";
-
 const prisma = new PrismaClient();
 
 export const dynamic = "force-dynamic";
@@ -49,15 +49,15 @@ export default async function Page({ params }: any) {
   const tel = telTemizle(atolye?.telefon || "");
 
   const toplamMetraj =
-    Number(is.metrajMtul || 0) +
-    Number(is.tezgahArasiMtul || 0) +
-    Number(is.adaTezgahMtul || 0);
+    normalizeMtulInput(is.metrajMtul || 0) +
+    normalizeMtulInput(is.tezgahArasiMtul || 0) +
+    normalizeMtulInput(is.adaTezgahMtul || 0);
 
   const satis = Number(is.satisFiyati || 0);
   // 🔥 YENİ FİYAT MOTORU
-  const bazMtul = Number(is.metrajMtul || 0);
-  const arasiMtul = Number(is.tezgahArasiMtul || 0);
-  const adaMtul = Number(is.adaTezgahMtul || 0);
+  const bazMtul = normalizeMtulInput(is.metrajMtul || 0);
+  const arasiMtul = normalizeMtulInput(is.tezgahArasiMtul || 0);
+  const adaMtul = normalizeMtulInput(is.adaTezgahMtul || 0);
 
   const weightedTotal =
     (bazMtul * 1) +
@@ -86,25 +86,25 @@ export default async function Page({ params }: any) {
     : "Porselen, doğal taş ve tezgah uygulamalarında profesyonel üretim yaklaşımıyla çalışıyoruz.";
 
   const teklifSatirlari = [
-    Number(is.metrajMtul || 0) > 0
+    normalizeMtulInput(is.metrajMtul || 0) > 0
       ? {
           kalem: "Tezgah",
           urun: is.urunAdi || "-",
-          miktar: Number(is.metrajMtul || 0),
+          miktar: normalizeMtulInput(is.metrajMtul || 0),
         }
       : null,
-    Number(is.tezgahArasiMtul || 0) > 0
+    normalizeMtulInput(is.tezgahArasiMtul || 0) > 0
       ? {
           kalem: "Tezgah Arası",
           urun: is.urunAdi || "-",
-          miktar: Number(is.tezgahArasiMtul || 0),
+          miktar: normalizeMtulInput(is.tezgahArasiMtul || 0),
         }
       : null,
-    Number(is.adaTezgahMtul || 0) > 0
+    normalizeMtulInput(is.adaTezgahMtul || 0) > 0
       ? {
           kalem: "Ada",
           urun: is.urunAdi || "-",
-          miktar: Number(is.adaTezgahMtul || 0),
+          miktar: normalizeMtulInput(is.adaTezgahMtul || 0),
         }
       : null,
   ].filter(Boolean) as Array<{ kalem: string; urun: string; miktar: number }>;

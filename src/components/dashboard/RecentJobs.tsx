@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import Card from "@/components/ui/Card";
 import { paraGoster } from "@/lib/format";

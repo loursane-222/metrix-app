@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect, useTransition, useRef, useMemo } from "react";
 import { ScheduleModal } from "./ScheduleModal";
 import { togglePhaseCompletion, movePhase, updateTasDurumu } from "@/app/actions/schedule";

@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useTransition } from "react";
 import { togglePhaseCompletion } from "@/app/actions/schedule";
 import { PhaseType, PHASE_LABELS, PHASE_COLORS, canCompletePhase, type SchedulePhase } from "@/lib/types/schedule";

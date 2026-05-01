@@ -1,5 +1,5 @@
 'use client'
-
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { useState, useEffect, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
@@ -189,9 +189,9 @@ export default function YeniIs() {
         ...prev,
         manuelPlakaSayisi: data.toplamPlaka ? String(data.toplamPlaka) : prev.manuelPlakaSayisi,
         plakaFiyatiEuro: data.ortalamaPlakaFiyati ? String(Number(data.ortalamaPlakaFiyati).toFixed(2)) : prev.plakaFiyatiEuro,
-        metrajMtul: data.tezgahMtul ? String(Number(data.tezgahMtul).toFixed(2)) : prev.metrajMtul,
-        tezgahArasiMtul: data.tezgahArasiMtul ? String(Number(data.tezgahArasiMtul).toFixed(2)) : prev.tezgahArasiMtul,
-        adaTezgahMtul: data.adaTezgahMtul ? String(Number(data.adaTezgahMtul).toFixed(2)) : prev.adaTezgahMtul,
+        metrajMtul: data.tezgahMtul ? String(normalizeMtulInput(data.tezgahMtul).toFixed(2)) : prev.metrajMtul,
+        tezgahArasiMtul: data.tezgahArasiMtul ? String(normalizeMtulInput(data.tezgahArasiMtul).toFixed(2)) : prev.tezgahArasiMtul,
+        adaTezgahMtul: data.adaTezgahMtul ? String(normalizeMtulInput(data.adaTezgahMtul).toFixed(2)) : prev.adaTezgahMtul,
         plakaGenislikCm: data.plakaGenislik ? String(data.plakaGenislik) : prev.plakaGenislikCm,
         plakaUzunlukCm: data.plakaYukseklik ? String(data.plakaYukseklik) : prev.plakaUzunlukCm,
       }));
@@ -201,11 +201,11 @@ export default function YeniIs() {
         toplamPlakaAdet: Number(data.toplamPlaka || 0),
         plakaEni: Number(data.plakaGenislik || 0),
         plakaBoy: Number(data.plakaYukseklik || 0),
-        tezgahBoy: Number(data.tezgahMtul || 0) * 100,
+        tezgahBoy: normalizeMtulInput(data.tezgahMtul || 0) * 100,
         tezgahAdet: 1,
-        tezgahArasiBoy: Number(data.tezgahArasiMtul || 0) * 100,
+        tezgahArasiBoy: normalizeMtulInput(data.tezgahArasiMtul || 0) * 100,
         tezgahArasiAdet: 1,
-        adaTezgahBoy: Number(data.adaTezgahMtul || 0) * 100,
+        adaTezgahBoy: normalizeMtulInput(data.adaTezgahMtul || 0) * 100,
         adaTezgahAdet: 1,
       });
 
@@ -287,8 +287,8 @@ const [sonuc, setSonuc] = useState<{
       .then(v => {
         if (v.atolye) {
           const a = v.atolye
-          setPlakaBasinaOrtMtul(Number(a.plakaBasinaMtul).toFixed(2))
-          setForm(prev => ({ ...prev, plakadanAlinanMtul: Number(a.plakaBasinaMtul).toFixed(2) }))
+          setPlakaBasinaOrtMtul(normalizeMtulInput(a.plakaBasinaMtul).toFixed(2))
+          setForm(prev => ({ ...prev, plakadanAlinanMtul: normalizeMtulInput(a.plakaBasinaMtul).toFixed(2) }))
           setAtolyeBilgi({
             adi: a.atolyeAdi || '',
             adres: a.adres || '',
@@ -782,9 +782,9 @@ function pdfModalAc() {
                       ...prev,
                       manuelPlakaSayisi: sonuc.toplamPlaka ? String(sonuc.toplamPlaka) : prev.manuelPlakaSayisi,
                       plakaFiyatiEuro: sonuc.ortalamaPlakaFiyati ? String(Number(sonuc.ortalamaPlakaFiyati).toFixed(2)) : prev.plakaFiyatiEuro,
-                      metrajMtul: sonuc.tezgahMtul ? String(Number(sonuc.tezgahMtul).toFixed(2)) : prev.metrajMtul,
-                      tezgahArasiMtul: sonuc.tezgahArasiMtul ? String(Number(sonuc.tezgahArasiMtul).toFixed(2)) : prev.tezgahArasiMtul,
-                      adaTezgahMtul: sonuc.adaTezgahMtul ? String(Number(sonuc.adaTezgahMtul).toFixed(2)) : prev.adaTezgahMtul,
+                      metrajMtul: sonuc.tezgahMtul ? String(normalizeMtulInput(sonuc.tezgahMtul).toFixed(2)) : prev.metrajMtul,
+                      tezgahArasiMtul: sonuc.tezgahArasiMtul ? String(normalizeMtulInput(sonuc.tezgahArasiMtul).toFixed(2)) : prev.tezgahArasiMtul,
+                      adaTezgahMtul: sonuc.adaTezgahMtul ? String(normalizeMtulInput(sonuc.adaTezgahMtul).toFixed(2)) : prev.adaTezgahMtul,
                       plakaGenislikCm: sonuc.plakaGenislik ? String(sonuc.plakaGenislik) : prev.plakaGenislikCm,
                       plakaUzunlukCm: sonuc.plakaYukseklik ? String(sonuc.plakaYukseklik) : prev.plakaUzunlukCm,
                       plakadanAlinanMtul:
@@ -798,11 +798,11 @@ function pdfModalAc() {
                       toplamPlakaAdet: Number(sonuc.toplamPlaka || 0),
                       plakaEni: Number(sonuc.plakaGenislik || 0),
                       plakaBoy: Number(sonuc.plakaYukseklik || 0),
-                      tezgahBoy: Number(sonuc.tezgahMtul || 0) * 100,
+                      tezgahBoy: normalizeMtulInput(sonuc.tezgahMtul || 0) * 100,
                       tezgahAdet: 1,
-                      tezgahArasiBoy: Number(sonuc.tezgahArasiMtul || 0) * 100,
+                      tezgahArasiBoy: normalizeMtulInput(sonuc.tezgahArasiMtul || 0) * 100,
                       tezgahArasiAdet: 1,
-                      adaTezgahBoy: Number(sonuc.adaTezgahMtul || 0) * 100,
+                      adaTezgahBoy: normalizeMtulInput(sonuc.adaTezgahMtul || 0) * 100,
                       adaTezgahAdet: 1,
                     })
 
@@ -1032,9 +1032,9 @@ function pdfModalAc() {
                 {(() => {
                   const netKar = sonuc.satisFiyati - sonuc.toplamMaliyet
 
-                  const bazMtul = parseFloat(form.metrajMtul || "0")
-                  const arasiMtul = parseFloat(form.tezgahArasiMtul || "0")
-                  const adaMtul = parseFloat(form.adaTezgahMtul || "0")
+                  const bazMtul = normalizeMtulInput(form.metrajMtul || "0")
+                  const arasiMtul = normalizeMtulInput(form.tezgahArasiMtul || "0")
+                  const adaMtul = normalizeMtulInput(form.adaTezgahMtul || "0")
 
                   const weightedTotal =
                     (bazMtul * 1) +

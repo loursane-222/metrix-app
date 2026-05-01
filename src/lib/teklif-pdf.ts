@@ -1,3 +1,4 @@
+import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import QRCode from 'qrcode'
 
 function para(n: number) {
@@ -57,11 +58,11 @@ export async function teklifPdfIndir(veri: any) {
   const malzemeTipi = guvenliYazi(is.malzemeTipi || '')
   const notlar = guvenliYazi(is.notlar || '')
 
-  const tezgahMtul = Number(is.metrajMtul || 0)
-  const tezgahArasiMtul = Number(is.tezgahArasiMtul || 0)
-  const adaTezgahMtul = Number(is.adaTezgahMtul || 0)
+  const tezgahMtul = normalizeMtulInput(is.metrajMtul || 0)
+  const tezgahArasiMtul = normalizeMtulInput(is.tezgahArasiMtul || 0)
+  const adaTezgahMtul = normalizeMtulInput(is.adaTezgahMtul || 0)
 
-  const toplamMetraj = Number(is.toplamMetraj || tezgahMtul + tezgahArasiMtul + adaTezgahMtul)
+  const toplamMetraj = normalizeMtulInput(is.toplamMetraj || tezgahMtul + tezgahArasiMtul + adaTezgahMtul)
   const kullanilanPlakaSayisi = Number(is.kullanilanPlakaSayisi || 0)
   const toplamSureDakika = Number(is.toplamSureDakika || 0)
   const satisFiyati = Number(is.satisFiyati || 0)
