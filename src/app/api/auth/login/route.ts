@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
 
       const res = NextResponse.json({ mesaj: 'Giriş başarılı.' })
       res.cookies.set('metrix-token', token, {
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: sureDakika * 60,
@@ -63,6 +67,10 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({ mesaj: 'Giriş başarılı.' })
     res.cookies.set('metrix-token', token, {
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: sureDakika * 60,

@@ -487,7 +487,14 @@ const [sonuc, setSonuc] = useState<{
       if (yanit.ok) {
         setSonuc(veri)
         setStep(5)
-        setBasariModal(true)
+        setBasariModal(false)
+
+        setTimeout(() => {
+          const el = document.getElementById('teklif-sonuc-aksiyonlari')
+          el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 250)
+      } else {
+        alert(veri?.error || veri?.message || 'Teklif kaydedilemedi. Lütfen eksik alanları kontrol et.')
       }
     } finally {
       setKaydediliyor(false)
@@ -1306,6 +1313,53 @@ function pdfModalAc() {
           </SectionCard>
         )}
 
+        
+        {sonuc && (
+          <section
+            id="teklif-sonuc-aksiyonlari"
+            className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
+          >
+            <div className="mb-3">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">
+                Teklif hazır
+              </p>
+              <h3 className="mt-1 text-lg font-black text-slate-950">
+                {sonuc.teklifNo} numaralı teklif oluşturuldu
+              </h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Müşteriye WhatsApp ile iletebilir, linki kopyalayabilir veya PDF teklif oluşturabilirsin.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={whatsappGonder}
+                className="rounded-2xl bg-green-600 px-4 py-3 text-sm font-bold text-white shadow-sm"
+              >
+                📲 WhatsApp Teklif İlet
+              </button>
+
+              <button
+                type="button"
+                onClick={linkKopyala}
+                className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm"
+              >
+                🔗 Linki Kopyala
+              </button>
+
+              <button
+                type="button"
+                onClick={pdfModalAc}
+                disabled={pdfYukleniyor}
+                className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm disabled:opacity-70"
+              >
+                {pdfYukleniyor ? 'Hazırlanıyor...' : '📄 PDF Teklif Aç'}
+              </button>
+            </div>
+          </section>
+        )}
+
         <section className="sticky bottom-4 z-20 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.10)] backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -1360,21 +1414,31 @@ function pdfModalAc() {
       </p>
 
       <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={whatsappGonder}
+            className="w-full rounded-2xl bg-green-600 px-4 py-3 text-white font-bold"
+          >
+            📲 WhatsApp ile Gönder
+          </button>
 
-        <button onClick={whatsappGonder}
-          className="w-full rounded-2xl bg-green-600 py-3 text-white font-bold">
-          📲 WhatsApp ile Gönder
-        </button>
+          <button
+            type="button"
+            onClick={linkKopyala}
+            className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-white font-bold"
+          >
+            🔗 Linki Kopyala
+          </button>
 
-        <button onClick={linkKopyala}
-          className="w-full rounded-2xl bg-slate-900 py-3 text-white font-bold">
-          🔗 Linki Kopyala
-        </button>
-
-        <button onClick={pdfModalAc}
-          className="w-full rounded-2xl bg-blue-600 py-3 text-white font-bold">
-          📄 PDF Aç
-        </button>
+          <button
+            type="button"
+            onClick={pdfModalAc}
+            className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-white font-bold"
+          >
+            📄 PDF Aç
+          </button>
+        </div>
 
         <button onClick={() => setBasariModal(false)}
           className="w-full rounded-2xl border py-3">

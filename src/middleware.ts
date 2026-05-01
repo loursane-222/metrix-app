@@ -28,7 +28,7 @@ export async function middleware(req: NextRequest) {
   const token =
     req.cookies.get('token')?.value ||
     req.cookies.get('auth_token')?.value ||
-    req.cookies.get('metrix_token')?.value
+    req.cookies.get('metrix-token')?.value
 
   if (!token) {
     return NextResponse.redirect(new URL('/login', req.url))
