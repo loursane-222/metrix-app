@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
 
 export async function middleware(req: NextRequest) {
-  const token = req.cookies.get('metrix-token')?.value
+  // PUBLIC OFFER ROUTES: customers must access offer pages without login
+  if (
+    pathname.startsWith('/teklif') ||
+    pathname.startsWith('/api/teklif')
+  ) {
+    return NextResponse.next()
+  }
+
+const token = req.cookies.get('metrix-token')?.value
   const pathname = req.nextUrl.pathname
 
   const acikSayfalar = ['/login', '/register', '/teklif']
