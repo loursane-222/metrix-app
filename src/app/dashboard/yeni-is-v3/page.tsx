@@ -91,7 +91,25 @@ export default function YeniIsV3Page() {
     notlar: "",
   });
 
+
   useEffect(() => {
+    const resetScroll = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      document.querySelectorAll('[class*="overflow-y-auto"], main, aside').forEach((el: any) => {
+        try { el.scrollTop = 0; } catch {}
+      });
+    };
+
+    resetScroll();
+    const t = setTimeout(resetScroll, 150);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+
     fetch("/api/musteriler-lite")
       .then((r) => r.json())
       .then((v) => setMusteriler(v.musteriler || []));
@@ -331,7 +349,10 @@ export default function YeniIsV3Page() {
 
   function whatsappTeklifGonder() {
     const link = onlineTeklifLinki()
-    if (!link) return
+    if (!link) {
+      alert("Teklif linki henüz oluşmadı. Kaydetme tamamlandıktan sonra tekrar dene.")
+      return
+    }
     const mesaj = encodeURIComponent(`Merhaba, teklifinizi aşağıdaki linkten inceleyip onaylayabilirsiniz:\n\n${link}`)
     window.open(`https://wa.me/?text=${mesaj}`, "_blank")
   }
@@ -344,11 +365,15 @@ export default function YeniIsV3Page() {
   }
 
   function pdfTeklifAc() {
-    if (!sonKayitIsId) return
+    if (!sonKayitIsId) {
+      alert("PDF için iş kaydı henüz oluşmadı. Kaydetme tamamlandıktan sonra tekrar dene.")
+      return
+    }
     window.open(`/api/isler/${sonKayitIsId}/pdf`, "_blank")
   }
 
   async function kaydet() {
+    console.log("KAYDET_CLICK_V3");
     if (!form.musteriAdi.trim()) return alert("Müşteri adı gerekli.");
     if (!form.urunAdi.trim()) return alert("Ürün / taş adı gerekli.");
 
@@ -439,11 +464,32 @@ export default function YeniIsV3Page() {
         return;
       }
 
-      const teklifNo = veri?.teklifNo || veri?.is?.teklifNo || "";
-      const isId = veri?.id || veri?.is?.id || "";
+      const teklifNo =
+        veri?.teklifNo ||
+        veri?.is?.teklifNo ||
+        veri?.data?.teklifNo ||
+        veri?.kayit?.teklifNo ||
+        "";
+      const isId =
+        veri?.id ||
+        veri?.isId ||
+        veri?.is?.id ||
+        veri?.data?.id ||
+        veri?.kayit?.id ||
+        "";
 
-      setSonKayitTeklifNo(teklifNo);
-      setSonKayitIsId(isId);
+      setSonKayitTeklifNo(String(teklifNo || ''));
+      setSonKayitIsId(String(isId));
+      setSonKayitModalAcik(true);
+      setSonKayitModalAcik(true);
+      console.log("KAYDET_SUCCESS_V3", { isId, teklifNo });
+      setFiyatPanelAcik(false);
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.querySelectorAll('[class*="overflow-y-auto"], main, aside').forEach((el: any) => {
+          try { el.scrollTop = 0; } catch {}
+        });
+      }, 100);
       setSonKayitModalAcik(true);
     } catch (e: any) {
       alert(e?.message || "Kaydetme sırasında hata oluştu.");
@@ -1054,6 +1100,41 @@ export default function YeniIsV3Page() {
       )}
         </div>
       </aside>
+
+
+      {sonKayitModalAcik && (
+        <div data-global-teklif-modal="true" className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-lg rounded-[32px] border border-slate-700 bg-[#0B1120] p-6 text-white shadow-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-300">TEKLİF HAZIR</p>
+            <h2 className="mt-2 text-2xl font-black">Satış aksiyonu seç</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              Teklif kaydedildi. Müşteriye gönderebilir, linki kopyalayabilir veya PDF açabilirsin.
+            </p>
+
+            <div className="mt-5 space-y-3">
+              <button type="button" onClick={whatsappTeklifGonder} className="w-full rounded-2xl bg-green-600 px-5 py-4 text-sm font-black text-white hover:bg-green-500">
+                📲 WhatsApp ile Gönder
+              </button>
+
+              <button type="button" onClick={teklifLinkiKopyala} className="w-full rounded-2xl bg-slate-800 px-5 py-4 text-sm font-black text-white hover:bg-slate-700">
+                🔗 Linki Kopyala
+              </button>
+
+              <button type="button" onClick={() => setFiyatPanelAcik(true)} className="w-full rounded-2xl bg-purple-600 px-5 py-4 text-sm font-black text-white hover:bg-purple-500">
+                💰 Fiyat Kontrol Paneli
+              </button>
+
+              <button type="button" onClick={pdfTeklifAc} className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white hover:bg-blue-500">
+                📄 PDF Aç
+              </button>
+
+              <button type="button" onClick={() => setSonKayitModalAcik(false)} className="w-full rounded-2xl border border-slate-700 px-5 py-4 text-sm font-bold text-slate-300 hover:bg-slate-800">
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {plakaAcik && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-0 md:p-4" onClick={() => setPlakaAcik(false)}>
