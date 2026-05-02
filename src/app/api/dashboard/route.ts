@@ -61,22 +61,87 @@ export async function GET() {
     let atolyeId = await getAuthAtolyeId();
 
     if (!atolyeId) {
-      // test için ilk atölyeyi al
-      const first = await prisma.atolye.findFirst();
-      atolyeId = first?.id || null;
-    }
-
-
-    if (!atolyeId) {
-      return Response.json({ error: "Yetkisiz." }, { status: 401 });
-    }
+  return Response.json({ error: "Yetkisiz." }, { status: 401 });
+}
 
     const isler = await prisma.is.findMany({
       where: { atolyeId },
       orderBy: { createdAt: "desc" },
     });
 
-    const bekleyen = isler.filter(
+    // 🔥 ANA AKIS MAIN
+const anaAkis = await prisma.activityLog.findMany({
+  where: { atolyeId },
+  orderBy: { createdAt: "desc" },
+  take: 20
+});
+
+// 🔥 SICAK TEKLİFLER (TEK SATIŞ SKOR KAYNAĞI)
+const son24Saat = new Date(Date.now() - 1000 * 60 * 60 * 24);
+
+const teklifNolari = isler
+  .map((i) => i.teklifNo)
+  .filter(Boolean);
+
+const sicakEvents = teklifNolari.length > 0
+  ? await prisma.teklifEvent.findMany({
+      where: {
+        teklifNo: { in: teklifNolari },
+        createdAt: { gte: son24Saat },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 300,
+    })
+  : [];
+
+const isByTeklifNo = new Map(isler.map((i) => [i.teklifNo, i]));
+const sicakMap = new Map();
+
+for (const e of sicakEvents) {
+  const ilgiliIs = isByTeklifNo.get(e.teklifNo);
+  if (!ilgiliIs) continue;
+  if (ilgiliIs.durum === "onaylandi" || ilgiliIs.durum === "kaybedildi") continue;
+
+  if (!sicakMap.has(e.teklifNo)) {
+    sicakMap.set(e.teklifNo, {
+      id: ilgiliIs.id,
+      teklifNo: e.teklifNo,
+      musteri: ilgiliIs.musteriAdi || "Müşteri",
+      urun: ilgiliIs.urunAdi || "",
+      tutar: Number(ilgiliIs.satisFiyati || ilgiliIs.tutar || 0),
+      goruntulenme: 0,
+      pdf: 0,
+      sonEvent: e.createdAt,
+    });
+  }
+
+  const row = sicakMap.get(e.teklifNo);
+  if (e.event === "goruntulendi") row.goruntulenme += 1;
+  if (e.event === "pdf_acildi" || e.event === "pdf_acildi_server") row.pdf += 1;
+}
+
+const sicakTeklifler = Array.from(sicakMap.values())
+  .map((t) => {
+    const score = Math.min(
+      100,
+      (t.goruntulenme * 10) +
+      (t.pdf * 12) +
+      (t.goruntulenme >= 2 || t.pdf >= 2 ? 15 : 0) +
+      (t.tutar >= 100000 ? 10 : t.tutar >= 50000 ? 6 : 3) +
+      10
+    );
+
+    return {
+      ...t,
+      ihtimal: score,
+    };
+  })
+  .sort((a, b) => b.ihtimal - a.ihtimal)
+  .slice(0, 8);
+
+// ----
+
+const bekleyen = isler.filter(
       i => i.durum !== "onaylandi" && i.durum !== "kaybedildi"
     );
 
@@ -227,90 +292,7 @@ export async function GET() {
       bekleyenOperasyon: operasyonPlan.filter(o => !o.tamamlandi).length,
     };
 
-    const satisAksiyonlari = kapanabilirTeklifler
-      .filter(t => t.ihtimal >= 65)
-      .sort((a, b) => b.ihtimal - a.ihtimal)
-      .slice(0, 3)
-      .map(t => ({
-        tip: "Satış",
-        metin: `${t.musteri} → ${t.tutar.toLocaleString("tr-TR")}₺ (%${t.ihtimal})`,
-        id: t.id,
-      }));
-
-
-    // 🔥 SICAK TEKLİFLER PANELİ
-    const son24Saat = new Date(Date.now() - 1000 * 60 * 60 * 24);
-
-    const teklifNolari = isler
-      .map(i => i.teklifNo)
-      .filter(Boolean);
-
-    const sicakEvents = await prisma.teklifEvent.findMany({
-      where: {
-        teklifNo: { in: teklifNolari },
-        createdAt: { gte: son24Saat },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 300,
-    });
-
-    const isByTeklifNo = new Map(isler.map(i => [i.teklifNo, i]));
-
-    const sicakMap = new Map<string, any>();
-
-    for (const e of sicakEvents) {
-      const ilgiliIs = isByTeklifNo.get(e.teklifNo);
-      if (!ilgiliIs) continue;
-      if (ilgiliIs.durum === "onaylandi" || ilgiliIs.durum === "kaybedildi") continue;
-
-      if (!sicakMap.has(e.teklifNo)) {
-        sicakMap.set(e.teklifNo, {
-          id: ilgiliIs.id,
-          teklifNo: e.teklifNo,
-          musteri: ilgiliIs.musteriAdi || "Müşteri",
-          urun: ilgiliIs.urunAdi || "",
-          tutar: Number(ilgiliIs.satisFiyati || 0),
-          goruntulenme: 0,
-          pdf: 0,
-          sonEvent: e.createdAt,
-          skor: teklifSkoru(ilgiliIs),
-        });
-      }
-
-      const row = sicakMap.get(e.teklifNo);
-
-      if (e.event === "goruntulendi") row.goruntulenme += 1;
-      if (e.event === "pdf_acildi" || e.event === "pdf_acildi_server") row.pdf += 1;
-
-      if (new Date(e.createdAt) > new Date(row.sonEvent)) {
-        row.sonEvent = e.createdAt;
-      }
-    }
-
-    const sicakTeklifler = Array.from(sicakMap.values())
-      .map((t: any) => {
-        const goruntulenmeSkor = Math.min(30, Number(t.goruntulenme || 0) * 10);
-        const pdfSkor = Math.min(35, Number(t.pdf || 0) * 12);
-        const tekrarIlgiSkor = Number(t.goruntulenme || 0) >= 2 || Number(t.pdf || 0) >= 2 ? 15 : 0;
-        const tutarSkor = Number(t.tutar || 0) >= 100000 ? 10 : Number(t.tutar || 0) >= 50000 ? 6 : 3;
-        const sonHareketSkor = 10;
-
-        const finalSkor = Math.min(
-          100,
-          goruntulenmeSkor + pdfSkor + tekrarIlgiSkor + tutarSkor + sonHareketSkor
-        );
-
-        return {
-          ...t,
-          ihtimal: finalSkor,
-          aksiyon: finalSkor >= 75 ? "WhatsApp mesajı" : finalSkor >= 60 ? "WhatsApp gönder" : "WhatsApp takip",
-        };
-      })
-      .sort((a: any, b: any) => {
-        if (b.ihtimal !== a.ihtimal) return b.ihtimal - a.ihtimal;
-        return new Date(b.sonEvent).getTime() - new Date(a.sonEvent).getTime();
-      })
-      .slice(0, 8);
+    const satisAksiyonlari = [];
 
     const operasyonAksiyonlari = operasyonPlan
       .filter(o => !o.tamamlandi)
@@ -330,11 +312,12 @@ export async function GET() {
         bugunKapanabilirCiro,
       },
       kapanabilirTeklifler: [],
-      sicakTeklifler,
+      sicakTeklifler: sicakTeklifler || [],
+      anaAkis,
       atelye,
       operasyonPlan,
       satisAksiyonlari,
-      operasyonAksiyonlari,
+            operasyonAksiyonlari,
     });
   } catch (e:any) {
     return Response.json({ error: e.message }, { status: 500 });

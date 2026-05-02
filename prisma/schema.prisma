@@ -347,3 +347,18 @@ model TeklifEvent {
   meta      String?
   createdAt DateTime @default(now())
 }
+
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  atolyeId  String
+  userId    String?
+  personelId String?
+  type      String
+  message   String
+  refId     String?
+  createdAt DateTime @default(now())
+
+  @@index([atolyeId])
+  @@index([createdAt])
+}
