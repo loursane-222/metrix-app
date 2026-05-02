@@ -19,7 +19,7 @@ export async function middleware(req: NextRequest) {
     pathname === '/login' ||
     pathname === '/register' ||
     pathname.startsWith('/api/auth') ||
-    pathname === '/api/dashboard' ||
+    pathname.startsWith('/api/public') ||
     pathname.startsWith('/teklif') ||
     pathname.startsWith('/api/teklif') ||
     (pathname.startsWith('/api/isler/') && pathname.endsWith('/pdf'))

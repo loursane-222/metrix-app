@@ -4,8 +4,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import QRCode from 'qrcode'
 
-const prisma = new PrismaClient()
-
 function para(v: any) {
   return Number(v || 0).toLocaleString('tr-TR', {
     minimumFractionDigits: 2,
@@ -52,6 +50,13 @@ export async function GET(
     if (!is) {
       return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
     }
+
+    await prisma.teklifEvent.create({
+      data: {
+        teklifNo: is.teklifNo,
+        event: "pdf_acildi_server",
+      },
+    }).catch(() => null)
 
     const atolye: any = is.atolye
     const tel = telTemizle(atolye?.telefon || '')

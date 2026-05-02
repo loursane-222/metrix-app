@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import TeklifClient from "@/components/teklif/TeklifClient";
+import { TeklifViewTracker, PdfTrackButton } from "@/components/teklif/TeklifTracking";
 import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
-import { PrismaClient } from "@prisma/client";
 export const dynamic = "force-dynamic";
 
 function para(v: any) {
@@ -31,18 +32,15 @@ export default async function Page({ params }: any) {
     return (
       <main style={{ padding: 40, fontFamily: "Arial" }}>
         Teklif bulunamadı.
-      </main>
+      
+      <TeklifClient
+        teklifNo={is.teklifNo}
+        pdfUrl={`/api/isler/${is.id}/pdf`}
+      />
+    </main>
+
     );
   }
-
-  
-  // 🔥 teklif görüntülendi event
-  await prisma.teklifEvent.create({
-    data: {
-      teklifNo: is.teklifNo,
-      event: "goruntulendi",
-    },
-  });
 
   await prisma.is.update({
     where: { id: is.id },
@@ -118,7 +116,11 @@ export default async function Page({ params }: any) {
   ].filter(Boolean) as Array<{ kalem: string; urun: string; miktar: number }>;
 
   return (
+
+
+
     <main className="page">
+      <TeklifViewTracker teklifNo={is.teklifNo} />
       <section className="card">
         <div className="hero">
           <div className="top">
@@ -215,9 +217,7 @@ export default async function Page({ params }: any) {
             <p>KDV dahil toplam teklif tutarıdır.</p>
           </div>
 
-          <a className="pdfBtn" href={`/api/isler/${is.id}/pdf`} target="_blank">
-            PDF Teklifi Aç
-          </a>
+          <PdfTrackButton teklifNo={is.teklifNo} pdfUrl={`/api/isler/${is.id}/pdf`} />
         </div>
 
         <div className="section">
@@ -436,6 +436,12 @@ export default async function Page({ params }: any) {
           .table { font-size:12px; display:block; overflow-x:auto; white-space:nowrap; }
         }
       `}</style>
+    
+      <TeklifClient
+        teklifNo={is.teklifNo}
+        pdfUrl={`/api/isler/${is.id}/pdf`}
+      />
     </main>
+
   );
 }
