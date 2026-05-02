@@ -1,6 +1,5 @@
+import { prisma } from "@/lib/prisma";
 import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
 
 function telTemizle(v: string) {
   const r = String(v || "").replace(/\D/g, "");

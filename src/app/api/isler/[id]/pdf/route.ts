@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma";
 import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
@@ -38,6 +39,15 @@ export async function GET(
       where: { id },
       include: { atolye: true },
     })
+
+    
+    // 🔥 PDF açıldı event
+    await prisma.teklifEvent.create({
+      data: {
+        teklifNo: is.teklifNo,
+        event: "pdf_acildi",
+      },
+    });
 
     if (!is) {
       return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })

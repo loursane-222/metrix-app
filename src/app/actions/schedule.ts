@@ -1,14 +1,10 @@
 "use server";
 
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { PhaseType, PHASE_ORDER, canCompletePhase } from "@/lib/types/schedule";
-
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-const prisma = globalForPrisma.prisma || new PrismaClient();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 async function authBilgisiAl(): Promise<{
   userId: string | null;

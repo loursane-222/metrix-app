@@ -1,7 +1,6 @@
+import { prisma } from "@/lib/prisma";
 import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
-
 export const dynamic = "force-dynamic";
 
 function para(v: any) {
@@ -35,6 +34,15 @@ export default async function Page({ params }: any) {
       </main>
     );
   }
+
+  
+  // 🔥 teklif görüntülendi event
+  await prisma.teklifEvent.create({
+    data: {
+      teklifNo: is.teklifNo,
+      event: "goruntulendi",
+    },
+  });
 
   await prisma.is.update({
     where: { id: is.id },

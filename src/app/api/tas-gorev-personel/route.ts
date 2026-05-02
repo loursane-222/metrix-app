@@ -1,9 +1,8 @@
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
-
-const prisma = new PrismaClient();
 
 async function authAtolyeId() {
   const cookieStore = await cookies();

@@ -1,13 +1,10 @@
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-const prisma = globalForPrisma.prisma || new PrismaClient();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-
-type PhaseKey = "OLCU" | "IMALAT" | "MONTAJ";
+if (process.env.NODE_ENV !== "production") type PhaseKey = "OLCU" | "IMALAT" | "MONTAJ";
 
 async function ownerAtolyeIdAl() {
   const cookieStore = await cookies();

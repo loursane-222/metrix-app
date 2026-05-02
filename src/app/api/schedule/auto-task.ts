@@ -1,6 +1,5 @@
+import { prisma } from "@/lib/prisma";
 import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
 
 function geri3IsGunu(date: Date) {
   let d = new Date(date);
