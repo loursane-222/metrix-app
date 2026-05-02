@@ -134,7 +134,7 @@ export async function GET() {
         musteri: i.musteriAdi,
         tutar: Number(i.satisFiyati || 0),
         ihtimal,
-        aksiyon: ihtimal >= 65 ? "Hemen ara" : "Takip et",
+        aksiyon: ihtimal >= 65 ? "WhatsApp mesajı" : "WhatsApp takip",
       };
     });
 
@@ -237,6 +237,81 @@ export async function GET() {
         id: t.id,
       }));
 
+
+    // 🔥 SICAK TEKLİFLER PANELİ
+    const son24Saat = new Date(Date.now() - 1000 * 60 * 60 * 24);
+
+    const teklifNolari = isler
+      .map(i => i.teklifNo)
+      .filter(Boolean);
+
+    const sicakEvents = await prisma.teklifEvent.findMany({
+      where: {
+        teklifNo: { in: teklifNolari },
+        createdAt: { gte: son24Saat },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 300,
+    });
+
+    const isByTeklifNo = new Map(isler.map(i => [i.teklifNo, i]));
+
+    const sicakMap = new Map<string, any>();
+
+    for (const e of sicakEvents) {
+      const ilgiliIs = isByTeklifNo.get(e.teklifNo);
+      if (!ilgiliIs) continue;
+      if (ilgiliIs.durum === "onaylandi" || ilgiliIs.durum === "kaybedildi") continue;
+
+      if (!sicakMap.has(e.teklifNo)) {
+        sicakMap.set(e.teklifNo, {
+          id: ilgiliIs.id,
+          teklifNo: e.teklifNo,
+          musteri: ilgiliIs.musteriAdi || "Müşteri",
+          urun: ilgiliIs.urunAdi || "",
+          tutar: Number(ilgiliIs.satisFiyati || 0),
+          goruntulenme: 0,
+          pdf: 0,
+          sonEvent: e.createdAt,
+          skor: teklifSkoru(ilgiliIs),
+        });
+      }
+
+      const row = sicakMap.get(e.teklifNo);
+
+      if (e.event === "goruntulendi") row.goruntulenme += 1;
+      if (e.event === "pdf_acildi" || e.event === "pdf_acildi_server") row.pdf += 1;
+
+      if (new Date(e.createdAt) > new Date(row.sonEvent)) {
+        row.sonEvent = e.createdAt;
+      }
+    }
+
+    const sicakTeklifler = Array.from(sicakMap.values())
+      .map((t: any) => {
+        const goruntulenmeSkor = Math.min(30, Number(t.goruntulenme || 0) * 10);
+        const pdfSkor = Math.min(35, Number(t.pdf || 0) * 12);
+        const tekrarIlgiSkor = Number(t.goruntulenme || 0) >= 2 || Number(t.pdf || 0) >= 2 ? 15 : 0;
+        const tutarSkor = Number(t.tutar || 0) >= 100000 ? 10 : Number(t.tutar || 0) >= 50000 ? 6 : 3;
+        const sonHareketSkor = 10;
+
+        const finalSkor = Math.min(
+          100,
+          goruntulenmeSkor + pdfSkor + tekrarIlgiSkor + tutarSkor + sonHareketSkor
+        );
+
+        return {
+          ...t,
+          ihtimal: finalSkor,
+          aksiyon: finalSkor >= 75 ? "WhatsApp mesajı" : finalSkor >= 60 ? "WhatsApp gönder" : "WhatsApp takip",
+        };
+      })
+      .sort((a: any, b: any) => {
+        if (b.ihtimal !== a.ihtimal) return b.ihtimal - a.ihtimal;
+        return new Date(b.sonEvent).getTime() - new Date(a.sonEvent).getTime();
+      })
+      .slice(0, 8);
+
     const operasyonAksiyonlari = operasyonPlan
       .filter(o => !o.tamamlandi)
       .slice(0, 5)
@@ -254,7 +329,8 @@ export async function GET() {
         toplamCiro,
         bugunKapanabilirCiro,
       },
-      kapanabilirTeklifler,
+      kapanabilirTeklifler: [],
+      sicakTeklifler,
       atelye,
       operasyonPlan,
       satisAksiyonlari,
