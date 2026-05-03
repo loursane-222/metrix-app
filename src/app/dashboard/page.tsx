@@ -19,7 +19,41 @@ export default function DashboardPage() {
       });
   }, []);
 
-  const sicakTeklifler = useMemo(() => data?.sicakTeklifler || [], [data]);
+  
+const sicakTeklifler = useMemo(() => data?.sicakTeklifler || [], [data]);
+
+const [aiMesajlar, setAiMesajlar] = useState({});
+
+useEffect(() => {
+  const run = async () => {
+    const top = sicakTeklifler.slice(0, 3);
+
+    const results = {};
+
+    for (const t of top) {
+      try {
+        const res = await fetch("/api/ai-sales", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            musteri: t.musteri,
+            tutar: t.tutar,
+            goruntulenme: t.goruntulenme,
+            pdf: t.pdf
+          })
+        });
+
+        const json = await res.json();
+        results[t.teklifNo] = json;
+      } catch {}
+    }
+
+    setAiMesajlar(results);
+  };
+
+  if (sicakTeklifler.length > 0) run();
+}, [sicakTeklifler]);
+
   const operasyonPlan = useMemo(() => data?.operasyonPlan || [], [data]);
   const anaAkis = useMemo(() => data?.anaAkis || [], [data]);
 
@@ -108,14 +142,27 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {sicakTeklifler.map((t: any) => {
             const score = Number(t?.ihtimal || 0);
-            const message = aiMessage(t);
+            const ai = aiMesajlar[t.teklifNo];
+            let message = ai?.mesaj || aiMessage(t);
+
+            if (t.aksiyonTipi === "satis") {
+              const musteriAdi = t?.musteri || "Müşterimiz";
+              message = `Merhaba ${musteriAdi}, teklifimizi incelediğinizi görüyorum. Uygun görürseniz bugün ölçü ve termin planlamasını netleştirip işi programa alabiliriz. Size ne zaman ulaşmam uygun olur?`;
+            }
             const phone = phoneClean(t);
+            let finalMessage = message;
+
+            if (t.aksiyonTipi === "satis") {
+              const musteriAdi = t?.musteri || "Müşterimiz";
+              finalMessage = `Merhaba ${musteriAdi}, teklifimizi incelediğinizi görüyorum. Uygun görürseniz bugün ölçü ve termin planlamasını netleştirip işi programa alabiliriz. Size ne zaman ulaşmam uygun olur?`;
+            }
+
             const whatsappUrl = phone
-              ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-              : `https://wa.me/?text=${encodeURIComponent(message)}`;
+              ? `https://wa.me/${phone}?text=${encodeURIComponent(finalMessage)}`
+              : `https://wa.me/?text=${encodeURIComponent(finalMessage)}`;
 
             return (
-              <div key={t?.teklifNo || t?.id} className="rounded-xl border border-slate-800 bg-[#0B1120] p-4">
+              <div key={t?.teklifNo || t?.id} className={`rounded-xl p-4 border ${score >= 85 ? "border-red-500 shadow-[0_0_20px_rgba(255,0,0,0.3)]" : score >= 65 ? "border-amber-500" : "border-slate-800"} bg-[#0B1120]`}>
                 <div className="flex justify-between gap-4">
                   <div>
                     <p className="text-sm font-black">{t?.musteri || t?.musteriAdi || "Müşteri"}</p>
@@ -130,6 +177,44 @@ export default function DashboardPage() {
                     <p className="text-[10px] text-slate-500 mt-1">
                       {score >= 85 ? "Çok sıcak" : score >= 65 ? "Sıcak" : "Takip"}
                     </p>
+
+                    {t.aksiyonTipi && (
+                      <div className="mt-2 text-[11px] font-bold text-red-400">
+                        {t.aksiyonMesaji}
+                        <div className="text-[10px] text-slate-500 mt-1">
+                          {t.aksiyonSaati} saat geçti
+                          <div className="text-[10px] text-slate-600 mt-1">
+                            Son hareket: {t.sonEvent ? new Date(t.sonEvent).toLocaleString("tr-TR") : "-"}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {aiMesajlar[t.teklifNo]?.aksiyon && (
+                      <>
+                        <p className="text-[11px] mt-1 font-bold text-amber-400">
+                          {aiMesajlar[t.teklifNo].aksiyon.toUpperCase()}
+                        </p>
+
+                        {aiMesajlar[t.teklifNo].aksiyon === "hemen ara" && phone && (
+                          <a
+                            href={`tel:${phone}`}
+                            className="text-xs mt-1 inline-block px-2 py-1 bg-red-600 text-white rounded"
+                          >
+                            📞 Şimdi Ara
+                          </a>
+                        )}
+
+                        {aiMesajlar[t.teklifNo].aksiyon === "hemen ara" && !phone && (
+                          <button
+                            type="button"
+                            onClick={() => alert("Bu müşteri için telefon numarası kayıtlı değil. Lütfen müşteri kartına telefon ekleyin.")}
+                            className="text-xs mt-1 inline-block px-2 py-1 bg-slate-700 text-slate-200 rounded"
+                          >
+                            Telefon Ekle
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -147,12 +232,60 @@ export default function DashboardPage() {
                   )}
                 </div>
 
+                
+
                 <div className="mt-3 rounded-lg bg-slate-950/70 border border-slate-800 p-3">
-                  <p className="text-[11px] text-emerald-400 mb-2 font-semibold">AI WhatsApp mesaj şablonu</p>
+                  <p className="text-[11px] text-emerald-400 mb-2 font-semibold">AI WhatsApp mesaj şablonu (Gerçek AI)</p>
                   <p className="text-xs text-slate-200 leading-relaxed select-text">{message}</p>
                 </div>
 
                 <div className="flex gap-2 mt-3 flex-wrap">
+
+                  {t.aksiyonTipi === "ara" && (
+                    phone ? (
+                      <a
+                        href={`tel:${phone}`}
+                        className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black"
+                      >
+                        🔥 Hemen Ara
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => alert("Telefon yok")}
+                        className="px-3 py-2 rounded-lg bg-slate-700 text-white text-xs"
+                      >
+                        Telefon Ekle
+                      </button>
+                    )
+                  )}
+
+                  {t.aksiyonTipi === "whatsapp" && (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      className="px-3 py-2 rounded-lg bg-green-500 text-black text-xs font-black"
+                    >
+                      WhatsApp Takip
+                    </a>
+                  )}
+
+                  {t.aksiyonTipi === "satis" && (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-black"
+                    >
+                      Satışı Kapat
+                    </a>
+                  )}
+
+                  {t.aksiyonTipi === "risk" && (
+                    <div className="px-3 py-2 rounded-lg bg-red-900 text-red-200 text-xs font-black">
+                      ⚠️ Kaybediliyor
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {

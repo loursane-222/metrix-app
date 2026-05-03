@@ -67,6 +67,9 @@ export async function GET() {
     const isler = await prisma.is.findMany({
       where: { atolyeId },
       orderBy: { createdAt: "desc" },
+      include: {
+        musteri: true,
+      },
     });
 
     // 🔥 ANA AKIS MAIN
@@ -77,7 +80,7 @@ const anaAkis = await prisma.activityLog.findMany({
 });
 
 // 🔥 SICAK TEKLİFLER (TEK SATIŞ SKOR KAYNAĞI)
-const son24Saat = new Date(Date.now() - 1000 * 60 * 60 * 24);
+const son24Saat = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7);
 
 const teklifNolari = isler
   .map((i) => i.teklifNo)
@@ -106,7 +109,9 @@ for (const e of sicakEvents) {
     sicakMap.set(e.teklifNo, {
       id: ilgiliIs.id,
       teklifNo: e.teklifNo,
-      musteri: ilgiliIs.musteriAdi || "Müşteri",
+      musteri: ilgiliIs.musteriAdi || ilgiliIs.musteri?.firmaAdi || ilgiliIs.musteri?.ad || "Müşteri",
+      telefon: ilgiliIs.musteri?.telefon || "",
+      musteriTelefon: ilgiliIs.musteri?.telefon || "",
       urun: ilgiliIs.urunAdi || "",
       tutar: Number(ilgiliIs.satisFiyati || ilgiliIs.tutar || 0),
       goruntulenme: 0,
@@ -131,9 +136,33 @@ const sicakTeklifler = Array.from(sicakMap.values())
       10
     );
 
+    // 🔥 AI FOLLOW-UP ENGINE
+    const saatFarki =
+      (Date.now() - new Date(t.sonEvent).getTime()) / (1000 * 60 * 60);
+
+    let aksiyonTipi = "";
+    let aksiyonMesaji = "";
+
+    if (t.goruntulenme === 0 && saatFarki > 24) {
+      aksiyonTipi = "whatsapp";
+      aksiyonMesaji = "Teklifinizi inceleme fırsatınız oldu mu?";
+    } else if (t.goruntulenme > 0 && t.pdf === 0 && saatFarki > 12) {
+      aksiyonTipi = "ara";
+      aksiyonMesaji = "Müşteri baktı ama ilerlemedi. Ara.";
+    } else if (t.pdf > 0 && saatFarki > 6) {
+      aksiyonTipi = "satis";
+      aksiyonMesaji = "Kararsız müşteri. Kapanış yap.";
+    } else if (saatFarki > 72) {
+      aksiyonTipi = "risk";
+      aksiyonMesaji = "Bu iş kaybediliyor.";
+    }
+
     return {
       ...t,
       ihtimal: score,
+      aksiyonTipi,
+      aksiyonMesaji,
+      aksiyonSaati: Math.round(saatFarki),
     };
   })
   .sort((a, b) => b.ihtimal - a.ihtimal)
@@ -287,7 +316,7 @@ const bekleyen = isler.filter(
     const kapasiteDakika = 720;
 
     const atelye = {
-      doluluk: Math.round((toplamDakika / kapasiteDakika) * 100),
+      doluluk: toplamDakika > 0 ? Math.round((toplamDakika / kapasiteDakika) * 100) : 10,
       bugunOperasyon: operasyonPlan.length,
       bekleyenOperasyon: operasyonPlan.filter(o => !o.tamamlandi).length,
     };

@@ -20,6 +20,7 @@ export async function middleware(req: NextRequest) {
     pathname === '/register' ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/public') ||
+    pathname.startsWith('/api/ai-sales') ||
     pathname.startsWith('/teklif') ||
     pathname.startsWith('/api/teklif') ||
     (pathname.startsWith('/api/isler/') && pathname.endsWith('/pdf'))
