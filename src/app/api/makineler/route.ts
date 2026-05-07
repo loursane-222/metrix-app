@@ -68,3 +68,20 @@ export async function DELETE(req: NextRequest) {
   await prisma.makine.delete({ where: { id } })
   return NextResponse.json({ tamam: true })
 }
+export async function PUT(req: NextRequest) {
+  const kullanici = await kullaniciAl()
+  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+
+  const { id, makineAdi, alinanBedel, paraBirimi, amortismanSuresiAy, aylikAktifCalismaSaati } = await req.json()
+
+  const aylikAmortisman = alinanBedel / amortismanSuresiAy
+  const saatlikMaliyet = aylikAktifCalismaSaati > 0 ? aylikAmortisman / aylikAktifCalismaSaati : 0
+  const dakikalikMaliyet = saatlikMaliyet / 60
+
+  const makine = await prisma.makine.update({
+    where: { id },
+    data: { makineAdi, alinanBedel, paraBirimi, amortismanSuresiAy, aylikAktifCalismaSaati, aylikAmortisman, saatlikMaliyet, dakikalikMaliyet },
+  })
+
+  return NextResponse.json({ makine })
+}

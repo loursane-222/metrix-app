@@ -69,3 +69,19 @@ export async function DELETE(req: NextRequest) {
   await prisma.arac.delete({ where: { id } })
   return NextResponse.json({ tamam: true })
 }
+export async function PUT(req: NextRequest) {
+  const kullanici = await kullaniciAl()
+  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+
+  const { id, aracAdi, aracTipi, alinanBedel, paraBirimi, amortismanSuresiAy, aylikBakim, aylikSigortaKasko, aylikVergiMuayene } = await req.json()
+
+  const aylikAmortisman = alinanBedel / amortismanSuresiAy
+  const aylikToplamSabitMaliyet = aylikAmortisman + aylikBakim + aylikSigortaKasko + aylikVergiMuayene
+
+  const arac = await prisma.arac.update({
+    where: { id },
+    data: { aracAdi, aracTipi, alinanBedel, paraBirimi, amortismanSuresiAy, aylikBakim, aylikSigortaKasko, aylikVergiMuayene, aylikAmortisman, aylikToplamSabitMaliyet },
+  })
+
+  return NextResponse.json({ arac })
+}

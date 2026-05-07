@@ -330,6 +330,23 @@ export async function togglePhaseCompletion(data: {
     },
   });
 
+  try {
+    const { logActivity } = await import('@/lib/activityLogger')
+    const phaseLabels: Record<string, string> = { OLCU: 'Olcu', IMALAT: 'Imalat', MONTAJ: 'Montaj', TAS_ALINACAK: 'Tas Alinacak' }
+    const fazAdi = phaseLabels[phase.phase] || phase.phase
+    const musteriAdi = phase.workSchedule.is.musteriAdi || 'Musteri'
+    const mesaj = data.isCompleted
+      ? musteriAdi + ' – ' + fazAdi + ' fazi tamamlandi.'
+      : musteriAdi + ' – ' + fazAdi + ' fazi tamamlandi isaretlenmesi geri alindi.'
+    await logActivity({
+      atolyeId: phase.workSchedule.is.atolyeId,
+      type: data.isCompleted ? 'faz_tamamlandi' : 'faz_geri_alindi',
+      message: mesaj,
+      refId: phase.workSchedule.isId,
+      userId: auth.userId || undefined,
+    })
+  } catch {}
+
   revalidatePath("/dashboard/is-programi");
   return updated;
 }

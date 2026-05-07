@@ -154,6 +154,7 @@ export default function MusterilerPage() {
   const [excelYukleniyor, setExcelYukleniyor] = useState(false)
   const [excelMesaji, setExcelMesaji] = useState('')
   const [ekstreAcik, setEkstreAcik] = useState(false)
+  const [atolyeLogo, setAtolyelogo] = useState({ ad: "Duru Mermer", logoUrl: "" })
   const [durumFiltre, setDurumFiltre] = useState<string>('tumu')
   const [aktifTab, setAktifTab] = useState<'ozet' | 'isler' | 'tahsilatlar'>('ozet')
   const [islerDurum, setIslerDurum] = useState<string>('tumu')
@@ -175,7 +176,12 @@ export default function MusterilerPage() {
     } finally { setYukleniyor(false) }
   }
 
-  useEffect(() => { listeYukle() }, [])
+  useEffect(() => {
+    listeYukle()
+    fetch('/api/atolye').then(r=>r.json()).then(d=>{
+      if(d?.atolye) setAtolyelogo({ ad: d.atolye.atolyeAdi||'Duru Mermer', logoUrl: d.atolye.logoUrl||'' })
+    }).catch(()=>{})
+  }, [])
 
   const filtreli = useMemo(() => {
     const q = arama.trim().toLowerCase()
@@ -765,9 +771,10 @@ export default function MusterilerPage() {
               </div>
               <button onClick={() => setMobilDetayAcik(false)} className="shrink-0 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-bold text-white">← Geri</button>
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-4 grid grid-cols-4 gap-2">
               <button onClick={() => router.push(`/dashboard/yeni-is-v3?musteriId=${aktif.id}&musteriAdi=${encodeURIComponent(musteriAdi(aktif))}`)} className="rounded-2xl bg-emerald-500 px-3 py-3 text-xs font-black text-slate-950">+ Yeni İş</button>
               <button onClick={() => setTahsilatModal(true)} className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-3 text-xs font-bold text-cyan-200">Tahsilat</button>
+              <button onClick={() => setEkstreAcik(true)} className="rounded-2xl border border-blue-400/30 bg-blue-400/10 px-3 py-3 text-xs font-bold text-blue-200">Ekstre</button>
               <button onClick={() => { duzenleAc(); setMobilDetayAcik(false) }} className="rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-xs font-bold text-white">Düzenle</button>
             </div>
           </div>
@@ -794,37 +801,41 @@ export default function MusterilerPage() {
       </button>
 
       {ekstreAcik && aktif && a && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-3 sm:items-center">
-          <div className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-3xl border border-white/10 bg-[#0B1120] p-4 shadow-2xl">
-            <div className="flex-1 overflow-y-auto rounded-3xl bg-white p-6 text-slate-950">
-              <div className="flex items-start justify-between gap-6 border-b border-slate-200 pb-5">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-xs font-bold text-white">METRIX</div>
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.35em] text-slate-400">Duru Mermer</p>
-                    <h2 className="mt-1 text-3xl font-black tracking-tight">Müşteri Hesap Ekstresi</h2>
-                    <p className="mt-1 text-sm text-slate-500">Düzenleme tarihi: {new Date().toLocaleDateString('tr-TR')}</p>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:p-3 sm:items-center">
+          <div className="flex h-[100dvh] w-full max-w-4xl flex-col rounded-none border-0 bg-[#0B1120] shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-3xl sm:border sm:border-white/10 sm:p-4">
+            <div className="flex-1 overflow-y-auto rounded-3xl bg-white p-4 md:p-6 text-slate-950">
+              <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div className="flex items-center gap-3">
+                  {atolyeLogo.logoUrl ? (
+                    <img src={atolyeLogo.logoUrl} alt={atolyeLogo.ad} className="h-10 w-10 rounded-xl border border-slate-200 object-cover sm:h-14 sm:w-14 sm:rounded-2xl" />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-xs font-bold text-white sm:h-14 sm:w-14 sm:rounded-2xl">{atolyeLogo.ad.charAt(0)}</div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">{atolyeLogo.ad}</p>
+                    <h2 className="mt-0.5 text-lg font-black tracking-tight sm:text-2xl md:text-3xl">Müşteri Hesap Ekstresi</h2>
+                    <p className="mt-0.5 text-xs text-slate-500">Düzenleme tarihi: {new Date().toLocaleDateString('tr-TR')}</p>
                   </div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-6 py-4 text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400">Güncel Bakiye</p>
-                  <p className="mt-2 text-2xl font-black text-amber-600">{tl(a.bakiye)}</p>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left sm:px-6 sm:py-4 sm:text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Güncel Bakiye</p>
+                  <p className="mt-1 text-xl font-black text-amber-600 sm:text-2xl">{tl(a.bakiye)}</p>
                 </div>
               </div>
-              <div className="mt-6 grid grid-cols-[1.5fr_0.8fr] gap-4">
-                <div className="min-h-[160px] rounded-3xl border border-slate-200 p-5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.35em] text-slate-400">Müşteri</p>
-                  <h3 className="mt-4 text-2xl font-black">Sayın {musteriAdi(aktif)}</h3>
-                  <p className="mt-2 text-sm text-slate-500">{[aktif.telefon, aktif.email].filter(Boolean).join(' · ') || 'İletişim bilgisi yok'}</p>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[1.5fr_0.8fr]">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">Müşteri</p>
+                  <h3 className="mt-2 text-lg font-black sm:text-2xl">Sayın {musteriAdi(aktif)}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{[aktif.telefon, aktif.email].filter(Boolean).join(' · ') || 'İletişim bilgisi yok'}</p>
                 </div>
-                <div className="min-h-[160px] rounded-3xl border border-slate-200 p-5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400">Ödeme Notu</p>
-                  <p className="mt-4 text-sm font-medium leading-6 text-slate-600">Sayın {musteriAdi(aktif)}, hesabınızda <b>{tl(a.bakiye)}</b> güncel bakiye görünmektedir.</p>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Ödeme Notu</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Sayın {musteriAdi(aktif)}, hesabınızda <b>{tl(a.bakiye)}</b> güncel bakiye görünmektedir.</p>
                 </div>
               </div>
-              <div className="mt-5 grid grid-cols-4 gap-3">
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[{ k: 'Onaylı Ciro', v: tl(a.onayliCiro) }, { k: 'Tahsilat', v: tl(a.tahsilat) }, { k: 'Teklif', v: String(a.teklifSayisi) }, { k: 'Onay Oranı', v: pct(a.onayOrani) }].map(x => (
-                  <div key={x.k} className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-500">{x.k}</p><p className="mt-2 text-lg font-black">{x.v}</p></div>
+                  <div key={x.k} className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">{x.k}</p><p className="mt-1 text-base font-black sm:text-lg">{x.v}</p></div>
                 ))}
               </div>
               <div className="mt-7 flex items-end justify-between">
@@ -862,7 +873,7 @@ export default function MusterilerPage() {
                 <p className="mt-3 text-sm leading-6 text-slate-600">Bu ekstre kayıtlı iş ve ödeme hareketlerine göre hazırlanmıştır.</p>
               </div>
             </div>
-            <div className="shrink-0 border-t border-white/10 pt-3">
+            <div className="shrink-0 border-t border-white/10 p-3" style={{paddingBottom: "calc(80px + env(safe-area-inset-bottom, 12px))"}}>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={pdfIndir} className="rounded-2xl bg-blue-600 py-3 font-bold">PDF indir / yazdır</button>
                 <button onClick={whatsappEkstreGonder} className="rounded-2xl bg-emerald-600 py-3 font-bold">WhatsApp gönder</button>

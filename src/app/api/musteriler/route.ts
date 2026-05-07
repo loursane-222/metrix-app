@@ -88,6 +88,17 @@ export async function POST(req: NextRequest) {
     data: { atolyeId: atolye.id, firmaAdi, ad, soyad, telefon, email, acilisBakiyesi, bakiyeTipi, musteriTipi }
   })
 
+  try {
+    const { logActivity } = await import('@/lib/activityLogger')
+    const musteriAdi = musteri.firmaAdi || (musteri.ad + ' ' + musteri.soyad).trim() || 'Musteri'
+    await logActivity({
+      atolyeId: atolye.id,
+      type: 'musteri_eklendi',
+      message: musteriAdi + ' adli yeni musteri kaydi olusturuldu.',
+      refId: musteri.id,
+      userId: kullanici.id,
+    })
+  } catch {}
   return NextResponse.json({ musteri })
 }
 

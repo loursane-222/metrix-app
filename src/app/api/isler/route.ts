@@ -262,6 +262,17 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  try {
+    const { logActivity } = await import('@/lib/activityLogger')
+    await logActivity({
+      atolyeId: atolye.id,
+      type: 'teklif_olusturuldu',
+      message: musteriAdi + ' icin ' + teklifNo + ' numarali teklif olusturuldu. Tutar: ' + satisFiyati.toLocaleString('tr-TR') + ' TL',
+      refId: is.id,
+      userId: kullanici.id,
+    })
+  } catch {}
+
   return NextResponse.json({
     is, toplamSureDakika, iscilikMaliyeti, malzemeMaliyeti,
     toplamMaliyet, satisFiyati, kdvTutari, kdvDahilFiyat,

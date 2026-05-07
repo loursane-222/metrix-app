@@ -196,7 +196,7 @@ export default function PremiumEkstreModal({ aktif, analiz, onClose, tl, pct, mu
               <div className="flex flex-col gap-5 border-b border-slate-200 pb-5 md:flex-row md:items-start md:justify-between md:gap-6 md:pb-6">
                 <div className="flex items-start gap-3 md:gap-4">
                   {logoUrl ? (
-                    <img src={logoUrl} alt={firmaAdi} className="h-12 w-12 rounded-2xl border border-slate-200 object-cover md:h-14 md:w-14" />
+                    <img src={logoUrl} alt={firmaAdi} crossOrigin="anonymous" className="h-12 w-12 rounded-2xl border border-slate-200 object-cover md:h-14 md:w-14" />
                   ) : (
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-lg font-black text-white md:h-14 md:w-14">
                       {firmaAdi.charAt(0).toUpperCase()}

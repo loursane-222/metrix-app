@@ -59,7 +59,6 @@ function tl(v: any) {
 }
 
 function tlInput(v: string) {
-  // Ham sayıyı binlik ayıraçlı göster
   const raw = v.replace(/\./g, '').replace(',', '').replace(/[^0-9]/g, '')
   if (!raw) return ''
   return Number(raw).toLocaleString('tr-TR')
@@ -96,6 +95,13 @@ export default function AtolyePage() {
 
   const [yeniMakine, setYeniMakine] = useState({ makineAdi: '', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikAktifCalismaSaati: '' })
   const [yeniArac, setYeniArac] = useState({ aracAdi: '', aracTipi: 'Kamyonet', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikBakim: '', aylikSigortaKasko: '', aylikVergiMuayene: '' })
+
+  // Düzenleme state'leri
+  const [editingMakine, setEditingMakine] = useState<Makine | null>(null)
+  const [editMakineForm, setEditMakineForm] = useState({ makineAdi: '', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikAktifCalismaSaati: '' })
+  const [editingArac, setEditingArac] = useState<Arac | null>(null)
+  const [editAracForm, setEditAracForm] = useState({ aracAdi: '', aracTipi: '', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikBakim: '', aylikSigortaKasko: '', aylikVergiMuayene: '' })
+  const [editKaydediliyor, setEditKaydediliyor] = useState(false)
 
   async function yukle() {
     const [a, m, ar, g] = await Promise.all([
@@ -135,13 +141,89 @@ export default function AtolyePage() {
   useEffect(() => { yukle() }, [])
 
   function setAlan(k: keyof FormState, v: string) {
-    // Sayısal alanlarda binlik ayıraç giriş desteği
     setForm(prev => ({ ...prev, [k]: k === 'plakaBasinaMtul' ? v.replace(',', '.') : v }))
   }
 
-  // Ham sayı değeri (binlik ayıraçları kaldır)
   function rawVal(v: string) {
     return v.replace(/\./g, '').replace(',', '.')
+  }
+
+  // Makine düzenlemeyi aç
+  function makineEditAc(m: Makine) {
+    setEditingMakine(m)
+    setEditMakineForm({
+      makineAdi: m.makineAdi,
+      alinanBedel: String(m.alinanBedel),
+      paraBirimi: m.paraBirimi,
+      amortismanSuresiAy: String(m.amortismanSuresiAy),
+      aylikAktifCalismaSaati: String(m.aylikAktifCalismaSaati),
+    })
+  }
+
+  // Araç düzenlemeyi aç
+  function aracEditAc(a: Arac) {
+    setEditingArac(a)
+    setEditAracForm({
+      aracAdi: a.aracAdi,
+      aracTipi: a.aracTipi,
+      alinanBedel: String(a.alinanBedel),
+      paraBirimi: a.paraBirimi,
+      amortismanSuresiAy: String(a.amortismanSuresiAy),
+      aylikBakim: String(a.aylikBakim),
+      aylikSigortaKasko: String(a.aylikSigortaKasko),
+      aylikVergiMuayene: String(a.aylikVergiMuayene),
+    })
+  }
+
+  async function makineGuncelle() {
+    if (!editingMakine) return
+    setEditKaydediliyor(true)
+    try {
+      const res = await fetch('/api/makineler', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingMakine.id,
+          makineAdi: editMakineForm.makineAdi,
+          alinanBedel: n(editMakineForm.alinanBedel),
+          paraBirimi: editMakineForm.paraBirimi,
+          amortismanSuresiAy: Math.round(n(editMakineForm.amortismanSuresiAy)),
+          aylikAktifCalismaSaati: n(editMakineForm.aylikAktifCalismaSaati),
+        }),
+      })
+      const json = await res.json()
+      if (json.makine) {
+        setMakineler(prev => prev.map(m => m.id === json.makine.id ? json.makine : m))
+        setEditingMakine(null)
+      }
+    } finally { setEditKaydediliyor(false) }
+  }
+
+  async function aracGuncelle() {
+    if (!editingArac) return
+    setEditKaydediliyor(true)
+    try {
+      const res = await fetch('/api/araclar', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingArac.id,
+          aracAdi: editAracForm.aracAdi,
+          aracTipi: editAracForm.aracTipi,
+          alinanBedel: n(editAracForm.alinanBedel),
+          paraBirimi: editAracForm.paraBirimi,
+          amortismanSuresiAy: Math.round(n(editAracForm.amortismanSuresiAy)),
+          aylikBakim: n(editAracForm.aylikBakim),
+          aylikSigortaKasko: n(editAracForm.aylikSigortaKasko),
+          aylikVergiMuayene: n(editAracForm.aylikVergiMuayene),
+        }),
+      })
+      const json = await res.json()
+      if (json.arac) {
+        setAraclar(prev => prev.map(a => a.id === json.arac.id ? json.arac : a))
+        setEditingArac(null)
+      }
+    } finally { setEditKaydediliyor(false) }
   }
 
   const hesap = useMemo(() => {
@@ -219,11 +301,13 @@ export default function AtolyePage() {
   async function makineSil(id: string) {
     await fetch('/api/makineler', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     setMakineler(prev => prev.filter(x => x.id !== id))
+    if (editingMakine?.id === id) setEditingMakine(null)
   }
 
   async function aracSil(id: string) {
     await fetch('/api/araclar', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     setAraclar(prev => prev.filter(x => x.id !== id))
+    if (editingArac?.id === id) setEditingArac(null)
   }
 
   async function giderKaydet() {
@@ -247,7 +331,6 @@ export default function AtolyePage() {
     setGecmisGiderler(prev => prev.filter(x => x.id !== id))
   }
 
-  // Para input bileşeni — TL simgesi + binlik ayıraç
   function ParaInput({ label, fieldKey, ort }: { label: string; fieldKey: keyof FormState; ort?: number }) {
     const val = form[fieldKey] as string
     const display = tlInput(val)
@@ -318,16 +401,15 @@ export default function AtolyePage() {
             <SideButton active={aktifSol === 'kapasite'} onClick={() => setAktifSol('kapasite')} title="Kapasite" sub="Plaka, mtül, teklif" />
           </div>
 
-          {/* İÇERİK PANEL — scroll düzeltildi */}
           <div className="mt-4 flex-1 min-h-0 overflow-y-auto rounded-2xl border border-slate-800 bg-[#111827] p-3" style={{WebkitOverflowScrolling:'touch'}}>
             {aktifSol === 'kimlik' && (
               <div className="grid gap-2">
-                <Input label="Atölye Adı" value={form.atolyeAdi} onChange={v => setAlan('atolyeAdi', v)} />
-                <Input label="Şehir" value={form.sehir} onChange={v => setAlan('sehir', v)} />
-                <Input label="İlçe" value={form.ilce} onChange={v => setAlan('ilce', v)} />
-                <Input label="Telefon" value={form.telefon} onChange={v => setAlan('telefon', v)} />
-                <Input label="Kuruluş Yılı" value={form.kurulusYili} onChange={v => setAlan('kurulusYili', v)} />
-                <Input label="E-posta" value={form.email} onChange={v => setAlan('email', v)} />
+                <Input label="Atölye Adı" value={form.atolyeAdi} onChange={(v: string) => setAlan('atolyeAdi', v)} />
+                <Input label="Şehir" value={form.sehir} onChange={(v: string) => setAlan('sehir', v)} />
+                <Input label="İlçe" value={form.ilce} onChange={(v: string) => setAlan('ilce', v)} />
+                <Input label="Telefon" value={form.telefon} onChange={(v: string) => setAlan('telefon', v)} />
+                <Input label="Kuruluş Yılı" value={form.kurulusYili} onChange={(v: string) => setAlan('kurulusYili', v)} />
+                <Input label="E-posta" value={form.email} onChange={(v: string) => setAlan('email', v)} />
               </div>
             )}
 
@@ -348,7 +430,6 @@ export default function AtolyePage() {
                 <ParaInput label="Sarf Malzeme" fieldKey="sarfMalzeme" ort={ortalamalar.sarfMalzeme} />
                 <ParaInput label="Diğer Giderler" fieldKey="digerGider" ort={ortalamalar.diger} />
 
-                {/* Geçmiş giderler */}
                 {gecmisGiderler.length > 0 && (
                   <div className="mt-3">
                     <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Geçmiş Gider Kayıtları</p>
@@ -382,12 +463,12 @@ export default function AtolyePage() {
 
             {aktifSol === 'kapasite' && (
               <div className="grid gap-2">
-                <Input label="Porselen Plaka/Ay" value={form.aylikPorselenPlaka} onChange={v => setAlan('aylikPorselenPlaka', v)} />
-                <Input label="Kuvars Plaka/Ay" value={form.aylikKuvarsPlaka} onChange={v => setAlan('aylikKuvarsPlaka', v)} />
-                <Input label="Doğaltaş Plaka/Ay" value={form.aylikDogaltasPlaka} onChange={v => setAlan('aylikDogaltasPlaka', v)} />
-                <Input label="Plaka Başına Mtül" value={form.plakaBasinaMtul} onChange={v => setAlan('plakaBasinaMtul', v)} />
-                <Input label="KDV %" value={form.kdvOrani} onChange={v => setAlan('kdvOrani', v)} />
-                <Input label="Teklif Geçerlilik (gün)" value={form.teklifGecerlilik} onChange={v => setAlan('teklifGecerlilik', v)} />
+                <Input label="Porselen Plaka/Ay" value={form.aylikPorselenPlaka} onChange={(v: string) => setAlan('aylikPorselenPlaka', v)} />
+                <Input label="Kuvars Plaka/Ay" value={form.aylikKuvarsPlaka} onChange={(v: string) => setAlan('aylikKuvarsPlaka', v)} />
+                <Input label="Doğaltaş Plaka/Ay" value={form.aylikDogaltasPlaka} onChange={(v: string) => setAlan('aylikDogaltasPlaka', v)} />
+                <Input label="Plaka Başına Mtül" value={form.plakaBasinaMtul} onChange={(v: string) => setAlan('plakaBasinaMtul', v)} />
+                <Input label="KDV %" value={form.kdvOrani} onChange={(v: string) => setAlan('kdvOrani', v)} />
+                <Input label="Teklif Geçerlilik (gün)" value={form.teklifGecerlilik} onChange={(v: string) => setAlan('teklifGecerlilik', v)} />
               </div>
             )}
           </div>
@@ -526,56 +607,178 @@ export default function AtolyePage() {
         </Modal>
       )}
 
+      {/* YENİ MAKİNE MODAL */}
       {makineModal && (
         <Modal title="Yeni Makine" onClose={() => setMakineModal(false)}>
-          <Input label="Makine Adı" value={yeniMakine.makineAdi} onChange={v => setYeniMakine({ ...yeniMakine, makineAdi: v })} />
-          <Input label="Alınan Bedel" value={yeniMakine.alinanBedel} onChange={v => setYeniMakine({ ...yeniMakine, alinanBedel: v })} />
-          <Input label="Amortisman Ay" value={yeniMakine.amortismanSuresiAy} onChange={v => setYeniMakine({ ...yeniMakine, amortismanSuresiAy: v })} />
-          <Input label="Aylık Aktif Saat" value={yeniMakine.aylikAktifCalismaSaati} onChange={v => setYeniMakine({ ...yeniMakine, aylikAktifCalismaSaati: v })} />
+          <Input label="Makine Adı" value={yeniMakine.makineAdi} onChange={(v: string) => setYeniMakine({ ...yeniMakine, makineAdi: v })} />
+          <Input label="Alınan Bedel" value={yeniMakine.alinanBedel} onChange={(v: string) => setYeniMakine({ ...yeniMakine, alinanBedel: v })} />
+          <Input label="Amortisman Ay" value={yeniMakine.amortismanSuresiAy} onChange={(v: string) => setYeniMakine({ ...yeniMakine, amortismanSuresiAy: v })} />
+          <Input label="Aylık Aktif Saat" value={yeniMakine.aylikAktifCalismaSaati} onChange={(v: string) => setYeniMakine({ ...yeniMakine, aylikAktifCalismaSaati: v })} />
           <button onClick={makineKaydet} className="mt-4 w-full rounded-xl bg-emerald-600 py-3 font-semibold">Kaydet</button>
         </Modal>
       )}
 
+      {/* YENİ ARAÇ MODAL */}
       {aracModal && (
         <Modal title="Yeni Araç" onClose={() => setAracModal(false)}>
-          <Input label="Araç Adı" value={yeniArac.aracAdi} onChange={v => setYeniArac({ ...yeniArac, aracAdi: v })} />
-          <Input label="Araç Tipi" value={yeniArac.aracTipi} onChange={v => setYeniArac({ ...yeniArac, aracTipi: v })} />
-          <Input label="Alınan Bedel" value={yeniArac.alinanBedel} onChange={v => setYeniArac({ ...yeniArac, alinanBedel: v })} />
-          <Input label="Amortisman Ay" value={yeniArac.amortismanSuresiAy} onChange={v => setYeniArac({ ...yeniArac, amortismanSuresiAy: v })} />
-          <Input label="Aylık Bakım" value={yeniArac.aylikBakim} onChange={v => setYeniArac({ ...yeniArac, aylikBakim: v })} />
-          <Input label="Sigorta/Kasko" value={yeniArac.aylikSigortaKasko} onChange={v => setYeniArac({ ...yeniArac, aylikSigortaKasko: v })} />
-          <Input label="Vergi/Muayene" value={yeniArac.aylikVergiMuayene} onChange={v => setYeniArac({ ...yeniArac, aylikVergiMuayene: v })} />
+          <Input label="Araç Adı" value={yeniArac.aracAdi} onChange={(v: string) => setYeniArac({ ...yeniArac, aracAdi: v })} />
+          <Input label="Araç Tipi" value={yeniArac.aracTipi} onChange={(v: string) => setYeniArac({ ...yeniArac, aracTipi: v })} />
+          <Input label="Alınan Bedel" value={yeniArac.alinanBedel} onChange={(v: string) => setYeniArac({ ...yeniArac, alinanBedel: v })} />
+          <Input label="Amortisman Ay" value={yeniArac.amortismanSuresiAy} onChange={(v: string) => setYeniArac({ ...yeniArac, amortismanSuresiAy: v })} />
+          <Input label="Aylık Bakım" value={yeniArac.aylikBakim} onChange={(v: string) => setYeniArac({ ...yeniArac, aylikBakim: v })} />
+          <Input label="Sigorta/Kasko" value={yeniArac.aylikSigortaKasko} onChange={(v: string) => setYeniArac({ ...yeniArac, aylikSigortaKasko: v })} />
+          <Input label="Vergi/Muayene" value={yeniArac.aylikVergiMuayene} onChange={(v: string) => setYeniArac({ ...yeniArac, aylikVergiMuayene: v })} />
           <button onClick={aracKaydet} className="mt-4 w-full rounded-xl bg-emerald-600 py-3 font-semibold">Kaydet</button>
         </Modal>
       )}
 
+      {/* MAKİNELER DETAY + DÜZENLEME MODAL */}
       {detayModal === 'makine' && (
-        <Modal title="Makineler" onClose={() => setDetayModal(null)}>
-          <div className="grid gap-2">
-            {makineler.map(m => (
-              <div key={m.id} className="rounded-xl border border-slate-700 bg-[#111827] p-3">
-                <div className="flex justify-between gap-3">
-                  <div><p className="font-semibold">{m.makineAdi}</p><p className="text-xs text-slate-400">{tl(m.dakikalikMaliyet)} / dk · {tl(m.aylikAmortisman)} / ay</p></div>
-                  <button onClick={() => makineSil(m.id)} className="text-xs text-red-300">Sil</button>
-                </div>
+        <Modal title="Makineler" onClose={() => { setDetayModal(null); setEditingMakine(null) }}>
+          {editingMakine ? (
+            /* DÜZENLEME FORMU */
+            <div className="grid gap-3">
+              <div className="flex items-center gap-2 mb-1">
+                <button onClick={() => setEditingMakine(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">← Geri</button>
+                <p className="text-sm font-semibold text-white">Makine Düzenle</p>
               </div>
-            ))}
-          </div>
+              <Input label="Makine Adı" value={editMakineForm.makineAdi} onChange={(v: string) => setEditMakineForm(f => ({ ...f, makineAdi: v }))} />
+              <Input label="Alınan Bedel (₺)" value={editMakineForm.alinanBedel} onChange={(v: string) => setEditMakineForm(f => ({ ...f, alinanBedel: v }))} />
+              <Input label="Amortisman Süresi (Ay)" value={editMakineForm.amortismanSuresiAy} onChange={(v: string) => setEditMakineForm(f => ({ ...f, amortismanSuresiAy: v }))} />
+              <Input label="Aylık Aktif Çalışma Saati" value={editMakineForm.aylikAktifCalismaSaati} onChange={(v: string) => setEditMakineForm(f => ({ ...f, aylikAktifCalismaSaati: v }))} />
+              {/* Hesaplanan önizleme */}
+              {n(editMakineForm.alinanBedel) > 0 && n(editMakineForm.amortismanSuresiAy) > 0 && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                  <p className="text-[10px] text-amber-400 uppercase tracking-wider mb-1">Hesaplanan Değerler</p>
+                  <p className="text-xs text-slate-300">Aylık Amortisman: <span className="text-white font-semibold">{tl(n(editMakineForm.alinanBedel) / n(editMakineForm.amortismanSuresiAy))}</span></p>
+                  {n(editMakineForm.aylikAktifCalismaSaati) > 0 && (
+                    <p className="text-xs text-slate-300 mt-1">Dakika Maliyeti: <span className="text-white font-semibold">{tl((n(editMakineForm.alinanBedel) / n(editMakineForm.amortismanSuresiAy)) / n(editMakineForm.aylikAktifCalismaSaati) / 60)}</span></p>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setEditingMakine(null)} className="flex-1 rounded-xl border border-slate-700 py-2.5 text-sm text-slate-300 hover:bg-slate-800">İptal</button>
+                <button onClick={makineGuncelle} disabled={editKaydediliyor} className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50">
+                  {editKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* MAKİNE LİSTESİ */
+            <div className="grid gap-2">
+              {makineler.length === 0 && (
+                <p className="text-center text-sm text-slate-500 py-4">Henüz makine eklenmemiş.</p>
+              )}
+              {makineler.map(m => (
+                <div
+                  key={m.id}
+                  onClick={() => makineEditAc(m)}
+                  className="group cursor-pointer rounded-xl border border-slate-700 bg-[#111827] p-4 hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-white truncate">{m.makineAdi}</p>
+                        <span className="shrink-0 rounded-md border border-slate-600 px-1.5 py-0.5 text-[9px] text-slate-400 group-hover:border-blue-500/40 group-hover:text-blue-400 transition-colors">Düzenle</span>
+                      </div>
+                      <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5">
+                        <p className="text-[11px] text-slate-400">Amortisman: <span className="text-slate-300">{m.amortismanSuresiAy} ay</span></p>
+                        <p className="text-[11px] text-slate-400">Aylık Saat: <span className="text-slate-300">{m.aylikAktifCalismaSaati} sa</span></p>
+                        <p className="text-[11px] text-slate-400">Aylık: <span className="text-amber-300 font-medium">{tl(m.aylikAmortisman)}</span></p>
+                        <p className="text-[11px] text-slate-400">Dakika: <span className="text-slate-300">{tl(m.dakikalikMaliyet)}</span></p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); makineSil(m.id) }}
+                      className="shrink-0 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-400 hover:bg-red-500/20 transition-colors"
+                    >
+                      Sil
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button onClick={() => { setDetayModal(null); setMakineModal(true) }} className="mt-1 w-full rounded-xl border border-dashed border-slate-700 py-2.5 text-xs text-slate-400 hover:border-blue-500/50 hover:text-blue-400 transition-colors">
+                + Yeni Makine Ekle
+              </button>
+            </div>
+          )}
         </Modal>
       )}
 
+      {/* ARAÇLAR DETAY + DÜZENLEME MODAL */}
       {detayModal === 'arac' && (
-        <Modal title="Araçlar" onClose={() => setDetayModal(null)}>
-          <div className="grid gap-2">
-            {araclar.map(a => (
-              <div key={a.id} className="rounded-xl border border-slate-700 bg-[#111827] p-3">
-                <div className="flex justify-between gap-3">
-                  <div><p className="font-semibold">{a.aracAdi}</p><p className="text-xs text-slate-400">{a.aracTipi} · {tl(a.aylikToplamSabitMaliyet)} / ay</p></div>
-                  <button onClick={() => aracSil(a.id)} className="text-xs text-red-300">Sil</button>
-                </div>
+        <Modal title="Araçlar" onClose={() => { setDetayModal(null); setEditingArac(null) }}>
+          {editingArac ? (
+            /* DÜZENLEME FORMU */
+            <div className="grid gap-3">
+              <div className="flex items-center gap-2 mb-1">
+                <button onClick={() => setEditingArac(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">← Geri</button>
+                <p className="text-sm font-semibold text-white">Araç Düzenle</p>
               </div>
-            ))}
-          </div>
+              <Input label="Araç Adı" value={editAracForm.aracAdi} onChange={(v: string) => setEditAracForm(f => ({ ...f, aracAdi: v }))} />
+              <Input label="Araç Tipi" value={editAracForm.aracTipi} onChange={(v: string) => setEditAracForm(f => ({ ...f, aracTipi: v }))} />
+              <Input label="Alınan Bedel (₺)" value={editAracForm.alinanBedel} onChange={(v: string) => setEditAracForm(f => ({ ...f, alinanBedel: v }))} />
+              <Input label="Amortisman Süresi (Ay)" value={editAracForm.amortismanSuresiAy} onChange={(v: string) => setEditAracForm(f => ({ ...f, amortismanSuresiAy: v }))} />
+              <Input label="Aylık Bakım (₺)" value={editAracForm.aylikBakim} onChange={(v: string) => setEditAracForm(f => ({ ...f, aylikBakim: v }))} />
+              <Input label="Sigorta / Kasko (₺)" value={editAracForm.aylikSigortaKasko} onChange={(v: string) => setEditAracForm(f => ({ ...f, aylikSigortaKasko: v }))} />
+              <Input label="Vergi / Muayene (₺)" value={editAracForm.aylikVergiMuayene} onChange={(v: string) => setEditAracForm(f => ({ ...f, aylikVergiMuayene: v }))} />
+              {/* Hesaplanan önizleme */}
+              {n(editAracForm.alinanBedel) > 0 && n(editAracForm.amortismanSuresiAy) > 0 && (
+                <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-3">
+                  <p className="text-[10px] text-violet-400 uppercase tracking-wider mb-1">Hesaplanan Değerler</p>
+                  <p className="text-xs text-slate-300">Aylık Amortisman: <span className="text-white font-semibold">{tl(n(editAracForm.alinanBedel) / n(editAracForm.amortismanSuresiAy))}</span></p>
+                  <p className="text-xs text-slate-300 mt-1">Toplam Aylık Maliyet: <span className="text-white font-semibold">{tl(
+                    n(editAracForm.alinanBedel) / n(editAracForm.amortismanSuresiAy) +
+                    n(editAracForm.aylikBakim) + n(editAracForm.aylikSigortaKasko) + n(editAracForm.aylikVergiMuayene)
+                  )}</span></p>
+                </div>
+              )}
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setEditingArac(null)} className="flex-1 rounded-xl border border-slate-700 py-2.5 text-sm text-slate-300 hover:bg-slate-800">İptal</button>
+                <button onClick={aracGuncelle} disabled={editKaydediliyor} className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50">
+                  {editKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* ARAÇ LİSTESİ */
+            <div className="grid gap-2">
+              {araclar.length === 0 && (
+                <p className="text-center text-sm text-slate-500 py-4">Henüz araç eklenmemiş.</p>
+              )}
+              {araclar.map(a => (
+                <div
+                  key={a.id}
+                  onClick={() => aracEditAc(a)}
+                  className="group cursor-pointer rounded-xl border border-slate-700 bg-[#111827] p-4 hover:border-violet-500/50 hover:bg-violet-500/5 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-white truncate">{a.aracAdi}</p>
+                        <span className="shrink-0 text-[9px] rounded-md border border-slate-600 px-1.5 py-0.5 text-slate-400 group-hover:border-violet-500/40 group-hover:text-violet-400 transition-colors">Düzenle</span>
+                      </div>
+                      <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5">
+                        <p className="text-[11px] text-slate-400">Tip: <span className="text-slate-300">{a.aracTipi}</span></p>
+                        <p className="text-[11px] text-slate-400">Amortisman: <span className="text-slate-300">{a.amortismanSuresiAy} ay</span></p>
+                        <p className="text-[11px] text-slate-400">Bakım: <span className="text-slate-300">{tl(a.aylikBakim)}</span></p>
+                        <p className="text-[11px] text-slate-400">Toplam: <span className="text-violet-300 font-medium">{tl(a.aylikToplamSabitMaliyet)}</span></p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); aracSil(a.id) }}
+                      className="shrink-0 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-400 hover:bg-red-500/20 transition-colors"
+                    >
+                      Sil
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button onClick={() => { setDetayModal(null); setAracModal(true) }} className="mt-1 w-full rounded-xl border border-dashed border-slate-700 py-2.5 text-xs text-slate-400 hover:border-violet-500/50 hover:text-violet-400 transition-colors">
+                + Yeni Araç Ekle
+              </button>
+            </div>
+          )}
         </Modal>
       )}
     </div>
