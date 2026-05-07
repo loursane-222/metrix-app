@@ -333,6 +333,7 @@ export default function IslerPage() {
               <div className="flex items-center justify-between gap-3">
                 <button onClick={() => setMobileView('list')} className="rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm font-bold min-w-[96px]">← İşler</button>
                 <div className="flex gap-2">
+                  <button onClick={() => router.push(`/dashboard/yeni-is-v3?duzenle=${aktifIs?.id}`)} disabled={!aktifIs?.id} className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-300 disabled:opacity-40">✏️</button>
                   <button onClick={aktifWhatsappGonder} disabled={!aktifIs?.teklifNo} className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm font-bold text-green-300 disabled:opacity-40">WA</button>
                   <button onClick={() => window.open(`/api/isler/${aktifIs?.id}/pdf`, "_blank")} disabled={!aktifIs?.id} className="rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm font-bold disabled:opacity-40">PDF</button>
                   <button onClick={() => setMobileActionsOpen(true)} className="rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm font-bold">···</button>
@@ -612,6 +613,7 @@ export default function IslerPage() {
       {/* MASAÜSTÜ SAĞ — AKSIYONLAR */}
       <div className="hidden md:flex md:w-[25%] p-6 border-l border-slate-800 flex-col gap-4">
         <button onClick={() => router.push('/dashboard/yeni-is-v3?fresh=1')} className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold">+ Yeni İş</button>
+        <button disabled={!aktifIs} onClick={() => router.push(`/dashboard/yeni-is-v3?duzenle=${aktifIs?.id}`)} className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl disabled:bg-slate-700">✏️ Düzenle</button>
         <button disabled={!aktifIs} onClick={() => router.push(`/is/detay?id=${aktifIs?.id}`)} className="bg-emerald-600 hover:bg-emerald-500 p-4 rounded-xl disabled:bg-slate-700">Satış Paneli</button>
         <button disabled={!aktifIs} onClick={() => setPlakaAcik(true)} className="bg-indigo-600 hover:bg-indigo-500 p-4 rounded-xl disabled:bg-slate-700">Plaka Optimizasyonu</button>
         <button disabled={!aktifIs} onClick={() => router.push(aktifIs?.musteriId ? `/dashboard/tahsilatlar?isId=${aktifIs.id}` : '/dashboard/tahsilatlar')} className="bg-amber-600 hover:bg-amber-500 p-4 rounded-xl disabled:bg-slate-700">Tahsilat</button>
@@ -637,6 +639,7 @@ export default function IslerPage() {
             </div>
             <div className="flex flex-col gap-3">
               <button onClick={() => router.push('/dashboard/yeni-is-v3?fresh=1')} className="rounded-2xl bg-blue-600 px-5 py-4 font-bold">+ Yeni İş</button>
+              <button disabled={!aktifIs} onClick={() => router.push(`/dashboard/yeni-is-v3?duzenle=${aktifIs?.id}`)} className="rounded-2xl bg-blue-600 px-5 py-4 font-bold disabled:bg-slate-700">✏️ Düzenle</button>
               <button disabled={!aktifIs} onClick={() => router.push(`/is/detay?id=${aktifIs?.id}`)} className="rounded-2xl bg-emerald-600 px-5 py-4 font-bold disabled:bg-slate-700">Satış Paneli</button>
               <button disabled={!aktifIs} onClick={() => { setPlakaAcik(true); setMobileActionsOpen(false); }} className="rounded-2xl bg-indigo-600 px-5 py-4 font-bold disabled:bg-slate-700">Plaka Optimizasyonu</button>
               <button disabled={!aktifIs} onClick={() => { setMobileActionsOpen(false); setUretimPlaniAcik(true); }} className="rounded-2xl bg-purple-600 px-5 py-4 font-bold disabled:bg-slate-700">Üretim Planı</button>

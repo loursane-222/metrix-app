@@ -296,6 +296,8 @@ export default function YeniIsV3Page() {
   const [plakaSlabs, setPlakaSlabs]         = useState<any[]>([]);
   const [plakaPlakaSayisi, setPlakaPlakaSayisi] = useState(0);
   const [plakaFireOrani, setPlakaFireOrani] = useState(0);
+  const [duzenleId, setDuzenleId]           = useState<string | null>(null);
+  const [duzenleYukleniyor, setDuzenleYukleniyor] = useState(false);
 
   // Layout override
   useEffect(() => {
@@ -308,10 +310,78 @@ export default function YeniIsV3Page() {
     return () => { if (main) main.setAttribute("style", ms); if (inner) inner.setAttribute("style", is); };
   }, []);
 
-  // Taslak yükle
+  // Taslak yükle / Düzenleme modu
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
+      const duzenleIdParam = url.searchParams.get("duzenle");
+      if (duzenleIdParam) {
+        setDuzenleId(duzenleIdParam);
+        setDuzenleYukleniyor(true);
+        fetch(`/api/isler/${duzenleIdParam}`).then(r => r.json()).then(json => {
+          const is = json.is || json;
+          if (!is?.id) return;
+          // Operasyonlardan pahlamaMtul, kesim45Mtul bul
+          const ops = is.operasyonlar || [];
+          const pahlamaOp = ops.find((o: any) => o.operasyonTipi === 'pahlama');
+          const kesim45Op = ops.find((o: any) => o.operasyonTipi === '45_kesim');
+          const tezgahOp  = ops.find((o: any) => o.operasyonTipi === 'tezgah');
+          setForm(p => ({
+            ...p,
+            musteriId:       is.musteriId || '',
+            musteriAdi:      is.musteriAdi || '',
+            musteriTipi:     is.musteriTipi || 'son_kullanici',
+            urunAdi:         is.urunAdi || '',
+            notlar:          is.notlar || '',
+            plakaFiyatiEuro: String(is.plakaFiyatiEuro || ''),
+            kullanilanKur:   String(is.kullanilanKur || '53'),
+            plakaEn:         String(is.plakaGenislikCm || '160'),
+            plakaBoy:        String(is.plakaUzunlukCm || '320'),
+            tezgahDakika:    String(is.birMtulDakika || '25'),
+            pahlamaMtul:     String(pahlamaOp?.toplamDakika && pahlamaOp?.birimDakika ? (pahlamaOp.toplamDakika / pahlamaOp.birimDakika).toFixed(2) : is.pahlamaMtul || ''),
+            pahlamaDakika:   String(pahlamaOp?.birimDakika || '1'),
+            kesim45Mtul:     String(kesim45Op?.toplamDakika && kesim45Op?.birimDakika ? (kesim45Op.toplamDakika / kesim45Op.birimDakika).toFixed(2) : is.kesim45Mtul || ''),
+            kesim45Dakika:   String(kesim45Op?.birimDakika || '4'),
+            tezgahMakineId:  tezgahOp?.makineId || p.tezgahMakineId,
+            pahlamaMakineId: pahlamaOp?.makineId || p.pahlamaMakineId,
+            kesim45MakineId: kesim45Op?.makineId || p.kesim45MakineId,
+            karHedefi:       String(is.karYuzdesi || '30'),
+            plakaLayoutJson: is.plakaLayoutJson || null,
+            plakaImageUrl:   is.plakaImageUrl || '',
+            // Ölçüleri parcalar'a dönüştür
+            parcalar: [
+              ...(Number(is.metrajMtul) > 0 ? [{
+                id: 'yuklenen-tezgah',
+                ad: 'Tezgah',
+                en: '60',
+                boy: String((Number(is.metrajMtul) * 100).toFixed(0)),
+                adet: '1',
+                onAlin: false,
+                tip: 'tezgah' as const,
+              }] : []),
+              ...(Number(is.tezgahArasiMtul) > 0 ? [{
+                id: 'yuklenen-tezgah-arasi',
+                ad: 'Tezgah Arası',
+                en: '10',
+                boy: String((Number(is.tezgahArasiMtul) * 100).toFixed(0)),
+                adet: '1',
+                onAlin: false,
+                tip: 'tezgah_arasi' as const,
+              }] : []),
+              ...(Number(is.adaTezgahMtul) > 0 ? [{
+                id: 'yuklenen-ada',
+                ad: 'Ada Tezgah',
+                en: '90',
+                boy: String((Number(is.adaTezgahMtul) * 100).toFixed(0)),
+                adet: '1',
+                onAlin: false,
+                tip: 'ada' as const,
+              }] : []),
+            ].filter(p => p.boy !== '0'),
+          }));
+        }).catch(() => {}).finally(() => setDuzenleYukleniyor(false));
+        return;
+      }
       if (url.searchParams.get("fresh") === "1") { localStorage.removeItem(TASLAK_KEY); return; }
       const ham = localStorage.getItem(TASLAK_KEY);
       if (ham) {
@@ -526,13 +596,16 @@ export default function YeniIsV3Page() {
         stresAlmaMakineId: "", fasonEbatlamaMakineId: "",
       };
 
-      const res = await fetch("/api/isler", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch(
+        duzenleId ? `/api/isler/${duzenleId}` : "/api/isler",
+        { method: duzenleId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+      );
       const raw = await res.text();
       let veri: any = {};
       try { veri = raw ? JSON.parse(raw) : {}; } catch { veri = { hata: raw }; }
       if (!res.ok) { alert(veri?.hata || "İş kaydedilemedi."); return; }
       setSonTeklifNo(String(veri?.teklifNo || veri?.is?.teklifNo || ""));
-      setSonIsId(String(veri?.id || veri?.isId || veri?.is?.id || ""));
+      setSonIsId(String(duzenleId || veri?.id || veri?.isId || veri?.is?.id || ""));
       setYeniMusteri(veri?.yeniMusteriOlusturuldu === true);
       try { localStorage.removeItem(TASLAK_KEY); } catch {}
       setBasariEkrani(true);
@@ -564,6 +637,16 @@ export default function YeniIsV3Page() {
   const onceki     = aktifIdx > 0 ? adimlar[aktifIdx - 1].id : null;
   const sonraki    = aktifIdx < adimlar.length - 1 ? adimlar[aktifIdx + 1].id : null;
   const filtreli   = musteriler.filter((m) => String(m.ad || "").toLocaleLowerCase("tr-TR").includes(musteriArama.toLocaleLowerCase("tr-TR")));
+
+  // ─── DÜZENLEME YÜKLENİYOR ────────────────────────────────────────────────
+  if (duzenleYukleniyor) {
+    return (
+      <div className="min-h-screen bg-[#030712] text-white flex items-center justify-center flex-col gap-4">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-400 text-sm">İş verisi yükleniyor...</p>
+      </div>
+    );
+  }
 
   // ─── AI MODU ──────────────────────────────────────────────────────────────
   if (aiMode) {
