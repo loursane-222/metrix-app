@@ -51,12 +51,19 @@ export async function GET() {
       });
     }
 
+    const simdi = new Date()
+    const abonelikBitis = user.abonelikBitis
+    const abonelikPlani = (user as any).abonelikPlani || 'demo'
+    const demoBitti = abonelikBitis ? abonelikBitis < simdi : true
+
     return NextResponse.json({
       userId: user.id,
       email: user.email,
       role: "admin",
       aktif: user.aktif,
       abonelikBitis: user.abonelikBitis,
+      abonelikPlani,
+      demoBitti,
       atolyeId: atolye.id,
     });
   } catch (e) {

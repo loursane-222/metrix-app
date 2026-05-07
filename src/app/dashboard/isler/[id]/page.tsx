@@ -124,7 +124,7 @@ export default function IsDuzenle() {
             plakadanAlinanMtul:String(normalizeMtulInput(is.plakadanAlinanMtul)||''),
             kirilanTasPlaka:String(Number(is.kirilanTasPlaka)||'0'),
             hataliKesimPlaka:String(normalizeMtulInput(is.hataliKesimPlaka)||'0'),
-            manuelPlakaSayisi:'',
+            manuelPlakaSayisi:String(Number(is.kullanilanPlakaSayisi)||''),
             ozelIscilik1Mtul:'',
             ozelIscilik1Dakika:'',
             ozelIscilik1Aciklama:'',

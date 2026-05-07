@@ -1,0 +1,178 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+
+/* ==== MOBILE STATE ==== */
+type MobileView = 'list' | 'detail'
+
+/* ==== TYPES ==== */
+type Personel = {
+  id: string
+  ad: string
+  soyad: string
+  gorevi: string
+  calismaYili: number
+  telefon: string
+  email: string
+  aktif: boolean
+  performansNotu: number | null
+  toplamGorev: number
+  tamamlananGorev?: number
+  zamanindaTamamlanan?: number
+}
+
+/* ==== HELPERS ==== */
+function cls(...v:any[]){return v.filter(Boolean).join(' ')}
+
+export default function PersonelSayfasi(){
+
+  const [personeller,setPersoneller]=useState<Personel[]>([])
+  const [aktif,setAktif]=useState<Personel|null>(null)
+
+  const [mobileView,setMobileView]=useState<MobileView>('list')
+  const [panelOpen,setPanelOpen]=useState(false)
+
+  useEffect(()=>{
+    fetch('/api/personel',{cache:'no-store'})
+      .then(r=>r.json())
+      .then(j=>{
+        setPersoneller(j.personeller||[])
+        setAktif(j.personeller?.[0]||null)
+      })
+  },[])
+
+  return (
+    <div className="h-screen bg-[#030712] text-white overflow-hidden">
+
+      {/* HEADER (MOBILE SAFE) */}
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        {mobileView === 'detail' ? (
+          <button
+            onClick={()=>setMobileView('list')}
+            className="text-sm bg-slate-800 px-3 py-1 rounded-lg"
+          >
+            ← Geri
+          </button>
+        ) : <div />}
+
+        <button
+          onClick={()=>setPanelOpen(true)}
+          className="bg-blue-600 px-3 py-1 rounded-lg text-sm"
+        >
+          Aksiyon
+        </button>
+      </div>
+
+      <div className="h-full md:grid md:grid-cols-[310px_minmax(0,1fr)_310px] md:gap-3 md:p-3">
+
+        {/* ==== LEFT (LIST) ==== */}
+        <aside className={cls(
+          "md:flex md:flex-col md:rounded-3xl md:border md:border-slate-800 md:bg-[#0B1120] md:p-4",
+          mobileView==='list' ? 'block h-full overflow-y-auto' : 'hidden md:flex'
+        )}>
+
+          <h1 className="text-xl md:text-2xl font-semibold mb-3 px-4 md:px-0">
+            Personel
+          </h1>
+
+          <div className="space-y-2 px-3 md:px-0">
+            {personeller.map(p=>(
+              <button
+                key={p.id}
+                onClick={()=>{
+                  setAktif(p)
+                  setMobileView('detail')
+                }}
+                className={cls(
+                  "w-full text-left p-3 rounded-xl border",
+                  aktif?.id===p.id
+                    ? "border-blue-500 bg-blue-500/10"
+                    : "border-slate-800 bg-[#111827]"
+                )}
+              >
+                <div className="text-sm font-semibold truncate">
+                  {p.ad} {p.soyad}
+                </div>
+                <div className="text-xs text-slate-400">
+                  {p.gorevi}
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* ==== CENTER (DETAIL) ==== */}
+        <main className={cls(
+          "md:block md:rounded-3xl md:border md:border-slate-800 md:bg-[#0B1120] md:p-5",
+          mobileView==='detail' ? 'block h-full overflow-y-auto p-4' : 'hidden md:block'
+        )}>
+
+          {!aktif ? (
+            <div className="flex h-full items-center justify-center">
+              Personel yok
+            </div>
+          ) : (
+            <div>
+
+              <h2 className="text-2xl md:text-3xl font-semibold">
+                {aktif.ad} {aktif.soyad}
+              </h2>
+
+              <p className="text-sm text-slate-400 mt-1">
+                {aktif.gorevi}
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+                <Kpi label="Performans" value={aktif.performansNotu ?? '-'} />
+                <Kpi label="Görev" value={aktif.toplamGorev} />
+                <Kpi label="Tamam" value={aktif.tamamlananGorev||0} />
+                <Kpi label="Zaman" value={aktif.zamanindaTamamlanan||0} />
+              </div>
+
+            </div>
+          )}
+        </main>
+
+        {/* ==== RIGHT PANEL ==== */}
+        <aside className="hidden md:flex flex-col rounded-3xl border border-slate-800 bg-[#0B1120] p-4">
+          <h2 className="text-lg font-semibold">Aksiyon</h2>
+        </aside>
+
+        {/* ==== MOBILE PANEL ==== */}
+        {panelOpen && (
+          <div
+            className="fixed inset-0 z-[200] bg-black/60 flex justify-end md:hidden"
+            onClick={()=>setPanelOpen(false)}
+          >
+            <div
+              className="w-[80%] h-full bg-[#0B1120] p-4"
+              onClick={e=>e.stopPropagation()}
+            >
+              <button
+                onClick={()=>setPanelOpen(false)}
+                className="mb-4 bg-slate-700 px-3 py-1 rounded"
+              >
+                Kapat
+              </button>
+
+              <p className="text-sm text-slate-400">
+                Aksiyon paneli
+              </p>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
+}
+
+/* ==== COMPONENT ==== */
+function Kpi({label,value}:any){
+  return (
+    <div className="p-3 rounded-xl border border-slate-800 bg-[#111827]">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-lg font-semibold mt-1">{value}</p>
+    </div>
+  )
+}

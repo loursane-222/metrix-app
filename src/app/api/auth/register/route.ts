@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const sifreliParola = await bcrypt.hash(password, 10)
 
     const abonelikBitis = new Date()
-    abonelikBitis.setDate(abonelikBitis.getDate() + 30)
+    abonelikBitis.setDate(abonelikBitis.getDate() + 7)
 
     const kullanici = await prisma.user.create({
       data: {

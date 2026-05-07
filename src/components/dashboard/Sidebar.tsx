@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import MobileTabBar from "./MobileTabBar";
 
 type Atolye = {
   atolyeAdi?: string;
@@ -28,6 +29,7 @@ const menuItems = [
   { href: "/dashboard/atolye", label: "Atölye", badge: "Maliyet" },
   { href: "/dashboard/personel", label: "Personel", badge: "Ekip" },
   { href: "/dashboard/plaka-planlayici", label: "Plaka Planlayıcı", badge: "Optimizasyon" },
+  { href: "/dashboard/tahsilatlar", label: "Tahsilat & Cari", badge: "Finans" },
 ];
 
 export default function Sidebar() {
@@ -69,7 +71,7 @@ export default function Sidebar() {
     atolyeGetir();
     ozetGetir();
 
-    const interval = window.setInterval(ozetGetir, 5000);
+    const interval = window.setInterval(ozetGetir, 60000);
 
     function aktifOluncaYenile() {
       if (document.visibilityState === "visible") {
@@ -90,10 +92,8 @@ export default function Sidebar() {
 
   const visibleMenuItems = useMemo(() => {
     if (!currentUser || currentUser.role !== "personel") return menuItems;
-
     const allowed = currentUser.allowedMenus || ["/dashboard"];
     const allowedSet = new Set(allowed);
-
     return menuItems.filter((item) => allowedSet.has(item.href));
   }, [currentUser]);
 
@@ -105,7 +105,6 @@ export default function Sidebar() {
         cache: "no-store",
       });
     } catch {}
-
     localStorage.clear();
     sessionStorage.clear();
     window.location.href = "/login";
@@ -134,7 +133,6 @@ export default function Sidebar() {
               {logoFallback}
             </div>
           )}
-
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">
               Metrix Tezgah
@@ -164,7 +162,6 @@ export default function Sidebar() {
       <nav className="mt-3 space-y-1">
         {visibleMenuItems.map((item) => {
           const active = pathname === item.href;
-
           return (
             <Link
               key={item.href}
@@ -212,49 +209,15 @@ export default function Sidebar() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-[90] flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white text-2xl text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.14)] md:hidden"
-        aria-label="Menüyü aç"
-      >
-        ☰
-      </button>
-
-      {mobileOpen && (
-        <div className="fixed inset-0 z-[100] md:hidden">
-          <div
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
-
-          <aside className="absolute left-0 top-0 h-full w-[86vw] max-w-[340px] bg-[#0B1020] p-4 text-white shadow-[20px_0_60px_rgba(0,0,0,0.35)]">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                Menü
-              </p>
-
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="rounded-xl border border-white/10 px-3 py-2 text-white/70"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="h-[calc(100%-44px)] overflow-y-auto pr-1">
-              <SidebarContent mobile />
-            </div>
-          </aside>
-        </div>
-      )}
-
+      {/* Masaüstü sidebar — md ve üzeri */}
       <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:flex md:w-72 bg-[#0B1020] text-white border-r border-white/10">
         <div className="flex h-full w-full min-h-0 flex-col p-4">
           <SidebarContent />
         </div>
       </aside>
+
+      {/* Mobil tab bar — md altı */}
+      <MobileTabBar currentUser={currentUser} />
     </>
   );
 }

@@ -14,6 +14,7 @@ model User {
   ad            String    @default("")
   aktif         Boolean   @default(true)
   abonelikBitis DateTime?
+  abonelikPlani  String    @default("demo")
   createdAt     DateTime  @default(now())
 
   atolye Atolye?
@@ -62,9 +63,10 @@ model Atolye {
 
   makineler   Makine[]
   araclar     Arac[]
-  isler       Is[]
+  isler        Is[]
   personeller Personel[]
   musteriler  Musteri[]
+  aylikGiderler AylikGider[]
 }
 
 model Makine {
@@ -122,12 +124,14 @@ model Musteri {
   email          String  @default("")
   acilisBakiyesi Decimal @default(0)
   bakiyeTipi     String  @default("borc")
+  musteriTipi    String  @default("son_kullanici")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  isler       Is[]
-  tahsilatlar Tahsilat[]
+  isler        Is[]
+  tahsilatlar  Tahsilat[]
+  odemePlanlari OdemePlani[]
 }
 
 model Tahsilat {
@@ -137,6 +141,9 @@ model Tahsilat {
 
   tarih DateTime
   tutar Decimal  @default(0)
+
+  isId  String?
+  is    Is?      @relation(fields: [isId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 }
@@ -207,10 +214,14 @@ model Is {
   onaylanmaTarihi  DateTime?
   kaybedilmeTarihi DateTime?
   notlar           String?
+  plakaLayoutJson Json?
+  plakaImageUrl   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  odemePlani   OdemePlani?
+  tahsilatlar  Tahsilat[]
   operasyonlar IsOperasyon[]
   workSchedule WorkSchedule?
 }
@@ -361,4 +372,55 @@ model ActivityLog {
 
   @@index([atolyeId])
   @@index([createdAt])
+}
+
+model AylikGider {
+  id       String @id @default(cuid())
+  atolyeId String
+  atolye   Atolye @relation(fields: [atolyeId], references: [id])
+
+  tarih     DateTime
+  kategori  String   // toplamMaas | sgkGideri | yemekGideri | yolGideri | kira | elektrik | su | dogalgaz | internet | sarfMalzeme | diger
+  aciklama  String   @default("")
+  tutar     Decimal
+
+  createdAt DateTime @default(now())
+
+  @@index([atolyeId])
+  @@index([atolyeId, kategori])
+}
+
+model OdemePlani {
+  id       String @id @default(cuid())
+  isId     String @unique
+  is       Is     @relation(fields: [isId], references: [id], onDelete: Cascade)
+  musteriId String
+  musteri  Musteri @relation(fields: [musteriId], references: [id])
+
+  toplamTutar  Decimal
+  musteriTipi  String
+
+  taksitler OdemeTaksiti[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("odeme_planlari")
+}
+
+model OdemeTaksiti {
+  id           String     @id @default(cuid())
+  planId       String
+  plan         OdemePlani @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  taksitNo     Int
+  aciklama     String
+  vadeTarihi   DateTime
+  tutar        Decimal
+  odendiMi     Boolean  @default(false)
+  odenmeTarihi DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("odeme_taksitleri")
 }

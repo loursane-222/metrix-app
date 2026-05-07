@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { jwtVerify } from 'jose'
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
@@ -21,6 +22,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/public') ||
     pathname.startsWith('/api/ai-sales') ||
+    pathname.startsWith('/api/makineler-lite') ||
     pathname.startsWith('/teklif') ||
     pathname.startsWith('/api/teklif') ||
     (pathname.startsWith('/api/isler/') && pathname.endsWith('/pdf'))
@@ -37,7 +39,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  return NextResponse.next()
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
+    await jwtVerify(token, secret)
+    return NextResponse.next()
+  } catch {
+    const response = NextResponse.redirect(new URL('/login', req.url))
+    response.cookies.delete('metrix-token')
+    response.cookies.delete('token')
+    response.cookies.delete('auth_token')
+    return response
+  }
 }
 
 export const config = {

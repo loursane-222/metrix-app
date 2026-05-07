@@ -31,14 +31,8 @@ export default async function Page({ params }: any) {
   if (!is) {
     return (
       <main style={{ padding: 40, fontFamily: "Arial" }}>
-        Teklif bulunamadı.
-      
-      <TeklifClient
-        teklifNo={is.teklifNo}
-        pdfUrl={`/api/isler/${is.id}/pdf`}
-      />
-    </main>
-
+        <p>Teklif bulunamadı.</p>
+      </main>
     );
   }
 

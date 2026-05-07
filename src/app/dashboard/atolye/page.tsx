@@ -2,91 +2,55 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 type Makine = {
-  id: string
-  makineAdi: string
-  alinanBedel: number
-  paraBirimi: string
-  amortismanSuresiAy: number
-  aylikAktifCalismaSaati: number
-  aylikAmortisman: number
-  saatlikMaliyet: number
-  dakikalikMaliyet: number
+  id: string; makineAdi: string; alinanBedel: number; paraBirimi: string
+  amortismanSuresiAy: number; aylikAktifCalismaSaati: number
+  aylikAmortisman: number; saatlikMaliyet: number; dakikalikMaliyet: number
 }
-
 type Arac = {
-  id: string
-  aracAdi: string
-  aracTipi: string
-  alinanBedel: number
-  paraBirimi: string
-  amortismanSuresiAy: number
-  aylikBakim: number
-  aylikSigortaKasko: number
-  aylikVergiMuayene: number
-  aylikAmortisman: number
-  aylikToplamSabitMaliyet: number
+  id: string; aracAdi: string; aracTipi: string; alinanBedel: number; paraBirimi: string
+  amortismanSuresiAy: number; aylikBakim: number; aylikSigortaKasko: number
+  aylikVergiMuayene: number; aylikAmortisman: number; aylikToplamSabitMaliyet: number
+}
+type FormState = {
+  atolyeAdi: string; sehir: string; ilce: string; telefon: string; email: string
+  adres: string; kurulusYili: string; toplamMaas: string; sgkGideri: string
+  yemekGideri: string; yolGideri: string; kira: string; elektrik: string; su: string
+  dogalgaz: string; internet: string; sarfMalzeme: string; digerGider: string
+  aylikPorselenPlaka: string; aylikKuvarsPlaka: string; aylikDogaltasPlaka: string
+  plakaBasinaMtul: string; kdvOrani: string; teklifGecerlilik: string
+}
+type AylikGider = {
+  id: string; tarih: string; kategori: string; aciklama: string; tutar: number
 }
 
-type FormState = {
-  atolyeAdi: string
-  sehir: string
-  ilce: string
-  telefon: string
-  email: string
-  adres: string
-  kurulusYili: string
-  toplamMaas: string
-  sgkGideri: string
-  yemekGideri: string
-  yolGideri: string
-  kira: string
-  elektrik: string
-  su: string
-  dogalgaz: string
-  internet: string
-  sarfMalzeme: string
-  aylikPorselenPlaka: string
-  aylikKuvarsPlaka: string
-  aylikDogaltasPlaka: string
-  plakaBasinaMtul: string
-  kdvOrani: string
-  teklifGecerlilik: string
-}
+const KATEGORİLER = [
+  { key: 'toplamMaas', label: 'Toplam Maaş' },
+  { key: 'sgkGideri', label: 'SGK Gideri' },
+  { key: 'yemekGideri', label: 'Yemek Gideri' },
+  { key: 'yolGideri', label: 'Yol Gideri' },
+  { key: 'kira', label: 'Kira' },
+  { key: 'elektrik', label: 'Elektrik' },
+  { key: 'su', label: 'Su' },
+  { key: 'dogalgaz', label: 'Doğalgaz' },
+  { key: 'internet', label: 'İnternet' },
+  { key: 'sarfMalzeme', label: 'Sarf Malzeme' },
+  { key: 'diger', label: 'Diğer' },
+]
 
 function emptyForm(): FormState {
   return {
-    atolyeAdi: '',
-    sehir: '',
-    ilce: '',
-    telefon: '',
-    email: '',
-    adres: '',
-  kurulusYili: '',
-    toplamMaas: '',
-    sgkGideri: '',
-    yemekGideri: '',
-    yolGideri: '',
-    kira: '',
-    elektrik: '',
-    su: '',
-    dogalgaz: '',
-    internet: '',
-    sarfMalzeme: '',
-    aylikPorselenPlaka: '',
-    aylikKuvarsPlaka: '',
-    aylikDogaltasPlaka: '',
-    plakaBasinaMtul: '3.20',
-    kdvOrani: '20',
-    teklifGecerlilik: '15',
+    atolyeAdi: '', sehir: '', ilce: '', telefon: '', email: '', adres: '', kurulusYili: '',
+    toplamMaas: '', sgkGideri: '', yemekGideri: '', yolGideri: '',
+    kira: '', elektrik: '', su: '', dogalgaz: '', internet: '', sarfMalzeme: '', digerGider: '',
+    aylikPorselenPlaka: '', aylikKuvarsPlaka: '', aylikDogaltasPlaka: '',
+    plakaBasinaMtul: '3.20', kdvOrani: '20', teklifGecerlilik: '15',
   }
 }
 
 function n(v: any) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0
-  const cleaned = String(v || '').replace(',', '.').replace(/[^0-9.\-]/g, '')
-  const first = cleaned.indexOf('.')
-  const normalized = first >= 0 ? cleaned.slice(0, first + 1) + cleaned.slice(first + 1).replace(/\./g, '') : cleaned
-  const out = Number(normalized)
+  const cleaned = String(v || '').replace(/\./g, '').replace(',', '.').replace(/[^0-9.\-]/g, '')
+  const out = Number(cleaned)
   return Number.isFinite(out) ? out : 0
 }
 
@@ -94,13 +58,23 @@ function tl(v: any) {
   return Number(v || 0).toLocaleString('tr-TR', { maximumFractionDigits: 2 }) + ' ₺'
 }
 
+function tlInput(v: string) {
+  // Ham sayıyı binlik ayıraçlı göster
+  const raw = v.replace(/\./g, '').replace(',', '').replace(/[^0-9]/g, '')
+  if (!raw) return ''
+  return Number(raw).toLocaleString('tr-TR')
+}
+
 function pct(v: any) {
   return '%' + Number(v || 0).toLocaleString('tr-TR', { maximumFractionDigits: 1 })
 }
 
+function bugunStr() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export default function AtolyePage() {
   const logoInputRef = useRef<HTMLInputElement | null>(null)
-
   const [form, setForm] = useState<FormState>(emptyForm())
   const [makineler, setMakineler] = useState<Makine[]>([])
   const [araclar, setAraclar] = useState<Arac[]>([])
@@ -111,246 +85,135 @@ export default function AtolyePage() {
   const [detayModal, setDetayModal] = useState<'makine' | 'arac' | null>(null)
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [giderModal, setGiderModal] = useState(false)
-  const [yeniGider, setYeniGider] = useState({ giderAdi: '', tutar: '' })
   const [mesaj, setMesaj] = useState('')
   const [logoYukleniyor, setLogoYukleniyor] = useState(false)
   const [mobileSolOpen, setMobileSolOpen] = useState(false)
   const [mobileSagOpen, setMobileSagOpen] = useState(false)
+  const [gecmisGiderler, setGecmisGiderler] = useState<AylikGider[]>([])
+  const [ortalamalar, setOrtalamalar] = useState<Record<string, number>>({})
+  const [yeniGider, setYeniGider] = useState({ tarih: bugunStr(), kategori: 'toplamMaas', aciklama: '', tutar: '' })
+  const [giderYukleniyor, setGiderYukleniyor] = useState(false)
 
-  const [yeniMakine, setYeniMakine] = useState({
-    makineAdi: '',
-    alinanBedel: '',
-    paraBirimi: 'TRY',
-    amortismanSuresiAy: '',
-    aylikAktifCalismaSaati: '',
-  })
-
-  const [yeniArac, setYeniArac] = useState({
-    aracAdi: '',
-    aracTipi: 'Kamyonet',
-    alinanBedel: '',
-    paraBirimi: 'TRY',
-    amortismanSuresiAy: '',
-    aylikBakim: '',
-    aylikSigortaKasko: '',
-    aylikVergiMuayene: '',
-  })
+  const [yeniMakine, setYeniMakine] = useState({ makineAdi: '', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikAktifCalismaSaati: '' })
+  const [yeniArac, setYeniArac] = useState({ aracAdi: '', aracTipi: 'Kamyonet', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikBakim: '', aylikSigortaKasko: '', aylikVergiMuayene: '' })
 
   async function yukle() {
-    const [a, m, ar] = await Promise.all([
+    const [a, m, ar, g] = await Promise.all([
       fetch('/api/atolye'),
       fetch('/api/makineler'),
       fetch('/api/araclar'),
+      fetch('/api/aylik-gider'),
     ])
-
     const av = await a.json()
     const mv = await m.json()
     const arv = await ar.json()
+    const gv = await g.json()
 
     if (av.atolye) {
       const x = av.atolye
       setForm({
-        atolyeAdi: String(x.atolyeAdi || ''),
-        sehir: String(x.sehir || ''),
-        ilce: String(x.ilce || ''),
-        telefon: String(x.telefon || ''),
-        email: String(x.email || ''),
-        adres: String(x.adres || ''),
+        atolyeAdi: String(x.atolyeAdi || ''), sehir: String(x.sehir || ''), ilce: String(x.ilce || ''),
+        telefon: String(x.telefon || ''), email: String(x.email || ''), adres: String(x.adres || ''),
         kurulusYili: String(x.kurulusYili || ''),
-        toplamMaas: String(x.toplamMaas || ''),
-        sgkGideri: String(x.sgkGideri || ''),
-        yemekGideri: String(x.yemekGideri || ''),
-        yolGideri: String(x.yolGideri || ''),
-        kira: String(x.kira || ''),
-        elektrik: String(x.elektrik || ''),
-        su: String(x.su || ''),
-        dogalgaz: String(x.dogalgaz || ''),
-        internet: String(x.internet || ''),
-        sarfMalzeme: String(x.sarfMalzeme || ''),
-        aylikPorselenPlaka: String(x.aylikPorselenPlaka || ''),
-        aylikKuvarsPlaka: String(x.aylikKuvarsPlaka || ''),
-        aylikDogaltasPlaka: String(x.aylikDogaltasPlaka || ''),
-        plakaBasinaMtul: String(x.plakaBasinaMtul || '3.20'),
-        kdvOrani: String(x.kdvOrani || '20'),
-        teklifGecerlilik: String(x.teklifGecerlilik || '15'),
+        toplamMaas: String(x.toplamMaas || ''), sgkGideri: String(x.sgkGideri || ''),
+        yemekGideri: String(x.yemekGideri || ''), yolGideri: String(x.yolGideri || ''),
+        kira: String(x.kira || ''), elektrik: String(x.elektrik || ''), su: String(x.su || ''),
+        dogalgaz: String(x.dogalgaz || ''), internet: String(x.internet || ''),
+        sarfMalzeme: String(x.sarfMalzeme || ''), digerGider: '0',
+        aylikPorselenPlaka: String(x.aylikPorselenPlaka || ''), aylikKuvarsPlaka: String(x.aylikKuvarsPlaka || ''),
+        aylikDogaltasPlaka: String(x.aylikDogaltasPlaka || ''), plakaBasinaMtul: String(x.plakaBasinaMtul || '3.20'),
+        kdvOrani: String(x.kdvOrani || '20'), teklifGecerlilik: String(x.teklifGecerlilik || '15'),
       })
       setLogoUrl(x.logoUrl || '')
     }
-
     setMakineler(mv.makineler || [])
     setAraclar(arv.araclar || [])
+    setGecmisGiderler(gv.giderler || [])
+    setOrtalamalar(gv.ortalamalar || {})
   }
 
-  useEffect(() => {
-    yukle()
-  }, [])
+  useEffect(() => { yukle() }, [])
 
   function setAlan(k: keyof FormState, v: string) {
+    // Sayısal alanlarda binlik ayıraç giriş desteği
     setForm(prev => ({ ...prev, [k]: k === 'plakaBasinaMtul' ? v.replace(',', '.') : v }))
   }
 
+  // Ham sayı değeri (binlik ayıraçları kaldır)
+  function rawVal(v: string) {
+    return v.replace(/\./g, '').replace(',', '.')
+  }
+
   const hesap = useMemo(() => {
-    const personel = n(form.toplamMaas) + n(form.sgkGideri) + n(form.yemekGideri) + n(form.yolGideri)
-    const sabit = n(form.kira) + n(form.elektrik) + n(form.su) + n(form.dogalgaz) + n(form.internet) + n(form.sarfMalzeme)
+    const personel = n(rawVal(form.toplamMaas)) + n(rawVal(form.sgkGideri)) + n(rawVal(form.yemekGideri)) + n(rawVal(form.yolGideri))
+    const sabit = n(rawVal(form.kira)) + n(rawVal(form.elektrik)) + n(rawVal(form.su)) + n(rawVal(form.dogalgaz)) + n(rawVal(form.internet)) + n(rawVal(form.sarfMalzeme)) + n(rawVal(form.digerGider))
     const makine = makineler.reduce((a, m) => a + Number(m.aylikAmortisman || 0), 0)
     const arac = araclar.reduce((a, x) => a + Number(x.aylikToplamSabitMaliyet || 0), 0)
     const toplam = personel + sabit + makine + arac
     const toplamDakika = 26 * 8 * 60
     const dakika = toplamDakika > 0 ? toplam / toplamDakika : 0
     const gunluk = toplam / 26
-
     const toplamPlaka = n(form.aylikPorselenPlaka) + n(form.aylikKuvarsPlaka) + n(form.aylikDogaltasPlaka)
-    const aylikMtul = toplamPlaka * n(form.plakaBasinaMtul)
+    const aylikMtul = toplamPlaka * (parseFloat(String(form.plakaBasinaMtul).replace(",", ".")) || 0)
     const mtulMaliyet = aylikMtul > 0 ? toplam / aylikMtul : 0
     const plakaMaliyet = toplamPlaka > 0 ? toplam / toplamPlaka : 0
-
     const oran = (v: number) => toplam > 0 ? (v / toplam) * 100 : 0
-    const verimlilik = toplamPlaka <= 0
-      ? 0
-      : Math.max(0, Math.min(100, 100 - Math.max(0, dakika - 75)))
-
-    let durum = 'Kapasite eksik'
-    let durumTone = 'text-red-300 border-red-500/30 bg-red-500/10'
+    const verimlilik = toplamPlaka <= 0 ? 0 : Math.max(0, Math.min(100, 100 - Math.max(0, dakika - 75)))
+    let durum = 'Kapasite eksik', durumTone = 'text-red-300 border-red-500/30 bg-red-500/10'
     let tavsiye = 'Aylık plaka kapasitesi girilmeden maliyet motoru güvenilir çalışmaz.'
-
-    if (toplamPlaka > 0 && dakika < 75) {
-      durum = 'Verimli'
-      durumTone = 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-      tavsiye = 'Dakika maliyeti sağlıklı görünüyor. Tekliflerde kâr marjını koru.'
-    } else if (toplamPlaka > 0 && dakika < 125) {
-      durum = 'Kontrollü'
-      durumTone = 'text-amber-300 border-amber-500/30 bg-amber-500/10'
-      tavsiye = 'Maliyet orta seviyede. Kapasiteyi artırmak fiyat baskısını azaltır.'
-    } else if (toplamPlaka > 0) {
-      durum = 'Riskli'
-      durumTone = 'text-red-300 border-red-500/30 bg-red-500/10'
-      tavsiye = 'Dakika maliyeti yüksek. Sabit gider veya kapasite varsayımı yeniden kontrol edilmeli.'
-    }
-
-    return {
-      personel,
-      sabit,
-      makine,
-      arac,
-      toplam,
-      dakika,
-      gunluk,
-      toplamPlaka,
-      aylikMtul,
-      mtulMaliyet,
-      plakaMaliyet,
-      oranPersonel: oran(personel),
-      oranSabit: oran(sabit),
-      oranMakine: oran(makine),
-      oranArac: oran(arac),
-      verimlilik,
-      durum,
-      durumTone,
-      tavsiye,
-    }
+    if (toplamPlaka > 0 && dakika < 75) { durum = 'Verimli'; durumTone = 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'; tavsiye = 'Dakika maliyeti sağlıklı. Tekliflerde kâr marjını koru.' }
+    else if (toplamPlaka > 0 && dakika < 125) { durum = 'Kontrollü'; durumTone = 'text-amber-300 border-amber-500/30 bg-amber-500/10'; tavsiye = 'Maliyet orta seviyede. Kapasiteyi artırmak fiyat baskısını azaltır.' }
+    else if (toplamPlaka > 0) { durum = 'Riskli'; durumTone = 'text-red-300 border-red-500/30 bg-red-500/10'; tavsiye = 'Dakika maliyeti yüksek. Sabit gider veya kapasite varsayımı yeniden kontrol edilmeli.' }
+    return { personel, sabit, makine, arac, toplam, dakika, gunluk, toplamPlaka, aylikMtul, mtulMaliyet, plakaMaliyet, oranPersonel: oran(personel), oranSabit: oran(sabit), oranMakine: oran(makine), oranArac: oran(arac), verimlilik, durum, durumTone, tavsiye }
   }, [form, makineler, araclar])
 
   async function kaydet() {
-    setKaydediliyor(true)
-    setMesaj('')
+    setKaydediliyor(true); setMesaj('')
     try {
       const res = await fetch('/api/atolye', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
           kurulusYili: Math.round(n(form.kurulusYili)) || 0,
-          toplamMaas: n(form.toplamMaas),
-          sgkGideri: n(form.sgkGideri),
-          yemekGideri: n(form.yemekGideri),
-          yolGideri: n(form.yolGideri),
-          kira: n(form.kira),
-          elektrik: n(form.elektrik),
-          su: n(form.su),
-          dogalgaz: n(form.dogalgaz),
-          internet: n(form.internet),
-          sarfMalzeme: n(form.sarfMalzeme),
+          toplamMaas: n(rawVal(form.toplamMaas)), sgkGideri: n(rawVal(form.sgkGideri)),
+          yemekGideri: n(rawVal(form.yemekGideri)), yolGideri: n(rawVal(form.yolGideri)),
+          kira: n(rawVal(form.kira)), elektrik: n(rawVal(form.elektrik)), su: n(rawVal(form.su)),
+          dogalgaz: n(rawVal(form.dogalgaz)), internet: n(rawVal(form.internet)),
+          sarfMalzeme: n(rawVal(form.sarfMalzeme)),
           aylikPorselenPlaka: Math.round(n(form.aylikPorselenPlaka)),
           aylikKuvarsPlaka: Math.round(n(form.aylikKuvarsPlaka)),
           aylikDogaltasPlaka: Math.round(n(form.aylikDogaltasPlaka)),
-          plakaBasinaMtul: n(form.plakaBasinaMtul) || 3.2,
+          plakaBasinaMtul: parseFloat(String(form.plakaBasinaMtul).replace(",", ".")) || 3.2,
           kdvOrani: Math.round(n(form.kdvOrani)) || 20,
           teklifGecerlilik: Math.round(n(form.teklifGecerlilik)) || 15,
         }),
       })
-
-      if (!res.ok) {
-        setMesaj('Kayıt başarısız.')
-        return
-      }
-
-      await yukle()
-      setMesaj('Kaydedildi.')
-    } finally {
-      setKaydediliyor(false)
-    }
+      if (!res.ok) { setMesaj('Kayıt başarısız.'); return }
+      await yukle(); setMesaj('Kaydedildi.')
+    } finally { setKaydediliyor(false) }
   }
 
   async function logoYukle(e: React.ChangeEvent<HTMLInputElement>) {
-    const dosya = e.target.files?.[0]
-    if (!dosya) return
-
+    const dosya = e.target.files?.[0]; if (!dosya) return
     setLogoYukleniyor(true)
-    const fd = new FormData()
-    fd.append('logo', dosya)
-
+    const fd = new FormData(); fd.append('logo', dosya)
     try {
       const res = await fetch('/api/logo', { method: 'POST', body: fd })
       const json = await res.json()
       if (json.logoUrl) setLogoUrl(json.logoUrl)
-    } finally {
-      setLogoYukleniyor(false)
-    }
+    } finally { setLogoYukleniyor(false) }
   }
 
   async function makineKaydet() {
-    const res = await fetch('/api/makineler', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        makineAdi: yeniMakine.makineAdi,
-        alinanBedel: n(yeniMakine.alinanBedel),
-        paraBirimi: yeniMakine.paraBirimi,
-        amortismanSuresiAy: Math.round(n(yeniMakine.amortismanSuresiAy)),
-        aylikAktifCalismaSaati: n(yeniMakine.aylikAktifCalismaSaati),
-      }),
-    })
-
+    const res = await fetch('/api/makineler', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ makineAdi: yeniMakine.makineAdi, alinanBedel: n(yeniMakine.alinanBedel), paraBirimi: yeniMakine.paraBirimi, amortismanSuresiAy: Math.round(n(yeniMakine.amortismanSuresiAy)), aylikAktifCalismaSaati: n(yeniMakine.aylikAktifCalismaSaati) }) })
     const json = await res.json()
-    if (json.makine) {
-      setMakineler(prev => [...prev, json.makine])
-      setMakineModal(false)
-      setYeniMakine({ makineAdi: '', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikAktifCalismaSaati: '' })
-    }
+    if (json.makine) { setMakineler(prev => [...prev, json.makine]); setMakineModal(false); setYeniMakine({ makineAdi: '', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikAktifCalismaSaati: '' }) }
   }
 
   async function aracKaydet() {
-    const res = await fetch('/api/araclar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        aracAdi: yeniArac.aracAdi,
-        aracTipi: yeniArac.aracTipi,
-        alinanBedel: n(yeniArac.alinanBedel),
-        paraBirimi: yeniArac.paraBirimi,
-        amortismanSuresiAy: Math.round(n(yeniArac.amortismanSuresiAy)),
-        aylikBakim: n(yeniArac.aylikBakim),
-        aylikSigortaKasko: n(yeniArac.aylikSigortaKasko),
-        aylikVergiMuayene: n(yeniArac.aylikVergiMuayene),
-      }),
-    })
-
+    const res = await fetch('/api/araclar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aracAdi: yeniArac.aracAdi, aracTipi: yeniArac.aracTipi, alinanBedel: n(yeniArac.alinanBedel), paraBirimi: yeniArac.paraBirimi, amortismanSuresiAy: Math.round(n(yeniArac.amortismanSuresiAy)), aylikBakim: n(yeniArac.aylikBakim), aylikSigortaKasko: n(yeniArac.aylikSigortaKasko), aylikVergiMuayene: n(yeniArac.aylikVergiMuayene) }) })
     const json = await res.json()
-    if (json.arac) {
-      setAraclar(prev => [...prev, json.arac])
-      setAracModal(false)
-      setYeniArac({ aracAdi: '', aracTipi: 'Kamyonet', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikBakim: '', aylikSigortaKasko: '', aylikVergiMuayene: '' })
-    }
+    if (json.arac) { setAraclar(prev => [...prev, json.arac]); setAracModal(false); setYeniArac({ aracAdi: '', aracTipi: 'Kamyonet', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikBakim: '', aylikSigortaKasko: '', aylikVergiMuayene: '' }) }
   }
 
   async function makineSil(id: string) {
@@ -363,41 +226,73 @@ export default function AtolyePage() {
     setAraclar(prev => prev.filter(x => x.id !== id))
   }
 
+  async function giderKaydet() {
+    if (!yeniGider.tutar) return
+    setGiderYukleniyor(true)
+    try {
+      const res = await fetch('/api/aylik-gider', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tarih: yeniGider.tarih, kategori: yeniGider.kategori, aciklama: yeniGider.aciklama, tutar: n(yeniGider.tutar.replace(/\./g, '')) }),
+      })
+      if (res.ok) {
+        await yukle()
+        setGiderModal(false)
+        setYeniGider({ tarih: bugunStr(), kategori: 'toplamMaas', aciklama: '', tutar: '' })
+      }
+    } finally { setGiderYukleniyor(false) }
+  }
+
+  async function giderSil(id: string) {
+    await fetch('/api/aylik-gider', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    setGecmisGiderler(prev => prev.filter(x => x.id !== id))
+  }
+
+  // Para input bileşeni — TL simgesi + binlik ayıraç
+  function ParaInput({ label, fieldKey, ort }: { label: string; fieldKey: keyof FormState; ort?: number }) {
+    const val = form[fieldKey] as string
+    const display = tlInput(val)
+    const hasOrt = ort && ort > 0 && String(Math.round(ort)) !== val.replace(/\./g, '')
+    return (
+      <label className="block">
+        <div className="mb-0.5 flex items-center justify-between">
+          <p className="text-[10px] text-slate-400">{label}</p>
+          {hasOrt && (
+            <span className="text-[9px] text-blue-400 cursor-pointer" onClick={() => setAlan(fieldKey, String(Math.round(ort!)))}>
+              ort: {Math.round(ort!).toLocaleString('tr-TR')} ₺ ↑
+            </span>
+          )}
+        </div>
+        <div className="relative">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={display}
+            onChange={e => {
+              const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '')
+              setAlan(fieldKey, raw)
+            }}
+            className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 pr-7 text-sm text-white outline-none focus:border-blue-500"
+          />
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500">₺</span>
+        </div>
+      </label>
+    )
+  }
+
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] text-white p-2 md:h-screen md:overflow-hidden md:p-3">
       <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:grid-cols-[270px_minmax(0,1fr)_290px]">
 
-        <button
-          onClick={() => setMobileSolOpen(true)}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] left-4 z-[120] rounded-2xl bg-slate-800 px-5 py-4 text-sm font-bold shadow-2xl md:hidden"
-        >
-          Atölye
-        </button>
-
-        <button
-          onClick={() => setMobileSagOpen(true)}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] right-4 z-[120] rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-2xl md:hidden"
-        >
-          Karar
-        </button>
+        <button onClick={() => setMobileSolOpen(true)} className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] left-4 z-[120] rounded-2xl bg-slate-800 px-5 py-4 text-sm font-bold shadow-2xl md:hidden">Atölye</button>
+        <button onClick={() => setMobileSagOpen(true)} className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] right-4 z-[120] rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-2xl md:hidden">Karar</button>
 
         {(mobileSolOpen || mobileSagOpen) && (
-          <div
-            onClick={() => {
-              setMobileSolOpen(false)
-              setMobileSagOpen(false)
-            }}
-            className="fixed inset-0 z-[130] bg-black/60 md:hidden"
-          />
+          <div onClick={() => { setMobileSolOpen(false); setMobileSagOpen(false) }} className="fixed inset-0 z-[130] bg-black/60 md:hidden" />
         )}
 
-        <aside className={`fixed left-0 top-0 z-[140] h-[100dvh] w-[88vw] max-w-[360px] overflow-y-auto rounded-r-3xl border-r border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-auto md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:p-3 md:overflow-hidden md:flex md:flex-col ${mobileSolOpen ? "translate-x-0" : "-translate-x-full"}`}>
-          <button
-            onClick={() => setMobileSolOpen(false)}
-            className="mb-4 w-full rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden"
-          >
-            Kapat
-          </button>
+        {/* SOL PANEL */}
+        <aside className={`fixed left-0 top-0 z-[140] h-[100dvh] w-[88vw] max-w-[360px] overflow-y-auto rounded-r-3xl border-r border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-full md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:p-3 md:overflow-hidden md:flex md:flex-col ${mobileSolOpen ? "translate-x-0" : "-translate-x-full"}`}>
+          <button onClick={() => setMobileSolOpen(false)} className="mb-4 w-full rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden">Kapat</button>
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Metrix</p>
           <h1 className="mt-2 text-2xl font-semibold">Atölye</h1>
 
@@ -411,11 +306,7 @@ export default function AtolyePage() {
                 <p className="text-xs text-slate-400">{[form.sehir, form.ilce].filter(Boolean).join(' / ') || 'Konum yok'}</p>
               </div>
             </div>
-
-            <button
-              onClick={() => logoInputRef.current?.click()}
-              className="mt-3 w-full rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
-            >
+            <button onClick={() => logoInputRef.current?.click()} className="mt-3 w-full rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">
               {logoYukleniyor ? 'Yükleniyor...' : 'Logo Yükle'}
             </button>
             <input ref={logoInputRef} onChange={logoYukle} type="file" accept="image/*" className="hidden" />
@@ -427,7 +318,8 @@ export default function AtolyePage() {
             <SideButton active={aktifSol === 'kapasite'} onClick={() => setAktifSol('kapasite')} title="Kapasite" sub="Plaka, mtül, teklif" />
           </div>
 
-          <div className="mt-4 min-h-0 flex-1 rounded-2xl border border-slate-800 bg-[#111827] p-3 max-h-[58dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] md:max-h-none md:overflow-y-auto metrix-atolye-scroll-panel">
+          {/* İÇERİK PANEL — scroll düzeltildi */}
+          <div className="mt-4 flex-1 min-h-0 overflow-y-auto rounded-2xl border border-slate-800 bg-[#111827] p-3" style={{WebkitOverflowScrolling:'touch'}}>
             {aktifSol === 'kimlik' && (
               <div className="grid gap-2">
                 <Input label="Atölye Adı" value={form.atolyeAdi} onChange={v => setAlan('atolyeAdi', v)} />
@@ -441,13 +333,50 @@ export default function AtolyePage() {
 
             {aktifSol === 'gider' && (
               <div className="grid gap-2">
-                <Input label="Toplam Maaş" value={form.toplamMaas} onChange={v => setAlan('toplamMaas', v)} />
-                <Input label="SGK" value={form.sgkGideri} onChange={v => setAlan('sgkGideri', v)} />
-                <Input label="Yemek" value={form.yemekGideri} onChange={v => setAlan('yemekGideri', v)} />
-                <Input label="Yol" value={form.yolGideri} onChange={v => setAlan('yolGideri', v)} />
-                <Input label="Kira" value={form.kira} onChange={v => setAlan('kira', v)} />
-                <Input label="Elektrik" value={form.elektrik} onChange={v => setAlan('elektrik', v)} />
-                <Input label="Sarf" value={form.sarfMalzeme} onChange={v => setAlan('sarfMalzeme', v)} />
+                <p className="text-[10px] uppercase tracking-widest text-blue-400 pt-1">Personel</p>
+                <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} />
+                <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} />
+                <ParaInput label="Yemek Gideri" fieldKey="yemekGideri" ort={ortalamalar.yemekGideri} />
+                <ParaInput label="Yol Gideri" fieldKey="yolGideri" ort={ortalamalar.yolGideri} />
+
+                <p className="text-[10px] uppercase tracking-widest text-blue-400 pt-2">Sabit Giderler</p>
+                <ParaInput label="Kira" fieldKey="kira" ort={ortalamalar.kira} />
+                <ParaInput label="Elektrik" fieldKey="elektrik" ort={ortalamalar.elektrik} />
+                <ParaInput label="Su" fieldKey="su" ort={ortalamalar.su} />
+                <ParaInput label="Doğalgaz" fieldKey="dogalgaz" ort={ortalamalar.dogalgaz} />
+                <ParaInput label="İnternet" fieldKey="internet" ort={ortalamalar.internet} />
+                <ParaInput label="Sarf Malzeme" fieldKey="sarfMalzeme" ort={ortalamalar.sarfMalzeme} />
+                <ParaInput label="Diğer Giderler" fieldKey="digerGider" ort={ortalamalar.diger} />
+
+                {/* Geçmiş giderler */}
+                {gecmisGiderler.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Geçmiş Gider Kayıtları</p>
+                    <div className="grid gap-1.5">
+                      {gecmisGiderler.slice(0, 20).map(g => (
+                        <div key={g.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-700 bg-[#0B1120] px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-white truncate">
+                              {KATEGORİLER.find(k => k.key === g.kategori)?.label || g.kategori}
+                              {g.aciklama ? ` — ${g.aciklama}` : ''}
+                            </p>
+                            <p className="text-[10px] text-slate-500">{new Date(g.tarih).toLocaleDateString('tr-TR', { month: 'short', year: 'numeric' })}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <p className="text-xs text-emerald-400">{Number(g.tutar).toLocaleString('tr-TR')} ₺</p>
+                            <button onClick={() => giderSil(g.id)} className="text-[10px] text-red-400 hover:text-red-300">✕</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {ortalamalar && Object.keys(ortalamalar).length > 0 && (
+                  <div className="mt-2 rounded-lg border border-blue-500/20 bg-blue-500/5 p-2">
+                    <p className="text-[10px] text-blue-400">💡 Mavi "ort:" etiketine tıklayarak ortalamayı otomatik uygulayabilirsiniz.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -458,22 +387,20 @@ export default function AtolyePage() {
                 <Input label="Doğaltaş Plaka/Ay" value={form.aylikDogaltasPlaka} onChange={v => setAlan('aylikDogaltasPlaka', v)} />
                 <Input label="Plaka Başına Mtül" value={form.plakaBasinaMtul} onChange={v => setAlan('plakaBasinaMtul', v)} />
                 <Input label="KDV %" value={form.kdvOrani} onChange={v => setAlan('kdvOrani', v)} />
-                <Input label="Teklif Geçerlilik" value={form.teklifGecerlilik} onChange={v => setAlan('teklifGecerlilik', v)} />
+                <Input label="Teklif Geçerlilik (gün)" value={form.teklifGecerlilik} onChange={v => setAlan('teklifGecerlilik', v)} />
               </div>
             )}
           </div>
         </aside>
 
-        <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-28 pt-[104px] md:p-5 md:overflow-hidden">
+        {/* ORTA PANEL */}
+        <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-28 pt-[104px] md:p-5 md:overflow-y-auto">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Maliyet Motoru</p>
               <h2 className="mt-2 text-2xl font-semibold leading-tight md:text-3xl">Atölye Kârlılık Paneli</h2>
             </div>
-
-            <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${hesap.durumTone}`}>
-              Verimlilik %{hesap.verimlilik.toFixed(0)}
-            </span>
+            <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${hesap.durumTone}`}>Verimlilik %{hesap.verimlilik.toFixed(0)}</span>
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
@@ -486,27 +413,22 @@ export default function AtolyePage() {
           <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <section className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
               <p className="text-sm text-slate-400">Üretim Modeli</p>
-
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <ModelCard label="Aylık Plaka" value={hesap.toplamPlaka.toFixed(0)} sub="adet" />
                 <ModelCard label="Aylık Mtül" value={hesap.aylikMtul.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sub="mtül" />
                 <ModelCard label="Çalışma" value="12.480" sub="dk/ay" />
                 <ModelCard label="Plaka Maliyeti" value={Math.round(hesap.plakaMaliyet).toLocaleString("tr-TR")} sub="₺ / plaka" compact />
               </div>
-
               <div className="mt-6">
                 <div className="mb-2 flex justify-between text-xs text-slate-400">
-                  <span>Gider Dağılımı</span>
-                  <span>{tl(hesap.toplam)}</span>
+                  <span>Gider Dağılımı</span><span>{tl(hesap.toplam)}</span>
                 </div>
-
                 <div className="h-5 overflow-hidden rounded-full bg-slate-800 flex">
                   <div style={{ width: `${hesap.oranPersonel}%` }} className="bg-blue-500" />
                   <div style={{ width: `${hesap.oranSabit}%` }} className="bg-emerald-500" />
                   <div style={{ width: `${hesap.oranMakine}%` }} className="bg-amber-500" />
                   <div style={{ width: `${hesap.oranArac}%` }} className="bg-violet-500" />
                 </div>
-
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
                   <Break label="Personel" value={pct(hesap.oranPersonel)} color="bg-blue-500" />
                   <Break label="Sabit" value={pct(hesap.oranSabit)} color="bg-emerald-500" />
@@ -518,12 +440,10 @@ export default function AtolyePage() {
 
             <section className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
               <p className="text-sm text-slate-400">Kaynaklar</p>
-
               <div className="mt-2 grid gap-1.5">
                 <ResourceCard title="Makineler" count={makineler.length} value={tl(hesap.makine)} onDetail={() => setDetayModal('makine')} onAdd={() => setMakineModal(true)} />
                 <ResourceCard title="Araçlar" count={araclar.length} value={tl(hesap.arac)} onDetail={() => setDetayModal('arac')} onAdd={() => setAracModal(true)} />
               </div>
-
               <div className="mt-5 rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
                 <p className="text-xs text-slate-500">Operasyon Notu</p>
                 <p className="mt-2 text-sm text-slate-300">{hesap.tavsiye}</p>
@@ -539,16 +459,11 @@ export default function AtolyePage() {
           </div>
         </main>
 
-        <aside className={`fixed right-0 top-0 z-[140] h-[100dvh] w-[88vw] max-w-[360px] overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-auto md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:overflow-hidden md:flex md:flex-col ${mobileSagOpen ? "translate-x-0" : "translate-x-full"}`}>
-          <button
-            onClick={() => setMobileSagOpen(false)}
-            className="mb-4 w-full rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden"
-          >
-            Kapat
-          </button>
+        {/* SAĞ PANEL */}
+        <aside className={`fixed right-0 top-0 z-[140] h-[100dvh] w-[88vw] max-w-[360px] overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-full md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:overflow-hidden md:flex md:flex-col ${mobileSagOpen ? "translate-x-0" : "translate-x-full"}`}>
+          <button onClick={() => setMobileSagOpen(false)} className="mb-4 w-full rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden">Kapat</button>
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Karar Paneli</p>
           <h2 className="mt-1 text-lg font-semibold">Canlı Özet</h2>
-
           <div className="mt-2 grid gap-1.5">
             <RightCard label="Verimlilik" value={`%${hesap.verimlilik.toFixed(0)}`} />
             <RightCard label="Dakika" value={tl(hesap.dakika)} />
@@ -556,58 +471,57 @@ export default function AtolyePage() {
             <RightCard label="Aylık Plaka" value={`${hesap.toplamPlaka.toFixed(0)} adet`} />
             <RightCard label="Aylık Mtül" value={`${hesap.aylikMtul.toFixed(1)} mtül`} />
           </div>
-
           <div className={`mt-4 rounded-2xl border p-4 ${hesap.durumTone}`}>
             <p className="text-sm font-semibold">{hesap.durum}</p>
             <p className="mt-2 text-xs opacity-90">{hesap.tavsiye}</p>
           </div>
-
           <div className="mt-auto grid gap-2 pt-2">
-            <button onClick={kaydet} disabled={kaydediliyor} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold hover:bg-emerald-500 disabled:bg-slate-700">
-              {kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
-            </button>
-            <button onClick={() => setMakineModal(true)} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500">
-              + Makine Ekle
-            </button>
-            <button onClick={() => setAracModal(true)} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold hover:bg-violet-500">
-              + Araç Ekle
-            </button>
-            <button onClick={() => setGiderModal(true)} className="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold hover:bg-amber-500">
-              + Gider Ekle
-            </button>
+            <button onClick={kaydet} disabled={kaydediliyor} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold hover:bg-emerald-500 disabled:bg-slate-700">{kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}</button>
+            <button onClick={() => setMakineModal(true)} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500">+ Makine Ekle</button>
+            <button onClick={() => setAracModal(true)} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold hover:bg-violet-500">+ Araç Ekle</button>
+            <button onClick={() => setGiderModal(true)} className="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold hover:bg-amber-500">+ Gider Ekle</button>
             {mesaj && <p className="text-center text-xs text-emerald-300">{mesaj}</p>}
           </div>
         </aside>
       </div>
 
-
-      
+      {/* GİDER EKLE MODAL */}
       {giderModal && (
-        <Modal title="Yeni Gider Kalemi" onClose={() => setGiderModal(false)}>
-          <Input
-            label="Gider Adı"
-            value={yeniGider.giderAdi}
-            onChange={v => setYeniGider({ ...yeniGider, giderAdi: v })}
-          />
-          <Input
-            label="Tutar"
-            value={yeniGider.tutar}
-            onChange={v => setYeniGider({ ...yeniGider, tutar: v })}
-          />
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
-            Bu gider şimdilik Sarf / Ek Gider toplamına eklenir.
+        <Modal title="Gider Kaydet" onClose={() => setGiderModal(false)}>
+          <label className="block">
+            <p className="mb-0.5 text-[10px] text-slate-400">Tarih</p>
+            <input type="date" value={yeniGider.tarih} onChange={e => setYeniGider(g => ({ ...g, tarih: e.target.value }))}
+              className="h-10 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500" />
+          </label>
+          <label className="block">
+            <p className="mb-0.5 text-[10px] text-slate-400">Kategori</p>
+            <select value={yeniGider.kategori} onChange={e => setYeniGider(g => ({ ...g, kategori: e.target.value }))}
+              className="h-10 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500">
+              {KATEGORİLER.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <p className="mb-0.5 text-[10px] text-slate-400">Açıklama (isteğe bağlı)</p>
+            <input type="text" value={yeniGider.aciklama} onChange={e => setYeniGider(g => ({ ...g, aciklama: e.target.value }))}
+              placeholder="Örn: Mayıs faturası"
+              className="h-10 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500" />
+          </label>
+          <label className="block">
+            <p className="mb-0.5 text-[10px] text-slate-400">Tutar (₺)</p>
+            <div className="relative">
+              <input type="text" inputMode="numeric" value={yeniGider.tutar ? Number(yeniGider.tutar.replace(/\./g,'')).toLocaleString('tr-TR') : ''}
+                onChange={e => { const raw = e.target.value.replace(/\./g,'').replace(/[^0-9]/g,''); setYeniGider(g => ({ ...g, tutar: raw })) }}
+                placeholder="0"
+                className="h-10 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 pr-7 text-sm text-white outline-none focus:border-blue-500" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">₺</span>
+            </div>
+          </label>
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-blue-300">
+            Bu gider kaydedilince ilgili kategori ortalaması otomatik güncellenir ve atölye giderlerine yansır.
           </div>
-          <button
-            onClick={() => {
-              const mevcut = n(form.sarfMalzeme)
-              const ek = n(yeniGider.tutar)
-              setForm(prev => ({ ...prev, sarfMalzeme: String(mevcut + ek) }))
-              setYeniGider({ giderAdi: '', tutar: '' })
-              setGiderModal(false)
-            }}
-            className="mt-4 w-full rounded-xl bg-emerald-600 py-3 font-semibold"
-          >
-            Gideri Ekle
+          <button onClick={giderKaydet} disabled={giderYukleniyor || !yeniGider.tutar}
+            className="mt-2 w-full rounded-xl bg-emerald-600 py-3 font-semibold hover:bg-emerald-500 disabled:opacity-50">
+            {giderYukleniyor ? 'Kaydediliyor...' : 'Gideri Kaydet'}
           </button>
         </Modal>
       )}
@@ -641,10 +555,7 @@ export default function AtolyePage() {
             {makineler.map(m => (
               <div key={m.id} className="rounded-xl border border-slate-700 bg-[#111827] p-3">
                 <div className="flex justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{m.makineAdi}</p>
-                    <p className="text-xs text-slate-400">{tl(m.dakikalikMaliyet)} / dk · {tl(m.aylikAmortisman)} / ay</p>
-                  </div>
+                  <div><p className="font-semibold">{m.makineAdi}</p><p className="text-xs text-slate-400">{tl(m.dakikalikMaliyet)} / dk · {tl(m.aylikAmortisman)} / ay</p></div>
                   <button onClick={() => makineSil(m.id)} className="text-xs text-red-300">Sil</button>
                 </div>
               </div>
@@ -659,10 +570,7 @@ export default function AtolyePage() {
             {araclar.map(a => (
               <div key={a.id} className="rounded-xl border border-slate-700 bg-[#111827] p-3">
                 <div className="flex justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{a.aracAdi}</p>
-                    <p className="text-xs text-slate-400">{a.aracTipi} · {tl(a.aylikToplamSabitMaliyet)} / ay</p>
-                  </div>
+                  <div><p className="font-semibold">{a.aracAdi}</p><p className="text-xs text-slate-400">{a.aracTipi} · {tl(a.aylikToplamSabitMaliyet)} / ay</p></div>
                   <button onClick={() => aracSil(a.id)} className="text-xs text-red-300">Sil</button>
                 </div>
               </div>
@@ -674,20 +582,15 @@ export default function AtolyePage() {
   )
 }
 
-function Input({ label, value, onChange, type = "text" }: any) {
+function Input({ label, value, onChange }: any) {
   return (
     <label className="block">
       <p className="mb-0.5 text-[10px] text-slate-400">{label}</p>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500"
-      />
+      <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
+        className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500" />
     </label>
   )
 }
-
 function SideButton({ active, title, sub, onClick }: any) {
   return (
     <button onClick={onClick} className={`rounded-2xl border p-3 text-left ${active ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-800 bg-[#111827]'}`}>
@@ -696,7 +599,6 @@ function SideButton({ active, title, sub, onClick }: any) {
     </button>
   )
 }
-
 function Kpi({ label, value, tone = 'text-white' }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
@@ -705,50 +607,36 @@ function Kpi({ label, value, tone = 'text-white' }: any) {
     </div>
   )
 }
-
 function ModelCard({ label, value, sub, compact = false }: any) {
   return (
     <div className="min-w-0 rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
       <p className="text-xs text-slate-400">{label}</p>
       <div className="mt-3 flex items-end gap-2">
-        <p className={`${compact ? 'text-[22px] md:text-[26px]' : 'text-[24px] md:text-[30px]'} break-words font-semibold leading-none tracking-tight tabular-nums`}>
-          {value}
-        </p>
+        <p className={`${compact ? 'text-[22px] md:text-[26px]' : 'text-[24px] md:text-[30px]'} break-words font-semibold leading-none tracking-tight tabular-nums`}>{value}</p>
         <p className="pb-1 text-xs text-slate-500 whitespace-nowrap">{sub}</p>
       </div>
     </div>
   )
 }
-
 function Break({ label, value, color }: any) {
   return (
     <div className="rounded-xl bg-[#0B1120] p-3">
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 rounded-full ${color}`} />
-        <span className="text-slate-400">{label}</span>
-      </div>
+      <div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${color}`} /><span className="text-slate-400">{label}</span></div>
       <p className="mt-1 font-semibold">{value}</p>
     </div>
   )
 }
-
 function ResourceCard({ title, count, value, onAdd, onDetail }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
       <div className="flex justify-between">
-        <div>
-          <p className="text-sm font-semibold">{title}</p>
-          <p className="mt-1 text-xs text-slate-400">{count} kayıt · {value}</p>
-        </div>
+        <div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-xs text-slate-400">{count} kayıt · {value}</p></div>
         <button onClick={onAdd} className="rounded-lg bg-blue-600 px-2 text-xs">+</button>
       </div>
-      <button onClick={onDetail} className="mt-3 w-full rounded-xl border border-slate-700 py-2 text-xs text-slate-300">
-        Detayları Gör
-      </button>
+      <button onClick={onDetail} className="mt-3 w-full rounded-xl border border-slate-700 py-2 text-xs text-slate-300">Detayları Gör</button>
     </div>
   )
 }
-
 function SmallStat({ label, value }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
@@ -757,7 +645,6 @@ function SmallStat({ label, value }: any) {
     </div>
   )
 }
-
 function RightCard({ label, value }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
@@ -766,7 +653,6 @@ function RightCard({ label, value }: any) {
     </div>
   )
 }
-
 function Modal({ title, children, onClose }: any) {
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>

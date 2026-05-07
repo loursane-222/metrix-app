@@ -1,0 +1,629 @@
+"use client";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+type Taksit = {
+  id: string; taksitNo: number; aciklama: string;
+  vadeTarihi: string; tutar: number; odendiMi: boolean; odenmeTarihi?: string;
+};
+type OdemePlani = {
+  id: string; toplamTutar: number; musteriTipi: string; taksitler: Taksit[];
+};
+type Tahsilat = {
+  id: string; tarih: string; tutar: number;
+  is?: { id: string; teklifNo: string; urunAdi: string; satisFiyati: number };
+};
+type Is = {
+  id: string; teklifNo: string; urunAdi: string; satisFiyati: number;
+  durum: string; musteriTipi: string; tahsilat: number;
+};
+type Musteri = {
+  id: string; ad: string; firmaAdi?: string; telefon?: string; musteriTipi: string;
+};
+
+function tl(v: number) {
+  return v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
+}
+function tarihFmt(d: string) {
+  return new Date(d).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" });
+}
+function tarihInput(d: string | Date) {
+  return new Date(d).toISOString().slice(0, 10);
+}
+function gunFarki(d: string) {
+  return Math.ceil((new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+function gunEkle(d: Date, gun: number) {
+  const r = new Date(d); r.setDate(r.getDate() + gun); return r;
+}
+const MUSTERI_TIP: Record<string, string> = {
+  bayi: "Bayi", mimar: "Mimar", muteahhit: "Müteahhit",
+  son_kullanici: "Ev Sahibi", imalatci: "İmalatçı",
+};
+
+function defaultTaksitler(musteriTipi: string, toplamTutar: number, baslangic: Date) {
+  const yapilar: Record<string, { aciklama: string; yuzde: number; gunSonra: number }[]> = {
+    bayi: [
+      { aciklama: "Peşinat (%30)", yuzde: 30, gunSonra: 0 },
+      { aciklama: "Teslimatta (%70)", yuzde: 70, gunSonra: 30 },
+    ],
+    mimar: [
+      { aciklama: "Peşinat (%25)", yuzde: 25, gunSonra: 0 },
+      { aciklama: "İmalat başlangıcı (%25)", yuzde: 25, gunSonra: 15 },
+      { aciklama: "Teslimatta (%50)", yuzde: 50, gunSonra: 30 },
+    ],
+    muteahhit: [
+      { aciklama: "Peşinat (%20)", yuzde: 20, gunSonra: 0 },
+      { aciklama: "İmalat başlangıcı (%30)", yuzde: 30, gunSonra: 15 },
+      { aciklama: "Hak ediş (%50)", yuzde: 50, gunSonra: 45 },
+    ],
+    imalatci: [
+      { aciklama: "Peşinat (%30)", yuzde: 30, gunSonra: 0 },
+      { aciklama: "İş bitiminde (%70)", yuzde: 70, gunSonra: 30 },
+    ],
+    son_kullanici: [
+      { aciklama: "Peşinat (%50)", yuzde: 50, gunSonra: 0 },
+      { aciklama: "Teslimatta (%50)", yuzde: 50, gunSonra: 30 },
+    ],
+  };
+  const yapi = yapilar[musteriTipi] || yapilar.son_kullanici;
+  return yapi.map((t, i) => ({
+    taksitNo: i + 1,
+    aciklama: t.aciklama,
+    tutar: Math.round((toplamTutar * t.yuzde) / 100 * 100) / 100,
+    vadeTarihi: tarihInput(gunEkle(baslangic, t.gunSonra)),
+    odendiMi: false,
+  }));
+}
+
+type Sekme = "musteri" | "tahsilat" | "plan";
+
+export default function TahsilatlarPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isIdParam = searchParams.get("isId");
+  const musteriIdParam = searchParams.get("musteriId");
+
+  const [musteriler, setMusteriler]         = useState<Musteri[]>([]);
+  const [seciliMusteri, setSeciliMusteri]   = useState<Musteri | null>(null);
+  const [musteriArama, setMusteriArama]     = useState("");
+  const [listeAcik, setListeAcik]           = useState(false);
+  const [isler, setIsler]                   = useState<Is[]>([]);
+  const [tahsilatlar, setTahsilatlar]       = useState<Tahsilat[]>([]);
+  const [aktifIs, setAktifIs]               = useState<Is | null>(null);
+  const [odemePlani, setOdemePlani]         = useState<OdemePlani | null>(null);
+  const [yukleniyor, setYukleniyor]         = useState(false);
+  const [planYukleniyor, setPlanYukleniyor] = useState(false);
+  const [yeniTutar, setYeniTutar]           = useState("");
+  const [yeniTarih, setYeniTarih]           = useState(new Date().toISOString().slice(0, 10));
+  const [kaydediliyor, setKaydediliyor]     = useState(false);
+  const [bugunListesi, setBugunListesi]     = useState<any[]>([]);
+  const [taksitDuzenle, setTaksitDuzenle]   = useState(false);
+  const [draftTaksitler, setDraftTaksitler] = useState<any[]>([]);
+  const [planKaydediliyor, setPlanKaydediliyor] = useState(false);
+  const [aktifSekme, setAktifSekme]         = useState<Sekme>("musteri");
+
+  useEffect(() => {
+    fetch("/api/musteriler-lite").then(r => r.json()).then(v => setMusteriler(v.musteriler || []));
+    fetch("/api/odeme-plani?bugun=1").then(r => r.json()).then(v => setBugunListesi(v.bugunListesi || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!isIdParam || !musteriler.length) return;
+    fetch(`/api/isler/${isIdParam}`).then(r => r.json()).then(v => {
+      if (v?.musteriId) {
+        const m = musteriler.find(x => x.id === v.musteriId);
+        if (m) musteriSec(m, v.id);
+      }
+    });
+  }, [isIdParam, musteriler]);
+
+  useEffect(() => {
+    if (!musteriIdParam || !musteriler.length) return;
+    const m = musteriler.find(x => x.id === musteriIdParam);
+    if (m) musteriSec(m);
+  }, [musteriIdParam, musteriler]);
+
+  const musteriSec = useCallback(async (m: Musteri, autoIsId?: string) => {
+    setSeciliMusteri(m); setListeAcik(false); setMusteriArama("");
+    setAktifIs(null); setOdemePlani(null); setYukleniyor(true);
+    try {
+      const [isRes, tahRes] = await Promise.all([
+        fetch(`/api/isler?musteriId=${m.id}&durum=onaylandi`).then(r => r.json()),
+        fetch(`/api/tahsilatlar?musteriId=${m.id}`).then(r => r.json()),
+      ]);
+      const islerData: Is[] = isRes.isler || [];
+      setIsler(islerData);
+      setTahsilatlar(tahRes.tahsilatlar || []);
+      const hedefId = autoIsId || isIdParam;
+      if (hedefId) {
+        const is = islerData.find(x => x.id === hedefId);
+        if (is) { await isSec(is, m); setAktifSekme("plan"); }
+      } else if (islerData.length > 0) {
+        await isSec(islerData[0], m);
+        setAktifSekme("plan");
+      }
+    } finally { setYukleniyor(false); }
+  }, [isIdParam]);
+
+  const isSec = useCallback(async (is: Is, musteri?: Musteri | null) => {
+    setAktifIs(is); setPlanYukleniyor(true); setTaksitDuzenle(false);
+    try {
+      const res = await fetch(`/api/odeme-plani?isId=${is.id}`).then(r => r.json());
+      if (res.plan) {
+        setOdemePlani(res.plan);
+        setDraftTaksitler(res.plan.taksitler.map((t: Taksit) => ({ ...t, vadeTarihi: tarihInput(t.vadeTarihi) })));
+      } else {
+        const m = musteri || seciliMusteri;
+        const tip = m?.musteriTipi || is.musteriTipi || "son_kullanici";
+        const draft = defaultTaksitler(tip, Number(is.satisFiyati), new Date());
+        setOdemePlani(null);
+        setDraftTaksitler(draft);
+        setTaksitDuzenle(true);
+      }
+    } finally { setPlanYukleniyor(false); }
+  }, [seciliMusteri]);
+
+  function taksitSayisiDegistir(yeniSayi: number) {
+    if (!aktifIs) return;
+    const toplamTutar = Number(aktifIs.satisFiyati);
+    const baslangic = new Date();
+    const yeni = [];
+    for (let i = 0; i < yeniSayi; i++) {
+      const mevcut = draftTaksitler[i];
+      yeni.push({
+        id: mevcut?.id,
+        taksitNo: i + 1,
+        aciklama: mevcut?.aciklama || `${i + 1}. Taksit`,
+        tutar: mevcut?.tutar || Math.round((toplamTutar / yeniSayi) * 100) / 100,
+        vadeTarihi: mevcut?.vadeTarihi || tarihInput(gunEkle(baslangic, i * 30)),
+        odendiMi: mevcut?.odendiMi || false,
+      });
+    }
+    setDraftTaksitler(yeni);
+  }
+
+  function draftGuncelle(idx: number, patch: any) {
+    setDraftTaksitler(prev => prev.map((t, i) => i === idx ? { ...t, ...patch } : t));
+  }
+
+  async function planKaydet() {
+    if (!aktifIs || !seciliMusteri) return;
+    setPlanKaydediliyor(true);
+    try {
+      if (!odemePlani) {
+        const res = await fetch("/api/odeme-plani", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isId: aktifIs.id, taksitler: draftTaksitler }),
+        }).then(r => r.json());
+        if (res.plan) {
+          setOdemePlani(res.plan);
+          setDraftTaksitler(res.plan.taksitler.map((t: Taksit) => ({ ...t, vadeTarihi: tarihInput(t.vadeTarihi) })));
+        }
+      } else {
+        for (const t of draftTaksitler) {
+          if (t.id) {
+            await fetch("/api/odeme-plani", {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ taksitId: t.id, odendiMi: t.odendiMi, vadeTarihi: t.vadeTarihi, aciklama: t.aciklama, tutar: t.tutar }),
+            });
+          }
+        }
+        const res = await fetch(`/api/odeme-plani?isId=${aktifIs.id}`).then(r => r.json());
+        if (res.plan) {
+          setOdemePlani(res.plan);
+          setDraftTaksitler(res.plan.taksitler.map((t: Taksit) => ({ ...t, vadeTarihi: tarihInput(t.vadeTarihi) })));
+        }
+      }
+      setTaksitDuzenle(false);
+    } finally { setPlanKaydediliyor(false); }
+  }
+
+  async function taksitOdendi(taksitId: string, odendiMi: boolean) {
+    const res = await fetch("/api/odeme-plani", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taksitId, odendiMi }),
+    }).then(r => r.json());
+    if (res.taksit) {
+      setOdemePlani(prev => prev ? {
+        ...prev,
+        taksitler: prev.taksitler.map(t => t.id === taksitId
+          ? { ...t, odendiMi, odenmeTarihi: res.taksit.odenmeTarihi } : t)
+      } : null);
+    }
+  }
+
+  async function tahsilatKaydet() {
+    if (!seciliMusteri || !yeniTutar) return;
+    setKaydediliyor(true);
+    try {
+      const res = await fetch("/api/tahsilatlar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          musteriId: seciliMusteri.id,
+          tutar: Number(yeniTutar.replace(",", ".")),
+          tarih: yeniTarih, isId: aktifIs?.id || null,
+        }),
+      }).then(r => r.json());
+      if (res.tahsilat) {
+        setTahsilatlar(prev => [res.tahsilat, ...prev]);
+        setYeniTutar(""); setYeniTarih(new Date().toISOString().slice(0, 10));
+      }
+    } finally { setKaydediliyor(false); }
+  }
+
+  async function tahsilatSil(id: string) {
+    if (!confirm("Silinsin mi?")) return;
+    await fetch(`/api/tahsilatlar?id=${id}`, { method: "DELETE" });
+    setTahsilatlar(prev => prev.filter(t => t.id !== id));
+  }
+
+  const toplamBorc = isler.reduce((s, i) => s + Number(i.satisFiyati), 0);
+  const toplamTahsilat = tahsilatlar.reduce((s, t) => s + Number(t.tutar), 0);
+  const bakiye = toplamBorc - toplamTahsilat;
+  const filtreli = musteriler.filter(m =>
+    (m.ad + " " + (m.firmaAdi || "")).toLocaleLowerCase("tr-TR")
+      .includes(musteriArama.toLocaleLowerCase("tr-TR"))
+  );
+  const gosterilecekTaksitler = taksitDuzenle ? draftTaksitler : (odemePlani?.taksitler || []);
+
+  // ── İÇERİK PANELLERİ ────────────────────────────────────────────────────
+  const PanelMusteri = (
+    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px" }}>
+      <div className="kart">
+        <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"8px", color:"#9ca3af" }}>👤 MÜŞTERİ</p>
+        <div style={{ position:"relative" }}>
+          <input className="yi-inp" placeholder="İsim veya firma..."
+            value={seciliMusteri ? (seciliMusteri.firmaAdi || seciliMusteri.ad) : musteriArama}
+            onFocus={() => setListeAcik(true)}
+            onChange={e => { setMusteriArama(e.target.value); setSeciliMusteri(null); setListeAcik(true); }} />
+          {listeAcik && (
+            <div style={{ position:"absolute", top:"100%", left:0, right:0, marginTop:"4px", background:"#111827", border:"1px solid #374151", borderRadius:"13px", zIndex:100, maxHeight:"220px", overflowY:"auto", boxShadow:"0 16px 40px rgba(0,0,0,0.8)" }}
+              onMouseLeave={() => setListeAcik(false)}>
+              {filtreli.slice(0,10).map(m => (
+                <button key={m.id} onClick={() => musteriSec(m)}
+                  style={{ width:"100%", padding:"10px 14px", textAlign:"left", background:"transparent", border:"none", borderBottom:"1px solid #1f2937", cursor:"pointer", color:"#f9fafb" }}
+                  onMouseOver={e => (e.currentTarget.style.background="#1f2937")}
+                  onMouseOut={e => (e.currentTarget.style.background="transparent")}>
+                  <div style={{ fontSize:"14px", fontWeight:600 }}>{m.firmaAdi||m.ad}</div>
+                  <div style={{ fontSize:"11px", color:"#6b7280" }}>{MUSTERI_TIP[m.musteriTipi]} · {m.telefon}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {seciliMusteri && (
+          <div style={{ marginTop:"10px" }}>
+            <div style={{ fontSize:"15px", fontWeight:900, color:"#10b981" }}>{seciliMusteri.firmaAdi||seciliMusteri.ad}</div>
+            <div style={{ fontSize:"12px", color:"#6b7280", marginTop:"2px" }}>{MUSTERI_TIP[seciliMusteri.musteriTipi]} · {seciliMusteri.telefon}</div>
+            <div style={{ marginTop:"10px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"6px" }}>
+              {[
+                { l:"Borç", v:tl(toplamBorc), c:"#f87171" },
+                { l:"Ödenen", v:tl(toplamTahsilat), c:"#10b981" },
+                { l:"Bakiye", v:tl(Math.abs(bakiye)), c:"#fbbf24" },
+              ].map(x => (
+                <div key={x.l} style={{ background:"#0d1117", borderRadius:"10px", padding:"10px 8px", textAlign:"center" }}>
+                  <div style={{ fontSize:"10px", color:"#6b7280" }}>{x.l}</div>
+                  <div style={{ fontSize:"12px", fontWeight:900, color:x.c }}>{x.v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {seciliMusteri && (
+        <div className="kart">
+          <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"8px", color:"#9ca3af" }}>
+            ✅ ONAYLI İŞLER ({isler.length})
+          </p>
+          {yukleniyor && <p style={{ fontSize:"13px", color:"#4b5563" }}>Yükleniyor...</p>}
+          {!yukleniyor && isler.length === 0 && <p style={{ fontSize:"13px", color:"#4b5563" }}>Onaylı iş bulunamadı.</p>}
+          {isler.map(is => (
+            <button key={is.id}
+              onClick={() => { isSec(is); setAktifSekme("plan"); }}
+              className={`is-btn${aktifIs?.id===is.id?" aktif":""}`}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontSize:"13px", fontWeight:700, textTransform:"capitalize" }}>{is.urunAdi}</span>
+                <span style={{ fontSize:"12px", color:"#10b981", fontWeight:700 }}>{tl(Number(is.satisFiyati))}</span>
+              </div>
+              <div style={{ fontSize:"11px", color:"#4b5563", marginTop:"2px" }}>#{is.teklifNo}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const PanelTahsilat = (
+    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px" }}>
+      {!seciliMusteri ? (
+        <div style={{ textAlign:"center", padding:"60px 20px", color:"#4b5563" }}>
+          <div style={{ fontSize:"36px", marginBottom:"10px" }}>💳</div>
+          <p>Önce müşteri seçin</p>
+        </div>
+      ) : (
+        <>
+          <div className="kart">
+            <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"12px", color:"#9ca3af" }}>💳 TAHSİLAT GİR</p>
+            <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
+              <div>
+                <span className="yi-label">Tutar (₺)</span>
+                <input className="yi-inp" type="text" inputMode="decimal" placeholder="0,00"
+                  value={yeniTutar} onChange={e => setYeniTutar(e.target.value)} />
+              </div>
+              <div>
+                <span className="yi-label">Tarih</span>
+                <input className="yi-inp" type="date" value={yeniTarih} onChange={e => setYeniTarih(e.target.value)} />
+              </div>
+              {aktifIs && (
+                <div style={{ fontSize:"12px", color:"#10b981", background:"rgba(16,185,129,0.07)", borderRadius:"9px", padding:"8px 12px" }}>
+                  ✓ {aktifIs.urunAdi}
+                </div>
+              )}
+              <button onClick={tahsilatKaydet} disabled={kaydediliyor||!yeniTutar}
+                style={{ padding:"13px", background:!yeniTutar?"#1f2937":"#10b981", border:"none", borderRadius:"12px", color:"#fff", fontSize:"14px", fontWeight:900, cursor:"pointer" }}>
+                {kaydediliyor ? "..." : "✓ Tahsilat Kaydet"}
+              </button>
+            </div>
+          </div>
+
+          {tahsilatlar.length > 0 && (
+            <div className="kart">
+              <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"10px", color:"#9ca3af" }}>📊 CARİ HAREKETLER</p>
+              {tahsilatlar.map(t => (
+                <div key={t.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 0", borderBottom:"1px solid #0d1117" }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:"13px", fontWeight:700, color:"#10b981" }}>{tl(Number(t.tutar))}</div>
+                    <div style={{ fontSize:"11px", color:"#6b7280" }}>
+                      {tarihFmt(t.tarih)}{t.is?` · ${t.is.urunAdi}`:" · Genel"}
+                    </div>
+                  </div>
+                  <button onClick={() => tahsilatSil(t.id)}
+                    style={{ background:"none", border:"none", color:"#4b5563", cursor:"pointer", fontSize:"18px", padding:"2px 8px" }}>×</button>
+                </div>
+              ))}
+              <div style={{ marginTop:"12px", paddingTop:"10px", borderTop:"1px solid #1f2937" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"6px" }}>
+                  <span style={{ fontSize:"12px", color:"#6b7280" }}>Toplam Tahsilat</span>
+                  <span style={{ fontSize:"14px", fontWeight:900, color:"#10b981" }}>{tl(toplamTahsilat)}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <span style={{ fontSize:"12px", color:"#6b7280" }}>Kalan Bakiye</span>
+                  <span style={{ fontSize:"14px", fontWeight:900, color:"#fbbf24" }}>{tl(bakiye)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  const PanelPlan = (
+    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px" }}>
+      {bugunListesi.length > 0 && !aktifIs && (
+        <div className="kart" style={{ borderColor:"rgba(239,68,68,0.3)" }}>
+          <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"10px", color:"#f87171" }}>🔔 BUGÜN BEKLEYENLER</p>
+          {bugunListesi.map((item:any,i:number) => (
+            <div key={i} style={{ padding:"10px", background:"#0d1117", borderRadius:"10px", marginBottom:"6px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <div style={{ fontSize:"13px", fontWeight:700 }}>{item.musteriAdi}</div>
+                <div style={{ fontSize:"11px", color:"#6b7280" }}>{item.isAdi} · {item.aciklama}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:"13px", fontWeight:900, color:"#fbbf24" }}>{tl(item.tutar)}</div>
+                <div style={{ fontSize:"10px", color:"#6b7280" }}>{tarihFmt(item.vadeTarihi)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!aktifIs ? (
+        <div style={{ textAlign:"center", padding:"60px 20px", color:"#4b5563" }}>
+          <div style={{ fontSize:"36px", marginBottom:"10px" }}>📅</div>
+          <p>Müşteri & iş seçin</p>
+        </div>
+      ) : (
+        <div className="kart">
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"14px" }}>
+            <div>
+              <p style={{ fontSize:"14px", fontWeight:900, margin:0 }}>📅 Ödeme Planı</p>
+              <p style={{ fontSize:"12px", color:"#6b7280", marginTop:"3px" }}>{aktifIs.urunAdi} · {tl(Number(aktifIs.satisFiyati))}</p>
+            </div>
+            <button onClick={() => setTaksitDuzenle(p => !p)}
+              style={{ padding:"6px 13px", background:taksitDuzenle?"rgba(251,191,36,0.1)":"#1f2937", border:`1px solid ${taksitDuzenle?"#fbbf24":"#374151"}`, borderRadius:"9px", color:taksitDuzenle?"#fbbf24":"#9ca3af", fontSize:"12px", fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+              {taksitDuzenle ? "✕ İptal" : "✏️ Düzenle"}
+            </button>
+          </div>
+
+          {planYukleniyor && <p style={{ color:"#6b7280", fontSize:"13px" }}>Yükleniyor...</p>}
+
+          {taksitDuzenle && (
+            <div style={{ marginBottom:"14px", padding:"12px", background:"rgba(251,191,36,0.05)", border:"1px solid rgba(251,191,36,0.2)", borderRadius:"12px" }}>
+              <p style={{ fontSize:"11px", color:"#fbbf24", fontWeight:700, marginBottom:"8px" }}>Taksit Sayısı</p>
+              <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
+                {[1,2,3,4,5,6].map(n => (
+                  <button key={n} onClick={() => taksitSayisiDegistir(n)}
+                    style={{ padding:"6px 14px", borderRadius:"8px", border:`1px solid ${draftTaksitler.length===n?"#fbbf24":"#374151"}`, background:draftTaksitler.length===n?"rgba(251,191,36,0.1)":"#111827", color:draftTaksitler.length===n?"#fbbf24":"#9ca3af", fontSize:"13px", fontWeight:700, cursor:"pointer" }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {odemePlani && !taksitDuzenle && (() => {
+            const odenen = odemePlani.taksitler.filter(t=>t.odendiMi).reduce((s,t)=>s+Number(t.tutar),0);
+            const yuzde = Number(odemePlani.toplamTutar)>0?(odenen/Number(odemePlani.toplamTutar))*100:0;
+            return (
+              <div style={{ marginBottom:"14px" }}>
+                <div style={{ height:"5px", background:"#1f2937", borderRadius:"100px", overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${yuzde}%`, background:"#10b981", borderRadius:"100px", transition:"width .4s" }} />
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:"4px", fontSize:"11px", color:"#6b7280" }}>
+                  <span>%{yuzde.toFixed(0)} ödendi</span>
+                  <span>Kalan: {tl(Number(odemePlani.toplamTutar)-odenen)}</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {gosterilecekTaksitler.map((taksit, idx) => {
+            const gun = gunFarki(taksit.vadeTarihi);
+            const gecti = gun < 0 && !taksit.odendiMi;
+            const bugun = gun === 0 && !taksit.odendiMi;
+            const yakin = gun > 0 && gun <= 3 && !taksit.odendiMi;
+
+            if (taksitDuzenle) return (
+              <div key={idx} style={{ padding:"13px", background:"#0d1117", borderRadius:"13px", marginBottom:"8px", border:"1px solid #1f2937" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px", marginBottom:"8px" }}>
+                  <div>
+                    <span className="yi-label">Açıklama</span>
+                    <input className="yi-inp" value={taksit.aciklama}
+                      onChange={e => draftGuncelle(idx, { aciklama: e.target.value })} />
+                  </div>
+                  <div>
+                    <span className="yi-label">Tutar (₺)</span>
+                    <input className="yi-inp" type="text" inputMode="decimal" value={taksit.tutar}
+                      onChange={e => draftGuncelle(idx, { tutar: Number(e.target.value.replace(",",".")) })} />
+                  </div>
+                </div>
+                <div>
+                  <span className="yi-label">Vade Tarihi</span>
+                  <input className="yi-inp" type="date" value={taksit.vadeTarihi}
+                    onChange={e => draftGuncelle(idx, { vadeTarihi: e.target.value })} />
+                </div>
+              </div>
+            );
+
+            return (
+              <div key={taksit.id||idx} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"12px 14px", borderRadius:"13px", border:`1px solid ${gecti?"rgba(239,68,68,0.4)":bugun?"rgba(251,191,36,0.4)":taksit.odendiMi?"rgba(16,185,129,0.25)":"#1f2937"}`, background:"#0d1117", marginBottom:"8px" }}>
+                <button onClick={() => taksit.id && taksitOdendi(taksit.id, !taksit.odendiMi)}
+                  style={{ width:"28px", height:"28px", borderRadius:"8px", flexShrink:0, border:"none", cursor:"pointer", background:taksit.odendiMi?"#10b981":"#1f2937", color:"#fff", fontSize:"14px" }}>
+                  {taksit.odendiMi?"✓":""}
+                </button>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:"13px", fontWeight:700, color:taksit.odendiMi?"#6b7280":"#f9fafb", textDecoration:taksit.odendiMi?"line-through":"none" }}>
+                    {taksit.aciklama}
+                  </div>
+                  <div style={{ fontSize:"11px", color:"#6b7280", marginTop:"1px" }}>
+                    {tarihFmt(taksit.vadeTarihi)}
+                    {taksit.odendiMi&&taksit.odenmeTarihi&&` · ${tarihFmt(taksit.odenmeTarihi)}`}
+                  </div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:"14px", fontWeight:900 }}>{tl(Number(taksit.tutar))}</div>
+                  {gecti&&<div style={{ fontSize:"10px", color:"#f87171", fontWeight:700 }}>{Math.abs(gun)}g gecikti</div>}
+                  {bugun&&<div style={{ fontSize:"10px", color:"#fbbf24", fontWeight:700 }}>Bugün!</div>}
+                  {yakin&&<div style={{ fontSize:"10px", color:"#fbbf24" }}>{gun}g kaldı</div>}
+                  {taksit.odendiMi&&<div style={{ fontSize:"10px", color:"#10b981" }}>✓</div>}
+                </div>
+              </div>
+            );
+          })}
+
+          {taksitDuzenle && (
+            <button onClick={planKaydet} disabled={planKaydediliyor}
+              style={{ width:"100%", marginTop:"8px", padding:"13px", background:"#10b981", border:"none", borderRadius:"12px", color:"#fff", fontSize:"14px", fontWeight:900, cursor:"pointer" }}>
+              {planKaydediliyor ? "Kaydediliyor..." : "✓ Planı Kaydet"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // ─── RENDER ────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ height:"100dvh", background:"#030712", color:"#f9fafb", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+      <style>{`
+        .kart{background:#0a0f1a;border:1px solid #1f2937;border-radius:18px;padding:16px;}
+        .yi-inp{width:100%;box-sizing:border-box;background:#111827;border:1.5px solid #1f2937;border-radius:11px;padding:10px 13px;color:#f9fafb;font-size:15px;outline:none;}
+        .yi-inp:focus{border-color:#10b981;}
+        .yi-label{font-size:10px;color:#6b7280;margin-bottom:4px;display:block;font-weight:700;text-transform:uppercase;letter-spacing:.08em;}
+        .is-btn{width:100%;text-align:left;padding:11px 13px;border-radius:12px;border:1px solid #1f2937;background:#0d1117;cursor:pointer;margin-bottom:7px;color:#f9fafb;transition:all .15s;}
+        .is-btn:hover{border-color:#374151;background:#111827;}
+        .is-btn.aktif{border-color:#10b981!important;background:rgba(16,185,129,0.08)!important;}
+        .sekme-btn{flex:1;padding:10px 4px;background:transparent;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:#6b7280;font-size:10px;font-weight:700;transition:color .15s;}
+        .sekme-btn.aktif{color:#10b981;}
+        ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#374151;border-radius:4px;}
+      `}</style>
+
+      {/* HEADER */}
+      <div style={{ flexShrink:0, borderBottom:"1px solid #1f2937", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+          <button onClick={() => router.push("/dashboard/isler")}
+            style={{ background:"#0d1117", border:"1px solid #1f2937", borderRadius:"10px", color:"#9ca3af", padding:"7px 13px", fontSize:"13px", cursor:"pointer" }}>
+            ← Geri
+          </button>
+          <div>
+            <p style={{ fontSize:"10px", color:"#4b5563", letterSpacing:".2em", textTransform:"uppercase", margin:0 }}>Metrix</p>
+            <h1 style={{ fontSize:"17px", fontWeight:900, margin:0 }}>Tahsilat & Cari</h1>
+          </div>
+        </div>
+        {bugunListesi.length > 0 && (
+          <div style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:"10px", padding:"6px 12px", fontSize:"11px", color:"#f87171", fontWeight:700 }}>
+            🔔 {bugunListesi.length} bekliyor
+          </div>
+        )}
+      </div>
+
+      {/* MASAÜSTÜ: 3 kolon | MOBİL: tek panel + alt sekme */}
+      <div style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" }}>
+
+        {/* Masaüstü 3 kolon */}
+        <div className="desktop-cols" style={{ flex:1, display:"grid", gridTemplateColumns:"280px 260px 1fr", overflow:"hidden" }}>
+          <div style={{ borderRight:"1px solid #1f2937", overflow:"hidden" }}>{PanelMusteri}</div>
+          <div style={{ borderRight:"1px solid #1f2937", overflow:"hidden" }}>{PanelTahsilat}</div>
+          <div style={{ overflow:"hidden" }}>{PanelPlan}</div>
+        </div>
+
+        {/* Mobil: aktif panel */}
+        <div className="mobile-panel" style={{ flex:1, overflow:"hidden" }}>
+          {aktifSekme === "musteri" && PanelMusteri}
+          {aktifSekme === "tahsilat" && PanelTahsilat}
+          {aktifSekme === "plan" && PanelPlan}
+        </div>
+
+        {/* Mobil alt sekme çubuğu */}
+        <div className="mobile-tabs" style={{ flexShrink:0, borderTop:"1px solid #1f2937", background:"rgba(3,7,18,0.97)", backdropFilter:"blur(16px)", display:"flex", paddingBottom:"env(safe-area-inset-bottom)" }}>
+          {([
+            { id:"musteri" as Sekme, icon:"👤", label:"Müşteri", badge: seciliMusteri ? isler.length : 0 },
+            { id:"tahsilat" as Sekme, icon:"💳", label:"Tahsilat", badge: tahsilatlar.length },
+            { id:"plan" as Sekme, icon:"📅", label:"Ödeme Planı", badge: odemePlani?.taksitler.filter(t=>!t.odendiMi).length || 0 },
+          ] as const).map(s => (
+            <button key={s.id} onClick={() => setAktifSekme(s.id)}
+              className={`sekme-btn${aktifSekme===s.id?" aktif":""}`}>
+              <div style={{ position:"relative" }}>
+                <span style={{ fontSize:"20px" }}>{s.icon}</span>
+                {s.badge > 0 && (
+                  <span style={{ position:"absolute", top:"-4px", right:"-8px", background:"#ef4444", color:"#fff", borderRadius:"100px", fontSize:"9px", fontWeight:900, padding:"1px 5px", minWidth:"16px", textAlign:"center" }}>
+                    {s.badge}
+                  </span>
+                )}
+              </div>
+              <span>{s.label}</span>
+              {aktifSekme===s.id && <div style={{ width:"20px", height:"2px", background:"#10b981", borderRadius:"100px" }} />}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Responsive CSS */}
+      <style>{`
+        @media (min-width: 768px) {
+          .desktop-cols { display: grid !important; }
+          .mobile-panel { display: none !important; }
+          .mobile-tabs  { display: none !important; }
+        }
+        @media (max-width: 767px) {
+          .desktop-cols { display: none !important; }
+          .mobile-panel { display: block !important; }
+          .mobile-tabs  { display: flex !important; }
+        }
+      `}</style>
+    </div>
+  );
+}

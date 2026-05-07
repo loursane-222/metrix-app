@@ -1,232 +1,130 @@
-"use client";
-import { useEffect, useState } from "react";
-
-const IBAN = "TR83 0006 2000 2690 0006 6417 03";
-const ALICI = "Murat Arda";
-const BANKA = "Garanti Bankası";
-const FIYAT = "149 USD";
+'use client'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function AbonelikPage() {
-  const [email, setEmail] = useState("");
-  const [modal, setModal] = useState(false);
-  const [copied, setCopied] = useState("");
-  const [usdKur, setUsdKur] = useState<number | null>(null);
+  const router = useRouter()
+  const [secili, setSecili] = useState<'core' | 'pro' | null>(null)
+  const [abonelikBitis, setAbonelikBitis] = useState<string | null>(null)
+  const [demoBitti, setDemoBitti] = useState(false)
 
   useEffect(() => {
-    fetch("/api/auth/current-user", { credentials: "include", cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setEmail(d?.email || ""))
-      .catch(() => {});
-
-    fetch("/api/doviz/usd", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (typeof d?.rate === "number") setUsdKur(d.rate);
-      })
-      .catch(() => {});
-  }, []);
-
-  const tlKarsilik = usdKur ? 149 * usdKur : null;
-  const tlKarsilikText = tlKarsilik
-    ? tlKarsilik.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL"
-    : "Kur alınamadı";
-
-  async function copy(text: string, label: string) {
-    await navigator.clipboard.writeText(text);
-    setCopied(label + " kopyalandı");
-    setTimeout(() => setCopied(""), 1500);
-  }
-
-  function whatsapp() {
-    const msg = encodeURIComponent(
-      `Merhaba, Metrix aboneliğimi aktif etmek istiyorum.
-
-Paket: Premium
-Tutar: ${FIYAT}
-TL karşılığı: ${tlKarsilikText}
-Alıcı: ${ALICI}
-Banka: ${BANKA}
-IBAN: ${IBAN}
-E-posta: ${email || "-"}
-
-Ödeme yaptım, hesabımı aktif eder misiniz?`
-    );
-    window.open(`https://wa.me/?text=${msg}`, "_blank");
-  }
-
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    window.location.href = "/login";
-  }
+    fetch('/api/auth/current-user').then(r => r.json()).then(d => {
+      if (d.abonelikBitis) {
+        setAbonelikBitis(d.abonelikBitis)
+        const bitis = new Date(d.abonelikBitis)
+        setDemoBitti(bitis < new Date() && d.abonelikPlani === 'demo' || !d.abonelikBitis)
+      }
+    })
+  }, [])
 
   return (
-    <div className="min-h-[100dvh] bg-[#030712] text-white overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.28),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.22),transparent_34%)]" />
+    <main className="min-h-screen bg-[#030712] text-white flex flex-col items-center justify-center px-4 py-12">
+      <div className="w-full max-w-3xl">
 
-      <main className="relative z-10 mx-auto flex min-h-[100dvh] max-w-7xl items-center px-5 py-8">
-        <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <div className="text-center mb-10">
+          <p className="text-xs uppercase tracking-[0.3em] text-emerald-300/80 mb-3">Metrix</p>
+          {demoBitti ? (
+            <>
+              <h1 className="text-3xl font-black">Demo süreniz doldu</h1>
+              <p className="mt-3 text-slate-400 text-sm max-w-md mx-auto">
+                Devam edebilmek için lütfen paketinizi seçin ve ödeme yapın.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-3xl font-black">Paketinizi Seçin</h1>
+              <p className="mt-3 text-slate-400 text-sm max-w-md mx-auto">
+                İhtiyacınıza uygun planı seçin ve Metrix'i tam kapasite kullanmaya başlayın.
+              </p>
+            </>
+          )}
+        </div>
 
-          <section className="rounded-[34px] border border-white/10 bg-white/[0.06] p-7 shadow-[0_30px_90px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
-            <div className="mb-6 flex items-center gap-3">
-              <img src="/icon.png" className="h-14 w-14 rounded-2xl object-cover" />
+        <div className="grid md:grid-cols-2 gap-5">
+
+          {/* Core Plan */}
+          <button
+            onClick={() => setSecili('core')}
+            className={`rounded-3xl border p-6 text-left transition-all ${secili === 'core' ? 'border-emerald-400/60 bg-emerald-400/10 ring-1 ring-emerald-400/30' : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.07]'}`}>
+            <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-white/40">Metrix Tezgah</p>
-                <h1 className="text-lg font-bold">Premium Erişim Kilitli</h1>
+                <p className="text-xs uppercase tracking-widest text-slate-400 mb-1">Core Plan</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black">₺1.490</span>
+                  <span className="text-slate-400 text-sm">/ ay</span>
+                </div>
+              </div>
+              <div className={`w-6 h-6 rounded-full border-2 shrink-0 mt-1 flex items-center justify-center ${secili === 'core' ? 'border-emerald-400 bg-emerald-400' : 'border-white/20'}`}>
+                {secili === 'core' && <div className="w-2 h-2 rounded-full bg-white" />}
               </div>
             </div>
-
-            <span className="inline-flex rounded-full border border-amber-300/20 bg-amber-400/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-amber-200">
-              Hesabın onay bekliyor
-            </span>
-
-            <h2 className="mt-6 max-w-3xl text-4xl font-black leading-[1.05] sm:text-5xl">
-              Metrix’i kullanmıyorsan her gün satış kaçırıyor olabilirsin.
-            </h2>
-
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-              Teklif gönderiyorsun ama müşteri “bakacağım” deyip kayboluyor. Takip unutuluyor, iş programı karışıyor, kâr nerede eriyor görünmüyor. Metrix bu dağınıklığı tek ekranda kontrol altına alır.
-            </p>
-
-            <div className="mt-7 grid gap-3 sm:grid-cols-2">
-              {[
-                "WhatsApp’tan teklif gönder, müşteri 1 tıkla onaylasın",
-                "AI destekli satış onaylatma sistemi",
-                "Kapanma ihtimali yüksek müşterileri öne çıkar",
-                "Teklif, PDF, müşteri ve tahsilat takibini birleştir",
-                "Günlük iş programı ve operasyon kontrolü",
-                "Maliyet, kâr ve fiyat kararlarını net gör",
-              ].map((x) => (
-                <div key={x} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300">✓</span>
-                  <span>{x}</span>
+            <div className="space-y-2.5">
+              {['Sınırsız teklif', 'WhatsApp takip', 'Sıcak teklif sistemi', 'Temel AI'].map(f => (
+                <div key={f} className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  </div>
+                  <span className="text-sm text-slate-300">{f}</span>
                 </div>
               ))}
             </div>
+          </button>
 
-            <div className="mt-7 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-              <p className="text-sm font-bold text-emerald-300">Basit hesap:</p>
-              <p className="mt-1 text-sm leading-6 text-slate-300">
-                Metrix ayda sadece 1 ekstra işi kapatmana yardım etse, abonelik maliyetini fazlasıyla çıkarır.
-              </p>
-            </div>
-
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={() => setModal(true)}
-                className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-7 py-4 text-sm font-black shadow-[0_18px_50px_rgba(37,99,235,0.35)]"
-              >
-                Aboneliği Aç
-              </button>
-
-              <button
-                onClick={logout}
-                className="rounded-2xl border border-white/10 bg-white/5 px-7 py-4 text-sm font-semibold text-slate-200"
-              >
-                Çıkış Yap
-              </button>
-            </div>
-
-            <p className="mt-5 text-xs text-slate-500">Giriş yapan hesap: {email || "—"}</p>
-          </section>
-
-          <aside className="rounded-[34px] border border-white/10 bg-[#08111f]/85 p-7 shadow-[0_30px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-200">Tek Paket</p>
-
-            <div className="mt-5 flex items-end gap-2">
-              <span className="text-6xl font-black">149$</span>
-              <span className="mb-2 text-sm text-slate-400">/ ay</span>
-            </div>
-
-            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-              <p className="text-xs text-slate-500">TCMB döviz satış kuruna göre TL karşılığı</p>
-              <p className="mt-1 text-2xl font-black text-emerald-300">{tlKarsilikText}</p>
-              {usdKur && (
-                <p className="mt-1 text-xs text-slate-500">
-                  1 USD = {usdKur.toLocaleString("tr-TR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })} TL
-                </p>
-              )}
-            </div>
-
-            <p className="mt-5 text-sm leading-6 text-slate-300">
-              Mermer ve porselen tezgah atölyeleri için satış, teklif, operasyon ve kârlılık kontrol sistemi.
-            </p>
-
-            <div className="mt-6 space-y-3 text-sm text-slate-200">
-              <p>✓ Sınırsız müşteri kaydı</p>
-              <p>✓ PDF teklif sistemi</p>
-              <p>✓ WhatsApp teklif onayı</p>
-              <p>✓ AI satış onaylatma</p>
-              <p>✓ İş programı ve tahsilat takibi</p>
-            </div>
-
-            <button
-              onClick={() => setModal(true)}
-              className="mt-7 w-full rounded-2xl bg-white px-5 py-4 text-sm font-black text-slate-950"
-            >
-              Ödeme Bilgilerini Göster
-            </button>
-
-            <p className="mt-4 text-xs leading-5 text-slate-500">
-              Ödeme sonrası hesabın admin panelinden aktif edilir.
-            </p>
-          </aside>
-        </div>
-      </main>
-
-      {modal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[30px] border border-white/10 bg-[#0B1120] p-6 shadow-[0_40px_100px_rgba(0,0,0,0.6)]">
-            <div className="flex items-start justify-between gap-4">
+          {/* Pro Plan */}
+          <button
+            onClick={() => setSecili('pro')}
+            className={`rounded-3xl border p-6 text-left transition-all relative overflow-hidden ${secili === 'pro' ? 'border-purple-400/60 bg-purple-400/10 ring-1 ring-purple-400/30' : 'border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-blue-500/5 hover:from-purple-500/15'}`}>
+            <div className="absolute top-4 right-14 bg-purple-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">Premium</div>
+            <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-blue-300">Ödeme Bilgileri</p>
-                <h3 className="mt-2 text-2xl font-black">Premium Abonelik</h3>
-              </div>
-              <button onClick={() => setModal(false)} className="rounded-xl border border-white/10 px-3 py-2 text-white/60">✕</button>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-xs text-slate-500">Tutar</p>
-                <p className="mt-1 text-xl font-black">{FIYAT}</p>
-                <p className="mt-1 text-sm font-semibold text-emerald-300">{tlKarsilikText}</p>
-                {usdKur && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    TCMB döviz satış: {usdKur.toLocaleString("tr-TR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })} TL
-                  </p>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-xs text-slate-500">Alıcı</p>
-                <div className="mt-1 flex items-center justify-between gap-3">
-                  <p className="font-bold">{ALICI}</p>
-                  <button onClick={() => copy(ALICI, "Alıcı")} className="text-xs text-blue-300">Kopyala</button>
+                <p className="text-xs uppercase tracking-widest text-purple-300/80 mb-1">Pro Plan</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black">₺2.990</span>
+                  <span className="text-slate-400 text-sm">/ ay</span>
                 </div>
               </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-xs text-slate-500">Banka</p>
-                <p className="mt-1 font-bold">{BANKA}</p>
+              <div className={`w-6 h-6 rounded-full border-2 shrink-0 mt-1 flex items-center justify-center ${secili === 'pro' ? 'border-purple-400 bg-purple-400' : 'border-white/20'}`}>
+                {secili === 'pro' && <div className="w-2 h-2 rounded-full bg-white" />}
               </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-xs text-slate-500">IBAN</p>
-                <div className="mt-1 flex items-center justify-between gap-3">
-                  <p className="break-all font-mono text-sm font-bold">{IBAN}</p>
-                  <button onClick={() => copy(IBAN, "IBAN")} className="shrink-0 text-xs text-blue-300">Kopyala</button>
-                </div>
-              </div>
-
-              {copied && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">{copied}</div>}
             </div>
+            <div className="space-y-2.5">
+              {['AI ölçü → teklif', 'Plaka planlayıcı', 'Satış tahminleri', 'Otomatik takip mesajları'].map(f => (
+                <div key={f} className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center shrink-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                  </div>
+                  <span className="text-sm text-slate-300">{f}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-[11px] text-purple-300/60">Core Plan'ın tüm özellikleri dahil</p>
+          </button>
+        </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button onClick={whatsapp} className="rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-bold">WhatsApp ile Bildir</button>
-              <button onClick={() => setModal(false)} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-semibold">Kapat</button>
+        {secili && (
+          <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-sm text-slate-400">Seçilen plan</p>
+                <p className="text-lg font-bold mt-0.5">{secili === 'core' ? 'Core Plan — ₺1.490/ay' : 'Pro Plan — ₺2.990/ay'}</p>
+              </div>
+              <button
+                onClick={() => {
+                  alert('Ödeme sistemi yakında aktif olacak. Lütfen info@metrix.app adresine yazın.')
+                }}
+                className={`rounded-2xl px-6 py-3 font-bold text-sm ${secili === 'pro' ? 'bg-purple-500 hover:bg-purple-400' : 'bg-emerald-500 hover:bg-emerald-400'} text-white transition`}>
+                Ödemeye Geç →
+              </button>
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+
+        <p className="text-center text-xs text-slate-600 mt-8">
+          Sorularınız için{' '}
+          <a href="mailto:info@metrix.app" className="text-slate-400 hover:text-white transition">info@metrix.app</a>
+        </p>
+      </div>
+    </main>
+  )
 }

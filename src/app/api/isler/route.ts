@@ -1,11 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-const prisma = new PrismaClient()
 
 async function kullaniciAl() {
   const cookieStore = await cookies()
@@ -26,15 +24,23 @@ function teklifNoOlustur(sayi: number): string {
   return `TKL-${yil}-${no}`
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const kullanici = await kullaniciAl()
   if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
 
   const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
   if (!atolye) return NextResponse.json({ isler: [] })
 
+  const { searchParams } = new URL(req.url)
+  const musteriId = searchParams.get('musteriId')
+  const durumFiltre = searchParams.get('durum') // 'onaylandi' gibi
+
+  const where: any = { atolyeId: atolye.id }
+  if (musteriId) where.musteriId = musteriId
+  if (durumFiltre) where.durum = durumFiltre
+
   const isler = await prisma.is.findMany({
-    where: { atolyeId: atolye.id },
+    where,
     orderBy: { createdAt: 'desc' },
     include: { operasyonlar: true },
   })
@@ -97,6 +103,7 @@ export async function POST(req: NextRequest) {
       }
     })
 
+    let yeniMusteriOlusturuldu = false
     if (!mevcutMusteri) {
       mevcutMusteri = await prisma.musteri.create({
         data: {
@@ -108,6 +115,7 @@ export async function POST(req: NextRequest) {
           email: ''
         }
       })
+      yeniMusteriOlusturuldu = true
     }
 
     bagliMusteriId = mevcutMusteri.id
@@ -164,8 +172,14 @@ export async function POST(req: NextRequest) {
   const toplamSureDakika = temelSureDakika + operasyonSureDakika
   const iscilikMaliyeti = (temelSureDakika * dakikaMaliyeti) + operasyonMaliyeti
 
+  const layoutPlakaSayisi = Number((veri as any)?.plakaLayoutJson?.plakaSayisi || 0)
+
   const otomatikPlakaSayisi =
-    gercekPlakaMtul > 0 ? Math.ceil(toplamMetraj / gercekPlakaMtul) : 0
+    layoutPlakaSayisi > 0
+      ? layoutPlakaSayisi
+      : gercekPlakaMtul > 0
+      ? Math.ceil(toplamMetraj / gercekPlakaMtul)
+      : 0
 
   const kullanilanPlakaSayisi =
     Number(manuelPlakaSayisi) > 0 ? Number(manuelPlakaSayisi) : otomatikPlakaSayisi
@@ -189,6 +203,8 @@ export async function POST(req: NextRequest) {
 
   const is = await prisma.is.create({
     data: {
+      plakaLayoutJson: (veri as any).plakaLayoutJson || null,
+      plakaImageUrl: (veri as any).plakaImageUrl || null,
       atolyeId: atolye.id,
       musteriId: bagliMusteriId,
       teklifNo,
@@ -250,6 +266,8 @@ export async function POST(req: NextRequest) {
     is, toplamSureDakika, iscilikMaliyeti, malzemeMaliyeti,
     toplamMaliyet, satisFiyati, kdvTutari, kdvDahilFiyat,
     mtulSatisFiyati, toplamMetraj, kullanilanPlakaSayisi, teklifNo,
-    teklifGecerlilikTarihi: teklifGecerlilikTarihi.toISOString()
+    teklifGecerlilikTarihi: teklifGecerlilikTarihi.toISOString(),
+    yeniMusteriOlusturuldu: typeof yeniMusteriOlusturuldu !== 'undefined' ? yeniMusteriOlusturuldu : false,
+    musteriId: bagliMusteriId || null
   })
 }

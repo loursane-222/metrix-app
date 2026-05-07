@@ -242,12 +242,25 @@ export default function PersonelSayfasi() {
   const aktifZamaninda = aktif ? oran(aktif.zamanindaTamamlanan || 0, aktif.tamamlananGorev || 0) : 0
 
   return (
-    <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 text-white md:h-screen md:overflow-hidden md:p-3">
+
+
+
+
+    <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 text-white md:h-screen md:overflow-hidden md:p-3 relative">
       <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:grid-cols-[310px_minmax(0,1fr)_310px]">
 
         <aside className={`flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-4 pt-[104px] md:pt-4 ${mobileView === "list" ? "flex" : "hidden md:flex"}`}>
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Ekip Radarı</p>
           <h1 className="mt-2 text-2xl font-semibold">Personel</h1>
+
+{/* MOBİL PERSONEL EKLE */}
+<button
+  onClick={() => formAc()}
+  className="absolute top-6 right-4 md:hidden rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-lg"
+>
+  + Personel
+</button>
+
 
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Mini label="Aktif" value={ozet.aktifSayi} />
@@ -383,7 +396,38 @@ export default function PersonelSayfasi() {
               </section>
             </div>
           )}
-        </main>
+        
+{/* MOBILE ACTION BAR */}
+<div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-800 bg-[#030712]/95 backdrop-blur md:hidden">
+  <div className="flex gap-2 p-3">
+    <button
+      onClick={() => formAc()}
+      className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white"
+    >
+      + Personel Ekle
+    </button>
+
+    {aktif && (
+      <>
+        <button
+          onClick={() => formAc(aktif)}
+          className="flex-1 rounded-xl bg-slate-700 py-3 text-sm font-bold text-white"
+        >
+          Düzenle
+        </button>
+
+        <button
+          onClick={yetkiKaydet}
+          className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white"
+        >
+          Yetki Kaydet
+        </button>
+      </>
+    )}
+  </div>
+</div>
+
+</main>
 
         <aside className={`fixed right-0 top-0 z-[180] h-[100dvh] w-[86vw] max-w-[380px] flex-col overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-auto md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:flex md:overflow-hidden ${mobilePanelOpen ? "translate-x-0" : "translate-x-full"}`}>
           <button
@@ -508,6 +552,10 @@ export default function PersonelSayfasi() {
 
 function Input({ label, value, onChange }: any) {
   return (
+
+
+
+
     <label>
       <p className="mb-1 text-xs text-slate-400">{label}</p>
       <input value={value} onChange={e => onChange(e.target.value)} className="h-10 w-full rounded-xl border border-slate-700 bg-[#111827] px-3 text-sm outline-none focus:border-blue-500" />
@@ -517,6 +565,10 @@ function Input({ label, value, onChange }: any) {
 
 function Mini({ label, value, tone = 'text-white' }: any) {
   return (
+
+
+
+
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
       <p className="text-[10px] tracking-[0.16em] text-slate-500 uppercase">{label}</p>
       <p className={`mt-1 text-lg font-semibold ${tone}`}>{value}</p>
@@ -526,6 +578,10 @@ function Mini({ label, value, tone = 'text-white' }: any) {
 
 function Kpi({ label, value, tone = 'text-white' }: any) {
   return (
+
+
+
+
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
       <p className="text-xs text-slate-400">{label}</p>
       <p className={`mt-2 break-words text-lg font-semibold leading-tight tabular-nums md:text-xl ${tone}`}>{value}</p>
@@ -535,6 +591,10 @@ function Kpi({ label, value, tone = 'text-white' }: any) {
 
 function Small({ label, value }: any) {
   return (
+
+
+
+
     <div className="flex items-center justify-between gap-3 rounded-xl bg-[#0B1120] px-4 py-3">
       <p className="min-w-0 truncate text-xs text-slate-400">{label}</p>
       <p className="shrink-0 text-xl font-semibold tabular-nums">{value}</p>
@@ -544,6 +604,10 @@ function Small({ label, value }: any) {
 
 function Info({ label, value }: any) {
   return (
+
+
+
+
     <div className="rounded-2xl bg-[#0B1120] p-4">
       <p className="text-xs text-slate-400">{label}</p>
       <p className="mt-2 truncate font-semibold">{value}</p>
@@ -554,6 +618,10 @@ function Info({ label, value }: any) {
 function Bar({ label, value }: any) {
   const safe = Math.max(0, Math.min(100, Number(value || 0)))
   return (
+
+
+
+
     <div>
       <div className="mb-2 flex justify-between text-xs">
         <span className="text-slate-400">{label}</span>
@@ -568,6 +636,10 @@ function Bar({ label, value }: any) {
 
 function Toggle({ label, value, onChange }: any) {
   return (
+
+
+
+
     <button onClick={() => onChange(!value)} className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-[#111827] p-3 text-left">
       <span className="min-w-0 pr-3 text-sm text-slate-300">{label}</span>
       <span className={cls('h-6 w-11 rounded-full p-1 transition', value ? 'bg-emerald-600' : 'bg-slate-700')}>

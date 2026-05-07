@@ -2,8 +2,8 @@
 import { useMemo, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
-import { ScheduleModal } from "./ScheduleModal";
 import ScheduleCreateModal from "./ScheduleCreateModal";
+import TaskDetailModal from "./TaskDetailModal";
 import ScheduleAiInsight from "./ScheduleAiInsight";
 
 dayjs.locale("tr");
@@ -66,7 +66,7 @@ function formatTaskTime(dateValue: any) {
 export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalendarProps) {
   const [view, setView] = useState<ViewMode>("week");
   const [currentDate, setCurrentDate] = useState(dayjs());
-  const [selectedSchedule, setSelectedSchedule] = useState<any | null>(null);
+  const [selectedTask, setSelectedTask] = useState<any | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [schedules, setSchedules] = useState<any[]>(initialSchedules);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
@@ -203,7 +203,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
           e.dataTransfer.effectAllowed = "move";
         }}
         onDragEnd={() => setDraggingTaskId(null)}
-        onClick={() => setSelectedSchedule(task.schedule)}
+        onClick={() => setSelectedTask(task)}
         className={[
           "group w-full cursor-grab rounded-2xl border border-white/10 bg-gradient-to-br p-3 text-left shadow-[0_18px_40px_rgba(0,0,0,0.25)] transition hover:-translate-y-0.5 hover:border-white/20 active:cursor-grabbing",
           m.soft,
@@ -265,7 +265,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
   function DesktopWeek() {
     return (
       <div className="hidden md:block">
-        <div className="grid grid-cols-7 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/40 shadow-2xl">
+        <div className="grid grid-cols-7 h-[calc(100dvh-260px)] overflow-hidden rounded-3xl border border-white/10 bg-slate-950/40 shadow-2xl">
           {weekDays.map((d, index) => {
             const dayTasks = tasks.filter((task) => dayjs(task.date).isSame(d, "day"));
             const today = d.isSame(dayjs(), "day");
@@ -283,7 +283,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
                   if (taskId) moveTaskToDay(taskId, d);
                 }}
                 className={[
-                  "min-h-[420px] border-r border-white/10 p-3 transition last:border-r-0",
+                  "h-[calc(100dvh-320px)] flex flex-col border-r border-white/10 p-3 transition last:border-r-0",
                   today ? "bg-blue-500/5" : "bg-slate-900/40",
                   draggingTaskId ? "ring-1 ring-blue-400/20" : "",
                 ].join(" ")}
@@ -298,7 +298,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
                   <div className="rounded-full bg-white/5 px-2 py-1 text-xs text-slate-300">{dayTasks.length} iş</div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 overflow-y-auto pr-1 flex-1">
                   {dayTasks.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-white/10 p-4 text-center text-xs text-slate-600">
                       Plan yok
@@ -345,7 +345,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
           <div className="text-sm text-slate-400">{selectedDayTasks.length} iş</div>
         </div>
 
-        <div className="space-y-3 pb-28">
+        <div className="space-y-3 pb-36">
           {selectedDayTasks.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-slate-500">
               Bu güne planlanmış iş yok.
@@ -405,7 +405,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
   }
 
   return (
-    <div className="min-h-[calc(100dvh-24px)] w-full overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,#0f2a4a_0%,#07111f_35%,#030712_75%)] p-4 text-white shadow-2xl md:p-6">
+    <div className="h-full w-full overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,#0f2a4a_0%,#07111f_35%,#030712_75%)] p-4 text-white shadow-2xl md:p-6">
       <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-2xl font-black tracking-tight md:text-3xl">İş Programı</h1>
@@ -417,7 +417,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
             onClick={() => setShowCreate(true)}
             className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-black text-white shadow-lg shadow-blue-900/40 hover:bg-blue-500"
           >
-            + Yeni İş Oluştur
+            + Program Ekle
           </button>
 
           <div className="flex rounded-2xl border border-white/10 bg-white/[0.04] p-1">
@@ -487,11 +487,11 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
         />
       )}
 
-      {selectedSchedule && (
-        <ScheduleModal
-          schedule={selectedSchedule}
-          onClose={() => setSelectedSchedule(null)}
-          onSaved={() => window.location.reload()}
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdated={() => window.location.reload()}
         />
       )}
     </div>

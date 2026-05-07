@@ -1,0 +1,63 @@
+"use client";
+
+import { useState } from "react";
+
+export default function Page() {
+  const [data, setData] = useState(null);
+
+  const test = async () => {
+    const res = await fetch("/api/ai-layout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plaka: { genislik: 320, yukseklik: 160 },
+        parcalar: [
+          { genislik: 100, yukseklik: 60 },
+          { genislik: 120, yukseklik: 60 },
+          { genislik: 80, yukseklik: 50 },
+        ],
+      }),
+    });
+
+    const json = await res.json();
+    setData(json);
+  };
+
+  return (
+    <div style={{ padding: 40 }}>
+      <button onClick={test} style={{ padding: 10, fontSize: 16 }}>
+        Test Et
+      </button>
+
+      {data && (
+        <div
+          style={{
+            marginTop: 20,
+            width: 640,
+            height: 320,
+            border: "2px solid black",
+            position: "relative",
+          }}
+        >
+          {data.yerlesim.map((p, i) => (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                left: p.x * 2,
+                top: p.y * 2,
+                width: p.genislik * 2,
+                height: p.yukseklik * 2,
+                border: "1px solid red",
+                background: "rgba(255,0,0,0.2)",
+                fontSize: 10,
+              }}
+            >
+              {p.genislik}x{p.yukseklik}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

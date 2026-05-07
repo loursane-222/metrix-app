@@ -182,3 +182,82 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     teklifGecerlilikTarihi: mevcutIs.teklifGecerlilikTarihi,
   })
 }
+
+function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
+  const taksitler: { taksitNo: number; aciklama: string; yuzdesi: number; gunSonra: number }[] = []
+  if (musteriTipi === 'bayi') {
+    taksitler.push({ taksitNo: 1, aciklama: 'Peşinat (%30)', yuzdesi: 30, gunSonra: 0 })
+    taksitler.push({ taksitNo: 2, aciklama: 'Teslimatta (%70)', yuzdesi: 70, gunSonra: 30 })
+  } else if (musteriTipi === 'mimar') {
+    taksitler.push({ taksitNo: 1, aciklama: 'Peşinat (%25)', yuzdesi: 25, gunSonra: 0 })
+    taksitler.push({ taksitNo: 2, aciklama: 'İmalat başlangıcı (%25)', yuzdesi: 25, gunSonra: 15 })
+    taksitler.push({ taksitNo: 3, aciklama: 'Teslimatta (%50)', yuzdesi: 50, gunSonra: 30 })
+  } else if (musteriTipi === 'muteahhit') {
+    taksitler.push({ taksitNo: 1, aciklama: 'Peşinat (%20)', yuzdesi: 20, gunSonra: 0 })
+    taksitler.push({ taksitNo: 2, aciklama: 'İmalat başlangıcı (%30)', yuzdesi: 30, gunSonra: 15 })
+    taksitler.push({ taksitNo: 3, aciklama: 'Teslim + 30 gün (%50)', yuzdesi: 50, gunSonra: 45 })
+  } else {
+    taksitler.push({ taksitNo: 1, aciklama: 'Peşinat (%50)', yuzdesi: 50, gunSonra: 0 })
+    taksitler.push({ taksitNo: 2, aciklama: 'Teslimatta (%50)', yuzdesi: 50, gunSonra: 30 })
+  }
+  return taksitler.map(t => ({
+    taksitNo: t.taksitNo,
+    aciklama: t.aciklama,
+    tutar: Math.round((toplamTutar * t.yuzdesi) / 100 * 100) / 100,
+    vadeTarihi: new Date(onayTarihi.getTime() + t.gunSonra * 24 * 60 * 60 * 1000)
+  }))
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const body = await req.json()
+    const { durum } = body
+
+    if (!id || !durum) return NextResponse.json({ error: 'id ve durum gerekli' }, { status: 400 })
+
+    const data: any = { durum }
+
+    if (durum === 'onaylandi') {
+      data.onaylanmaTarihi = new Date()
+      data.kaybedilmeTarihi = null
+    } else if (durum === 'kaybedildi') {
+      data.kaybedilmeTarihi = new Date()
+      data.onaylanmaTarihi = null
+    } else if (durum === 'teklif_verildi') {
+      data.onaylanmaTarihi = null
+      data.kaybedilmeTarihi = null
+    }
+
+    const updated = await prisma.is.update({
+      where: { id },
+      data,
+      include: { musteri: true }
+    })
+
+    // Onaylandığında otomatik ödeme planı oluştur
+    if (durum === 'onaylandi' && updated.musteriId && updated.musteri) {
+      const mevcutPlan = await prisma.odemePlani.findUnique({ where: { isId: id } })
+      if (!mevcutPlan) {
+        const musteriTipi = updated.musteri.musteriTipi || 'son_kullanici'
+        const toplamTutar = Number(updated.satisFiyati || 0)
+        if (toplamTutar > 0) {
+          const taksitVerileri = odemePlanOlustur(musteriTipi, toplamTutar, new Date())
+          await prisma.odemePlani.create({
+            data: {
+              isId: id,
+              musteriId: updated.musteriId,
+              toplamTutar,
+              musteriTipi,
+              taksitler: { create: taksitVerileri }
+            }
+          })
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true, data: updated })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}

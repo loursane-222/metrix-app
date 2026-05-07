@@ -1,1161 +1,1401 @@
 "use client";
 
 import { normalizeMtulDisplay } from "@/lib/normalizeMtul";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { PlakaPlanlayiciV2, type AIPlakaAktarSonucu } from "@/components/plaka-planlayici/PlakaPlanlayiciV2";
+import { PlakaPlanlayiciV2 } from "@/components/plaka-planlayici/PlakaPlanlayiciV2";
+import AiYeniIsPanel from "@/components/ai/AiYeniIsPanel";
 
-
-function tl(v: any) {
-  return Number(v || 0).toLocaleString("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }) + " ₺";
-}
-
-function n(v: string | number) {
+// ─── Yardımcılar ──────────────────────────────────────────────────────────────
+function n(v: any): number {
   const x = Number(String(v || "0").replace(",", "."));
   return Number.isFinite(x) ? x : 0;
 }
+function tl(v: number) {
+  return v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
+}
+function uid() { return Math.random().toString(36).slice(2, 8); }
 
-function para(v: number) {
-  return v.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) + "₺";
+const TASLAK_KEY = "metrix_yeni_is_v4_taslak";
+
+// ─── Tipler ───────────────────────────────────────────────────────────────────
+type Adim = "musteri" | "olculer" | "fiyat";
+type IsModeli = "tam" | "sadece_iscilik" | "fason";
+type MutfakTipi = "duz" | "l" | "u" | "paralel" | "coffee" | "ozel";
+
+interface Parca {
+  id: string;
+  ad: string;
+  en: string;   // cm
+  boy: string;  // cm
+  adet: string;
+  onAlin: boolean;
+  tip: "tezgah" | "panel" | "ada" | "tezgah_arasi" | "ozel";
 }
 
+interface FormState {
+  // Müşteri
+  musteriId: string;
+  musteriAdi: string;
+  musteriTipi: string;
+  isTarihi: string;
+  urunAdi: string;
+  // İş modeli
+  isModeli: IsModeli;
+  mutfakTipi: MutfakTipi;
+  // Parçalar
+  parcalar: Parca[];
+  // Ekstra işler
+  eviyes: string;       // adet
+  ocaklar: string;
+  prizler: string;
+  pahlamaMtul: string;
+  kesim45Mtul: string;
+  // Plaka
+  plakaFiyati: string;  // TL (direkt TL de girilebilir)
+  plakaFiyatiEuro: string;
+  kullanilanKur: string;
+  plakaEn: string;
+  plakaBoy: string;
+  plakaLayoutJson: any;
+  plakaImageUrl: string;
+  // Fiyatlandırma
+  carpan: string;       // ×2, ×2.5, ×3 vb
+  karHedefi: string;    // % alternatif
+  fiyatModu: "carpan" | "kar"; // hangisiyle hesaplansın
+  manuelBirimFiyat: string;    // override
+  // Makine/süre (gelişmiş)
+  tezgahMakineId: string;
+  tezgahDakika: string;
+  pahlamaMakineId: string;
+  pahlamaDakika: string;
+  kesim45MakineId: string;
+  kesim45Dakika: string;
+  // Meta
+  notlar: string;
+  onAlinEnOverride?: Record<string, string>;
+}
+
+// ─── Mutfak tipleri ───────────────────────────────────────────────────────────
+const MUTFAK_TIPLERI: { id: MutfakTipi; label: string; aciklama: string; svg: string }[] = [
+  {
+    id: "duz", label: "Düz Tezgah", aciklama: "Tek yön, karşısı boş",
+    svg: `<svg viewBox="0 0 80 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="20" width="70" height="12" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="5" y="32" width="70" height="5" rx="1" fill="currentColor" opacity="0.3"/>
+    </svg>`
+  },
+  {
+    id: "l", label: "L Tezgah", aciklama: "İki yön, köşe birleşim",
+    svg: `<svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="10" width="12" height="40" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="5" y="38" width="55" height="12" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="17" y="38" width="43" height="5" rx="1" fill="currentColor" opacity="0.3"/>
+      <rect x="5" y="10" width="5" height="28" rx="1" fill="currentColor" opacity="0.3"/>
+    </svg>`
+  },
+  {
+    id: "u", label: "U Tezgah", aciklama: "Üç yön, tam çevre",
+    svg: `<svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="10" width="12" height="40" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="63" y="10" width="12" height="40" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="5" y="38" width="70" height="12" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="5" y="38" width="3" height="12" rx="1" fill="currentColor" opacity="0.2"/>
+    </svg>`
+  },
+  {
+    id: "paralel", label: "Paralel", aciklama: "Karşılıklı iki tezgah",
+    svg: `<svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="10" width="70" height="12" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="5" y="38" width="70" height="12" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="5" y="22" width="70" height="5" rx="1" fill="currentColor" opacity="0.2"/>
+      <rect x="5" y="33" width="70" height="5" rx="1" fill="currentColor" opacity="0.2"/>
+    </svg>`
+  },
+  {
+    id: "coffee", label: "Coffee Corner", aciklama: "Ana tezgah + küçük köşe",
+    svg: `<svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="20" width="50" height="12" rx="2" fill="currentColor" opacity="0.8"/>
+      <rect x="55" y="10" width="20" height="22" rx="2" fill="currentColor" opacity="0.5"/>
+      <rect x="5" y="32" width="50" height="5" rx="1" fill="currentColor" opacity="0.3"/>
+    </svg>`
+  },
+  {
+    id: "ozel", label: "Özel / Diğer", aciklama: "Serbest parça girişi",
+    svg: `<svg viewBox="0 0 80 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <text x="40" y="35" text-anchor="middle" font-size="24" fill="currentColor" opacity="0.8">+</text>
+    </svg>`
+  },
+];
+
+// ─── İş modeli ────────────────────────────────────────────────────────────────
+const IS_MODELLERI = [
+  { id: "tam"           as IsModeli, label: "Taş + İşçilik", ikon: "🪨", aciklama: "Taş bizden, her şey dahil" },
+  { id: "sadece_iscilik"as IsModeli, label: "Sadece İşçilik", ikon: "⚙️", aciklama: "Taşı müşteri alıyor" },
+  { id: "fason"         as IsModeli, label: "Fason Kesim",   ikon: "✂️", aciklama: "Sadece kesim/ebatlama" },
+];
+
+// ─── Müşteri tipleri ──────────────────────────────────────────────────────────
+const MUSTERI_TIPLERI = [
+  { id: "Ev sahibi",  label: "Ev Sahibi",  ikon: "🏡", carpan: "3.0"  },
+  { id: "Mimar",      label: "Mimar",      ikon: "📐", carpan: "2.8"  },
+  { id: "Bayi",       label: "Bayi",       ikon: "🏪", carpan: "2.5"  },
+  { id: "Müteahhit",  label: "Müteahhit",  ikon: "🦺", carpan: "2.3"  },
+  { id: "İmalatçı",   label: "İmalatçı",   ikon: "🏭", carpan: "2.0"  },
+];
+
+// ─── Mutfak tipine göre varsayılan parçalar ───────────────────────────────────
+function defaultParcalar(tip: MutfakTipi): Parca[] {
+  const p = (ad: string, t: Parca["tip"]): Parca => ({
+    id: uid(), ad, en: "", boy: "", adet: "1", onAlin: t === "tezgah" || t === "ada", tip: t,
+  });
+  switch (tip) {
+    case "duz":     return [p("Tezgah", "tezgah")];
+    case "l":       return [p("Ana Tezgah", "tezgah"), p("Yan Tezgah", "tezgah")];
+    case "u":       return [p("Ana Tezgah", "tezgah"), p("Sol Tezgah", "tezgah"), p("Sağ Tezgah", "tezgah")];
+    case "paralel": return [p("Ana Tezgah", "tezgah"), p("Karşı Tezgah", "tezgah")];
+    case "coffee":  return [p("Ana Tezgah", "tezgah"), p("Coffee Corner", "ada")];
+    case "ozel":    return [p("Parça 1", "ozel")];
+    default:        return [p("Tezgah", "tezgah")];
+  }
+}
+
+// ─── Hesap motoru ─────────────────────────────────────────────────────────────
+function hesapla(form: FormState, makineler: any[]) {
+  const makineMaliyet = (id: string) => {
+    const m = makineler.find((x) => x.id === id);
+    return Number(m?.dakikalikMaliyet ?? m?.dkMaliyet ?? m?.dakikaMaliyet ?? m?.hesaplananDakikaMaliyeti ?? 0) || 106;
+  };
+
+  // Toplam mtül hesabı — her parçanın en×boy/10000 × adet
+  let toplamMtul = 0;
+  let toplamOnAlinMtul = 0;
+  for (const p of form.parcalar) {
+    const en = n(p.en), boy = n(p.boy), adet = n(p.adet) || 1;
+    if (en > 0 && boy > 0) {
+      const mtul = (boy / 100) * adet; // boy cm → mtül (1 mtül = 1m uzunluk)
+      toplamMtul += mtul;
+      if (p.onAlin) toplamOnAlinMtul += mtul;
+    }
+  }
+
+  // Plaka hesabı
+  // Plaka alanı cm² → kaç parça sığar
+  const plakaEn  = n(form.plakaEn)  || 160;
+  const plakaBoy = n(form.plakaBoy) || 320;
+  const plakaAlani = plakaEn * plakaBoy; // cm²
+
+  let toplamParcaAlani = 0;
+  for (const p of form.parcalar) {
+    const en = n(p.en), boy = n(p.boy), adet = n(p.adet) || 1;
+    if (en > 0 && boy > 0) toplamParcaAlani += en * boy * adet;
+  }
+
+  const plakaSayisi = form.plakaLayoutJson?.plakaSayisi > 0
+    ? Number(form.plakaLayoutJson.plakaSayisi)
+    : plakaAlani > 0 && toplamParcaAlani > 0
+      ? Math.ceil(toplamParcaAlani / (plakaAlani * 0.75)) // %75 verim
+      : 0;
+
+  const plakaFiyatiTl = n(form.plakaFiyati) > 0
+    ? n(form.plakaFiyati)
+    : n(form.plakaFiyatiEuro) * n(form.kullanilanKur);
+
+  const malzemeMaliyeti = form.isModeli === "tam" ? plakaSayisi * plakaFiyatiTl : 0;
+
+  // İşçilik maliyeti (makine dakika ücreti)
+  const tezgahDk   = toplamMtul * n(form.tezgahDakika || "25");
+  const pahlamaDk  = n(form.pahlamaMtul)  * n(form.pahlamaDakika || "1");
+  const kesim45Dk  = n(form.kesim45Mtul)  * n(form.kesim45Dakika || "4");
+  const toplamDakika = tezgahDk + pahlamaDk + kesim45Dk;
+
+  const iscilikMaliyeti = tezgahDk  * makineMaliyet(form.tezgahMakineId)
+    + pahlamaDk  * makineMaliyet(form.pahlamaMakineId)
+    + kesim45Dk  * makineMaliyet(form.kesim45MakineId);
+
+  const toplamMaliyet = malzemeMaliyeti + iscilikMaliyeti;
+
+  // Satış fiyatı
+  let satisFiyati = 0;
+  if (form.manuelBirimFiyat && n(form.manuelBirimFiyat) > 0) {
+    satisFiyati = n(form.manuelBirimFiyat) * toplamMtul;
+  } else if (form.fiyatModu === "carpan") {
+    // Çarpan: plaka maliyeti × çarpan / toplam mtül = birim fiyat
+    if (form.isModeli === "tam") {
+      satisFiyati = malzemeMaliyeti * n(form.carpan);
+    } else {
+      satisFiyati = iscilikMaliyeti * n(form.carpan);
+    }
+  } else {
+    satisFiyati = toplamMaliyet * (1 + n(form.karHedefi) / 100);
+  }
+
+  const kar = satisFiyati - toplamMaliyet;
+  const karYuzde = toplamMaliyet > 0 ? (kar / toplamMaliyet) * 100 : 0;
+  const birimFiyat = toplamMtul > 0 ? satisFiyati / toplamMtul : 0;
+
+  // Ek işler maliyeti tahmini (bilgi amaçlı)
+  const eviyeMaliyet  = n(form.eviyes)  * 200 * makineMaliyet(form.tezgahMakineId);
+  const ocakMaliyet   = n(form.ocaklar) * 150 * makineMaliyet(form.tezgahMakineId);
+
+  return {
+    toplamMtul, toplamOnAlinMtul, toplamParcaAlani, plakaSayisi,
+    plakaFiyatiTl, malzemeMaliyeti, iscilikMaliyeti, toplamMaliyet,
+    satisFiyati, kar, karYuzde, birimFiyat, toplamDakika,
+    eviyeMaliyet, ocakMaliyet,
+  };
+}
+
+// ─── Varsayılan form ──────────────────────────────────────────────────────────
+function defaultForm(): FormState {
+  return {
+    musteriId: "", musteriAdi: "", musteriTipi: "Ev sahibi",
+    isTarihi: new Date().toISOString().slice(0, 10),
+    urunAdi: "", isModeli: "tam", mutfakTipi: "duz",
+    parcalar: defaultParcalar("duz"),
+    eviyes: "1", ocaklar: "1", prizler: "2",
+    pahlamaMtul: "", kesim45Mtul: "",
+    plakaFiyati: "", plakaFiyatiEuro: "", kullanilanKur: "53",
+    plakaEn: "160", plakaBoy: "320",
+    plakaLayoutJson: null, plakaImageUrl: "",
+    carpan: "3.0", karHedefi: "30", fiyatModu: "carpan",
+    manuelBirimFiyat: "",
+    tezgahMakineId: "", tezgahDakika: "25",
+    pahlamaMakineId: "", pahlamaDakika: "1",
+    kesim45MakineId: "", kesim45Dakika: "4",
+    notlar: "",
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ANA SAYFA
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function YeniIsV3Page() {
   const router = useRouter();
+  const mainRef = useRef<HTMLDivElement>(null);
+  const taslakRef = useRef<any>(null);
 
-  const [aktifBolum, setAktifBolum] = useState<"musteri" | "malzeme" | "maliyet" | "not">("musteri");
-  const [plakaAcik, setPlakaAcik] = useState(false);
-  const [kaydediliyor, setKaydediliyor] = useState(false)
-  const [sonKayitModalAcik, setSonKayitModalAcik] = useState(false)
-  const [sonKayitTeklifNo, setSonKayitTeklifNo] = useState("")
-  const [sonKayitIsId, setSonKayitIsId] = useState("")
-  const [fiyatPanelAcik, setFiyatPanelAcik] = useState(false)
-  const [fiyatOverride, setFiyatOverride] = useState<any>({});
-  const [hesapPopupAcik, setHesapPopupAcik] = useState(false);
-  const [duzenlenmis, setDuzenlenmis] = useState<any>(null);
+  const [aktifAdim, setAktifAdim] = useState<Adim>("musteri");
+  const [form, setForm] = useState<FormState>(defaultForm);
   const [musteriler, setMusteriler] = useState<any[]>([]);
-  const [makineler, setMakineler] = useState<any[]>([]);
+  const [makineler, setMakineler]   = useState<any[]>([]);
+  const [musteriArama, setMusteriArama]     = useState("");
   const [musteriListeAcik, setMusteriListeAcik] = useState(false);
+  const [plakaAcik, setPlakaAcik]           = useState(false);
+  const [plakaInitialRows, setPlakaInitialRows] = useState<any[]>([]);
+  const [aiMode, setAiMode]                 = useState(false);
+  const [kaydediliyor, setKaydediliyor]     = useState(false);
+  const [basariEkrani, setBasariEkrani]     = useState(false);
+  const [sonTeklifNo, setSonTeklifNo]       = useState("");
+  const [sonIsId, setSonIsId]               = useState("");
+  const [yeniMusteri, setYeniMusteri]       = useState(false);
+  const [taslakKaydedildi, setTaslakKaydedildi] = useState(false);
+  const [gelismisAcik, setGelismisAcik]     = useState(false);
+  const [fiyatPanelAcik, setFiyatPanelAcik] = useState(false);
+  const [plakaHesaplaniyor, setPlakaHesaplaniyor] = useState(false);
+  const [plakaSlabs, setPlakaSlabs]         = useState<any[]>([]);
+  const [plakaPlakaSayisi, setPlakaPlakaSayisi] = useState(0);
+  const [plakaFireOrani, setPlakaFireOrani] = useState(0);
 
-  const [form, setForm] = useState({
-    musteriId: "",
-    musteriAdi: "",
-    urunAdi: "",
-    malzemeTipi: "Porselen",
-    musteriTipi: "Ev sahibi",
-    isTarihi: new Date().toISOString().slice(0, 10),
-
-    kullanilanKur: "53",
-    karYuzdesi: "30",
-
-    plakaFiyatiEuro: "",
-    plakaGenislikCm: "",
-    plakaUzunlukCm: "",
-    manuelPlakaSayisi: "",
-    plakadanAlinanMtul: "5",
-
-    metrajMtul: "",
-    birMtulDakika: "25",
-    tezgahArasiMtul: "",
-    tezgahArasiDakika: "18",
-    adaTezgahMtul: "",
-    adaTezgahDakika: "30",
-
-    ozelIscilik1Mtul: "",
-    ozelIscilik1Dakika: "",
-    ozelIscilik2Mtul: "",
-    ozelIscilik2Dakika: "",
-    ozelIscilik3Mtul: "",
-    ozelIscilik3Dakika: "",
-
-    tezgahMakineId: "",
-    tezgahArasiMakineId: "",
-    adaMakineId: "",
-    stresAlmaMakineId: "",
-    fasonEbatlamaMakineId: "",
-
-    kesim45Mtul: "",
-    kesim45Dakika: "4",
-    kesim45MakineId: "",
-
-    pahlamaMtul: "",
-    pahlamaDakika: "1",
-    pahlamaMakineId: "",
-
-    yapistirmaMtul: "",
-    yapistirmaDakika: "8",
-    yapistirmaMakineId: "",
-
-    notlar: "",
-  });
-
-
+  // Layout override
   useEffect(() => {
-    const resetScroll = () => {
-      window.scrollTo(0, 0);
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-      document.querySelectorAll('[class*="overflow-y-auto"], main, aside').forEach((el: any) => {
-        try { el.scrollTop = 0; } catch {}
-      });
-    };
-
-    resetScroll();
-    const t = setTimeout(resetScroll, 150);
-    return () => clearTimeout(t);
+    const main  = document.getElementById("dashboard-main");
+    const inner = document.getElementById("dashboard-inner");
+    const ms = main?.getAttribute("style")  || "";
+    const is = inner?.getAttribute("style") || "";
+    if (main)  { main.style.overflow = "hidden"; main.style.height = "100dvh"; main.style.minHeight = "unset"; main.style.paddingBottom = "0"; }
+    if (inner) { inner.style.overflow = "hidden"; inner.style.height = "100dvh"; inner.style.minHeight = "unset"; }
+    return () => { if (main) main.setAttribute("style", ms); if (inner) inner.setAttribute("style", is); };
   }, []);
 
+  // Taslak yükle
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "auto" });
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("fresh") === "1") { localStorage.removeItem(TASLAK_KEY); return; }
+      const ham = localStorage.getItem(TASLAK_KEY);
+      if (ham) {
+        const t = JSON.parse(ham);
+        if (t?.musteriAdi || t?.urunAdi) setForm((p) => ({ ...p, ...t }));
+      }
+    } catch {}
+  }, []);
 
-    fetch("/api/musteriler-lite")
-      .then((r) => r.json())
-      .then((v) => setMusteriler(v.musteriler || []));
+  // Taslak kaydet (debounce)
+  useEffect(() => {
+    clearTimeout(taslakRef.current);
+    taslakRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(TASLAK_KEY, JSON.stringify(form));
+        setTaslakKaydedildi(true);
+        setTimeout(() => setTaslakKaydedildi(false), 1200);
+      } catch {}
+    }, 1000);
+    return () => clearTimeout(taslakRef.current);
+  }, [form]);
 
-    fetch("/api/makineler-lite")
-      .then((r) => r.json())
-      .then((v) => {
-        const liste = v.makineler || [];
-        setMakineler(liste);
+  // Adım scroll
+  useEffect(() => { mainRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }, [aktifAdim]);
 
-        if (liste.length > 0) {
-          setForm((p) => ({
-            ...p,
-            tezgahMakineId: p.tezgahMakineId || liste[0].id,
-            tezgahArasiMakineId: p.tezgahArasiMakineId || liste[0].id,
-            adaMakineId: p.adaMakineId || liste[0].id,
-            stresAlmaMakineId: p.stresAlmaMakineId || liste[0].id,
-            fasonEbatlamaMakineId: p.fasonEbatlamaMakineId || liste[0].id,
-            kesim45MakineId: p.kesim45MakineId || liste[0].id,
-            pahlamaMakineId: p.pahlamaMakineId || liste[0].id,
-            yapistirmaMakineId: p.yapistirmaMakineId || liste[0].id,
-          }));
+  // API
+  useEffect(() => {
+    fetch("/api/musteriler-lite").then((r) => r.json()).then((v) => setMusteriler(v.musteriler || []));
+    fetch("/api/makineler-lite").then((r) => r.json()).then((v) => {
+      const liste = v.makineler || [];
+      setMakineler(liste);
+      if (liste.length > 0) {
+        setForm((p) => ({
+          ...p,
+          tezgahMakineId:    p.tezgahMakineId    || liste[0].id,
+          pahlamaMakineId:   p.pahlamaMakineId   || liste[0].id,
+          kesim45MakineId:   p.kesim45MakineId   || liste[0].id,
+        }));
+      }
+    });
+  }, []);
+
+  const setAlan = useCallback((key: keyof FormState, val: any) => {
+    setForm((p) => ({ ...p, [key]: val }));
+  }, []);
+
+  // Parça adını API'nin anlayacağı parcaTuru'na normalize et
+  function normalizeParcaTuru(ad: string): string {
+    const s = ad.toLocaleLowerCase("tr-TR")
+      .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g")
+      .replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c").trim();
+    if (s.includes("on alin") || s.includes("ön alın") || s.includes("on alin")) return "ön alın";
+    if (s.includes("tezgah arasi") || s.includes("tezgah arası")) return "tezgah arası";
+    if (s.includes("ada tezgah")) return "ada tezgah";
+    if (s.includes("ada ayak")) return "ada ayak";
+    if (s.includes("tezgah")) return "tezgah";
+    if (s.includes("panel")) return "tezgah arası";
+    if (s.includes("supurgelik") || s.includes("süpürgelik")) return "süpürgelik";
+    if (s.includes("davlumbaz")) return "davlumbaz";
+    return "tezgah"; // default
+  }
+
+  // Planlayıcı açmadan direkt AI layout API'ye hesaplat
+  async function plakaHesapla() {
+    const plakaEn  = n(form.plakaEn)  || 160;
+    const plakaBoy = n(form.plakaBoy) || 320;
+    if (!plakaEn || !plakaBoy) { alert("Önce plaka ölçüsü girin (En/Boy cm)."); return; }
+
+    // Her ünite (adet) kendi damar setini oluşturur — ön alın + tezgah birlikte
+    // Önce her parçanın max adetini bul
+    const maxAdet = form.parcalar.reduce((acc, p) => Math.max(acc, n(p.adet) || 1), 1);
+    const pieces: any[] = [];
+    let id = 1;
+
+    for (let unite = 0; unite < maxAdet; unite++) {
+      const tipAdi = `Unite-${unite + 1}`;
+      // Önce ön alınları ekle (damar sırasına göre)
+      form.parcalar.forEach((p) => {
+        const en = n(p.en), boy = n(p.boy), adet = Math.max(1, n(p.adet) || 1);
+        if (en <= 0 || boy <= 0 || unite >= adet) return;
+        if (p.onAlin) {
+          const oaEn = n(form.onAlinEnOverride?.["toplam"]) || 4;
+          pieces.push({ id: id++, label: `${p.ad} Ön Alın #${unite+1}`, parcaTuru: "ön alın", tipAdi, genislik: boy, yukseklik: oaEn });
         }
       });
-  }, []);
-
-  function setAlan(key: string, value: string) {
-    setForm((p) => ({ ...p, [key]: value }));
-  }
-
-  function musteriSec(m: any) {
-    setForm((p) => ({
-      ...p,
-      musteriId: m.id,
-      musteriAdi: m.ad,
-    }));
-    setMusteriListeAcik(false);
-  }
-
-  function makineMaliyet(id: string) {
-  const m = makineler.find((x) => x.id === id);
-  if (!m) return 0;
-
-  const val =
-    m.dakikalikMaliyet ??
-    m.dkMaliyet ??
-    m.dakikaMaliyet ??
-    m.hesaplananDakikaMaliyeti ??
-    m.minuteCost ??
-    m.costPerMinute ??
-    0;
-
-  return Number(val) || 0;
-}
-
-  function aiAktar(sonuc: AIPlakaAktarSonucu) {
-    setForm((p) => ({
-      ...p,
-      manuelPlakaSayisi: String(sonuc.toplamPlaka || ""),
-      plakaFiyatiEuro: sonuc.ortalamaPlakaFiyati ? String(sonuc.ortalamaPlakaFiyati) : p.plakaFiyatiEuro,
-      plakaGenislikCm: sonuc.plakaGenislik ? String(sonuc.plakaGenislik) : p.plakaGenislikCm,
-      plakaUzunlukCm: sonuc.plakaYukseklik ? String(sonuc.plakaYukseklik) : p.plakaUzunlukCm,
-
-      metrajMtul: sonuc.tezgahMtul ? String(sonuc.tezgahMtul) : p.metrajMtul,
-      tezgahArasiMtul: sonuc.tezgahArasiMtul ? String(sonuc.tezgahArasiMtul) : p.tezgahArasiMtul,
-      adaTezgahMtul: sonuc.adaTezgahMtul ? String(sonuc.adaTezgahMtul) : p.adaTezgahMtul,
-
-      ozelIscilik1Mtul: sonuc.stresAlmaMtul ? String(sonuc.stresAlmaMtul) : p.ozelIscilik1Mtul,
-      ozelIscilik1Dakika: sonuc.stresAlmaDakika ? String(sonuc.stresAlmaDakika) : p.ozelIscilik1Dakika,
-      ozelIscilik2Mtul: sonuc.fasonEbatlamaMtul ? String(sonuc.fasonEbatlamaMtul) : p.ozelIscilik2Mtul,
-      ozelIscilik2Dakika: sonuc.fasonEbatlamaDakika ? String(sonuc.fasonEbatlamaDakika) : p.ozelIscilik2Dakika,
-    }));
-
-    setPlakaAcik(false);
-    setAktifBolum("maliyet");
-  }
-
-  const hesap = useMemo(() => {
-    const toplamMtul =
-      n(form.metrajMtul) +
-      n(form.tezgahArasiMtul) +
-      n(form.adaTezgahMtul) +
-      n(form.ozelIscilik1Mtul) +
-      n(form.ozelIscilik2Mtul) +
-      n(form.ozelIscilik3Mtul);
-
-    const tezgahDakikaToplam = n(form.metrajMtul) * n(form.birMtulDakika);
-    const tezgahArasiDakikaToplam = n(form.tezgahArasiMtul) * n(form.tezgahArasiDakika);
-    const adaDakikaToplam = n(form.adaTezgahMtul) * n(form.adaTezgahDakika);
-    const stresAlmaDakikaToplam = n(form.ozelIscilik1Mtul) * n(form.ozelIscilik1Dakika);
-    const fasonEbatlamaDakikaToplam = n(form.ozelIscilik2Mtul) * n(form.ozelIscilik2Dakika);
-    const kesim45DakikaToplam = n(form.kesim45Mtul) * n(form.kesim45Dakika);
-    const pahlamaDakikaToplam = n(form.pahlamaMtul) * n(form.pahlamaDakika);
-    const yapistirmaDakikaToplam = n(form.yapistirmaMtul) * n(form.yapistirmaDakika);
-
-    const toplamDakika =
-      tezgahDakikaToplam +
-      tezgahArasiDakikaToplam +
-      adaDakikaToplam +
-      stresAlmaDakikaToplam +
-      fasonEbatlamaDakikaToplam +
-      kesim45DakikaToplam +
-      pahlamaDakikaToplam +
-      yapistirmaDakikaToplam;
-
-    const plakaSayisi =
-      n(form.manuelPlakaSayisi) > 0
-        ? n(form.manuelPlakaSayisi)
-        : n(form.plakadanAlinanMtul) > 0
-        ? Math.ceil(toplamMtul / n(form.plakadanAlinanMtul))
-        : 0;
-
-    const malzeme = plakaSayisi * n(form.plakaFiyatiEuro) * n(form.kullanilanKur);
-
-    const tezgahMaliyet = tezgahDakikaToplam * (makineMaliyet(form.tezgahMakineId) || 106.16);
-    const tezgahArasiMaliyet = tezgahArasiDakikaToplam * (makineMaliyet(form.tezgahArasiMakineId) || 106.16);
-    const adaMaliyet = adaDakikaToplam * (makineMaliyet(form.adaMakineId) || 106.16);
-    const stresAlmaMaliyet = stresAlmaDakikaToplam * (makineMaliyet(form.stresAlmaMakineId) || 106.16);
-    const fasonEbatlamaMaliyet = fasonEbatlamaDakikaToplam * (makineMaliyet(form.fasonEbatlamaMakineId) || 106.16);
-    const kesim45Maliyet = kesim45DakikaToplam * (makineMaliyet(form.kesim45MakineId) || 106.16);
-    const pahlamaMaliyet = pahlamaDakikaToplam * (makineMaliyet(form.pahlamaMakineId) || 106.16);
-    const yapistirmaMaliyet = yapistirmaDakikaToplam * (makineMaliyet(form.yapistirmaMakineId) || 106.16);
-
-    const iscilik =
-      tezgahMaliyet +
-      tezgahArasiMaliyet +
-      adaMaliyet +
-      stresAlmaMaliyet +
-      fasonEbatlamaMaliyet +
-      kesim45Maliyet +
-      pahlamaMaliyet +
-      yapistirmaMaliyet;
-    const maliyet = malzeme + iscilik;
-    const satis = maliyet * (1 + n(form.karYuzdesi) / 100);
-    const kar = satis - maliyet;
-
-    return {
-      toplamMtul,
-      tezgahMaliyet,
-      tezgahArasiMaliyet,
-      adaMaliyet,
-      stresAlmaMaliyet,
-      fasonEbatlamaMaliyet,
-      kesim45DakikaToplam,
-      pahlamaDakikaToplam,
-      toplamDakika,
-      plakaSayisi,
-      malzeme,
-      iscilik,
-      maliyet,
-      satis,
-      kar,
-      kesim45Maliyet,
-      pahlamaMaliyet,
-      yapistirmaMaliyet,
-    };
-  }, [form, makineler]);
-
-  function fiyatAnaliziSatirlari() {
-    const satis = hesap.satis || 0
-    const tezgah = n(form.metrajMtul)
-    const arasi = n(form.tezgahArasiMtul)
-    const ada = n(form.adaTezgahMtul)
-
-    const weighted = tezgah * 1 + arasi * 0.75 + ada * 1.5
-    const baz = weighted > 0 ? satis / weighted : 0
-
-    return [
-      tezgah > 0 ? { ad: "Tezgah", mtul: tezgah, katsayi: 1, birim: baz, toplam: tezgah * baz } : null,
-      arasi > 0 ? { ad: "Tezgah Arası", mtul: arasi, katsayi: 0.75, birim: baz * 0.75, toplam: arasi * baz * 0.75 } : null,
-      ada > 0 ? { ad: "Ada Tezgah", mtul: ada, katsayi: 1.5, birim: baz * 1.5, toplam: ada * baz * 1.5 } : null,
-    ].filter(Boolean) as any[]
-  }
-
-  function fiyatKarari() {
-    const kar = n(form.karYuzdesi)
-    if (kar >= 60) return { baslik: "Premium fiyat", metin: "Kâr güçlü. Değer anlatımı ve teslim güveniyle savunulmalı.", renk: "text-emerald-300" }
-    if (kar >= 35) return { baslik: "Sağlıklı fiyat", metin: "Fiyat dengeli. Pazarlık payı kontrollü bırakılabilir.", renk: "text-blue-300" }
-    if (kar >= 20) return { baslik: "Dikkatli fiyat", metin: "Marj daralıyor. Ek işçilik ve fire riski mutlaka korunmalı.", renk: "text-amber-300" }
-    return { baslik: "Riskli fiyat", metin: "Bu fiyat hata affetmez. İndirim yapma, mümkünse fiyatı yukarı çek.", renk: "text-red-300" }
-  }
-
-  function fiyatPanelToplam() {
-    return fiyatAnaliziSatirlari().reduce((acc, r) => {
-      const birim = Number(fiyatOverride[r.ad] ?? r.birim)
-      return acc + (birim * r.mtul)
-    }, 0)
-  }
-
-  function fiyatPanelKar() {
-    return fiyatPanelToplam() - (hesap.maliyet || 0)
-  }
-
-  function fiyatPanelKarYuzde() {
-    return (hesap.maliyet || 0) > 0 ? (fiyatPanelKar() / (hesap.maliyet || 1)) * 100 : 0
-  }
-
-  async function manuelFiyatlariKaydet() {
-    if (!sonKayitIsId) {
-      alert("Önce teklif kaydedilmeli.")
-      return
+      // Sonra tezgahları ekle
+      form.parcalar.forEach((p) => {
+        const en = n(p.en), boy = n(p.boy), adet = Math.max(1, n(p.adet) || 1);
+        if (en <= 0 || boy <= 0 || unite >= adet) return;
+        const parcaTuru = normalizeParcaTuru(p.ad);
+        pieces.push({ id: id++, label: `${p.ad} #${unite+1}`, parcaTuru, tipAdi, genislik: boy, yukseklik: en });
+      });
     }
 
-    const satirlar = fiyatAnaliziSatirlari()
-    const tezgah = satirlar.find((x) => x.ad === "Tezgah")
-    const arasi = satirlar.find((x) => x.ad === "Tezgah Arası")
-    const ada = satirlar.find((x) => x.ad === "Ada Tezgah")
+    if (pieces.length === 0) { alert("Önce parça ölçülerini girin."); return; }
 
-    const payload = {
-      tezgahBirimFiyatOverride: Number(fiyatOverride["Tezgah"] ?? tezgah?.birim ?? 0),
-      tezgahArasiBirimFiyatOverride: Number(fiyatOverride["Tezgah Arası"] ?? arasi?.birim ?? 0),
-      adaBirimFiyatOverride: Number(fiyatOverride["Ada Tezgah"] ?? ada?.birim ?? 0),
-    }
-
-    const res = await fetch(`/api/isler/${sonKayitIsId}/fiyat`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-
-    const raw = await res.text()
-    let veri: any = {}
-    try { veri = raw ? JSON.parse(raw) : {} } catch { veri = { hata: raw } }
-
-    if (!res.ok) {
-      alert(veri?.hata || "Fiyat kaydedilemedi.")
-      return
-    }
-
-    alert("Manuel fiyatlar kaydedildi. Online teklif ve PDF güncellendi.")
-  }
-
-  function onlineTeklifLinki() {
-    if (!sonKayitTeklifNo) return ""
-    return `${window.location.origin}/teklif/${sonKayitTeklifNo}`
-  }
-
-  function whatsappTeklifGonder() {
-    const link = onlineTeklifLinki()
-    if (!link) {
-      alert("Teklif linki henüz oluşmadı. Kaydetme tamamlandıktan sonra tekrar dene.")
-      return
-    }
-    const mesaj = encodeURIComponent(`Merhaba, teklifinizi aşağıdaki linkten inceleyip onaylayabilirsiniz:\n\n${link}`)
-    window.open(`https://wa.me/?text=${mesaj}`, "_blank")
-  }
-
-  async function teklifLinkiKopyala() {
-    const link = onlineTeklifLinki()
-    if (!link) return
-    await navigator.clipboard.writeText(link)
-    alert("Teklif linki kopyalandı.")
-  }
-
-  function pdfTeklifAc() {
-    if (!sonKayitIsId) {
-      alert("PDF için iş kaydı henüz oluşmadı. Kaydetme tamamlandıktan sonra tekrar dene.")
-      return
-    }
-    window.open(`/api/isler/${sonKayitIsId}/pdf`, "_blank")
-  }
-
-  async function kaydet() {
-    console.log("KAYDET_CLICK_V3");
-    if (!form.musteriAdi.trim()) return alert("Müşteri adı gerekli.");
-    if (!form.urunAdi.trim()) return alert("Ürün / taş adı gerekli.");
-
-    const operasyonlar = [
-      {
-        tip: "tezgah",
-        mtul: n(form.metrajMtul),
-        dakika: n(form.birMtulDakika),
-        makineId: form.tezgahMakineId,
-      },
-      {
-        tip: "tezgah_arasi",
-        mtul: n(form.tezgahArasiMtul),
-        dakika: n(form.tezgahArasiDakika),
-        makineId: form.tezgahArasiMakineId,
-      },
-      {
-        tip: "ada",
-        mtul: n(form.adaTezgahMtul),
-        dakika: n(form.adaTezgahDakika),
-        makineId: form.adaMakineId,
-      },
-      {
-        tip: "stres_alma",
-        mtul: n(form.ozelIscilik1Mtul),
-        dakika: n(form.ozelIscilik1Dakika),
-        makineId: form.stresAlmaMakineId,
-      },
-      {
-        tip: "fason_ebatlama",
-        mtul: n(form.ozelIscilik2Mtul),
-        dakika: n(form.ozelIscilik2Dakika),
-        makineId: form.fasonEbatlamaMakineId,
-      },
-      {
-        tip: "45_kesim",
-        mtul: n(form.kesim45Mtul),
-        dakika: n(form.kesim45Dakika),
-        makineId: form.kesim45MakineId,
-      },
-      {
-        tip: "pahlama",
-        mtul: n(form.pahlamaMtul),
-        dakika: n(form.pahlamaDakika),
-        makineId: form.pahlamaMakineId,
-      },
-      {
-        tip: "yapistirma_toplama",
-        mtul: n(form.yapistirmaMtul),
-        dakika: n(form.yapistirmaDakika),
-        makineId: form.yapistirmaMakineId,
-      },
-    ]
-      .filter((x) => x.mtul > 0 && x.dakika > 0)
-      .map((x) => ({
-        operasyonTipi: x.tip,
-        makineId: x.makineId || null,
-        adet: 1,
-        birimDakika: x.dakika,
-        toplamDakika: x.mtul * x.dakika,
-      }));
-
-    setKaydediliyor(true);
-
+    setPlakaHesaplaniyor(true);
     try {
-      const res = await fetch("/api/isler", {
+      const res = await fetch("/api/ai-layout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          musteriId: form.musteriId || null,
-          operasyonlar,
-        }),
+        body: JSON.stringify({ plaka: { genislik: plakaEn, yukseklik: plakaBoy }, pieces }),
       });
+      const json = await res.json();
+      if (!res.ok || !json.ok) { alert(json?.error || "Hesaplama hatası."); return; }
+      setAlan("plakaLayoutJson", { plakaSayisi: json.plakaSayisi, slabs: json.slabs, fireOrani: json.fireOrani });
+      setPlakaSlabs(json.slabs || []);
+      setPlakaPlakaSayisi(json.plakaSayisi || 0);
+      setPlakaFireOrani(json.fireOrani || 0);
+    } catch(e: any) {
+      alert(e?.message || "Hata.");
+    } finally {
+      setPlakaHesaplaniyor(false);
+    }
+  }
 
-      // KRİTİK: response body sadece 1 kez okunur.
+  // Müşteri tipine göre carpan öner
+  function musteriSecVeCarpanOner(m: any) {
+    const tipMap: Record<string, string> = { bayi: "Bayi", mimar: "Mimar", son_kullanici: "Ev sahibi", muteahhit: "Müteahhit" };
+    const ad = [m.firmaAdi, m.ad, m.soyad].filter(Boolean).join(" ") || m.ad || "";
+    const tip = m.musteriTipi ? (tipMap[m.musteriTipi] || "Ev sahibi") : "Ev sahibi";
+    const carpan = MUSTERI_TIPLERI.find((t) => t.id === tip)?.carpan || "3.0";
+    setForm((p) => ({ ...p, musteriId: m.id, musteriAdi: ad, musteriTipi: tip, carpan }));
+    setMusteriArama(""); setMusteriListeAcik(false);
+  }
+
+  function mutfakTipiDegistir(tip: MutfakTipi) {
+    setForm((p) => ({ ...p, mutfakTipi: tip, parcalar: defaultParcalar(tip) }));
+  }
+
+  function parcaGuncelle(id: string, field: keyof Parca, val: any) {
+    setForm((p) => ({ ...p, parcalar: p.parcalar.map((x) => x.id === id ? { ...x, [field]: val } : x) }));
+  }
+  function parcaEkle() {
+    setForm((p) => ({ ...p, parcalar: [...p.parcalar, { id: uid(), ad: `Parça ${p.parcalar.length + 1}`, en: "", boy: "", adet: "1", onAlin: false, tip: "ozel" as const }] }));
+  }
+
+  // Parça listesinden toplam işçilik mtülünü hesapla
+  function toplamIscilikMtul(parcalar: Parca[]): number {
+    return parcalar.reduce((acc, p) => {
+      const boy = n(p.boy), adet = n(p.adet) || 1;
+      if (boy <= 0) return acc;
+      const mtul = (boy / 100) * adet;
+      return acc + mtul + (p.onAlin ? mtul : 0);
+    }, 0);
+  }
+
+  // Parça güncellenince pahlama ve 45° kesimi otomatik güncelle
+  function parcaGuncelleVeHesapla(id: string, field: keyof Parca, val: any) {
+    setForm((prev) => {
+      const yeniParcalar = prev.parcalar.map((x) => x.id === id ? { ...x, [field]: val } : x);
+      const toplamMtul = toplamIscilikMtul(yeniParcalar);
+      return {
+        ...prev,
+        parcalar: yeniParcalar,
+        pahlamaMtul: toplamMtul > 0 ? toplamMtul.toFixed(2) : prev.pahlamaMtul,
+        kesim45Mtul: toplamMtul > 0 ? toplamMtul.toFixed(2) : prev.kesim45Mtul,
+      };
+    });
+  }
+  function parcaSil(id: string) {
+    setForm((p) => ({ ...p, parcalar: p.parcalar.filter((x) => x.id !== id) }));
+  }
+
+  const hesap = useMemo(() => hesapla(form, makineler), [form, makineler]);
+
+  // Kaydet
+  async function kaydet() {
+    if (!form.musteriAdi.trim()) { alert("Müşteri adı gerekli."); return; }
+    setKaydediliyor(true);
+    try {
+      // Eski API formatına dönüştür
+      const operasyonlar = [
+        { tip: "tezgah", mtul: hesap.toplamMtul, dakika: n(form.tezgahDakika), makineId: form.tezgahMakineId },
+        { tip: "pahlama", mtul: n(form.pahlamaMtul), dakika: n(form.pahlamaDakika), makineId: form.pahlamaMakineId },
+        { tip: "45_kesim", mtul: n(form.kesim45Mtul), dakika: n(form.kesim45Dakika), makineId: form.kesim45MakineId },
+      ].filter((x) => x.mtul > 0 && x.dakika > 0).map((x) => ({
+        operasyonTipi: x.tip, makineId: x.makineId || null,
+        adet: 1, birimDakika: x.dakika, toplamDakika: x.mtul * x.dakika,
+      }));
+
+      const body = {
+        musteriId: form.musteriId || null,
+        musteriAdi: form.musteriAdi,
+        urunAdi: form.urunAdi || form.mutfakTipi,
+        malzemeTipi: "Porselen",
+        musteriTipi: form.musteriTipi,
+        isTarihi: form.isTarihi,
+        plakaFiyatiEuro: n(form.plakaFiyatiEuro) || (n(form.plakaFiyati) / n(form.kullanilanKur)) || 0,
+        kullanilanKur: n(form.kullanilanKur),
+        karYuzdesi: String(hesap.karYuzde.toFixed(1)),
+        metrajMtul: String(hesap.toplamMtul.toFixed(2)),
+        birMtulDakika: form.tezgahDakika,
+        tezgahArasiMtul: "0", tezgahArasiDakika: "0",
+        adaTezgahMtul: "0", adaTezgahDakika: "0",
+        plakaGenislikCm: form.plakaEn,
+        plakaUzunlukCm: form.plakaBoy,
+        plakadanAlinanMtul: "5",
+        manuelPlakaSayisi: String(hesap.plakaSayisi),
+        operasyonlar,
+        plakaLayoutJson: form.plakaLayoutJson || null,
+        plakaImageUrl: form.plakaImageUrl || "",
+        notlar: form.notlar,
+        tasDurumu: form.isModeli,
+        ozelIscilik1Mtul: "0", ozelIscilik1Dakika: "0",
+        ozelIscilik2Mtul: "0", ozelIscilik2Dakika: "0",
+        ozelIscilik3Mtul: "0", ozelIscilik3Dakika: "0",
+        kesim45Mtul: form.kesim45Mtul, kesim45Dakika: form.kesim45Dakika, kesim45MakineId: form.kesim45MakineId,
+        pahlamaMtul: form.pahlamaMtul, pahlamaDakika: form.pahlamaDakika, pahlamaMakineId: form.pahlamaMakineId,
+        yapistirmaMtul: "0", yapistirmaDakika: "0", yapistirmaMakineId: "",
+        tezgahMakineId: form.tezgahMakineId, tezgahArasiMakineId: "", adaMakineId: "",
+        stresAlmaMakineId: "", fasonEbatlamaMakineId: "",
+      };
+
+      const res = await fetch("/api/isler", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const raw = await res.text();
-
       let veri: any = {};
-      try {
-        veri = raw ? JSON.parse(raw) : {};
-      } catch {
-        veri = { hata: raw || "Sunucudan geçersiz cevap geldi." };
-      }
-
-      if (!res.ok) {
-        alert(veri?.hata || "İş kaydedilemedi.");
-        return;
-      }
-
-      const teklifNo =
-        veri?.teklifNo ||
-        veri?.is?.teklifNo ||
-        veri?.data?.teklifNo ||
-        veri?.kayit?.teklifNo ||
-        "";
-      const isId =
-        veri?.id ||
-        veri?.isId ||
-        veri?.is?.id ||
-        veri?.data?.id ||
-        veri?.kayit?.id ||
-        "";
-
-      setSonKayitTeklifNo(String(teklifNo || ''));
-      setSonKayitIsId(String(isId));
-      setSonKayitModalAcik(true);
-      setSonKayitModalAcik(true);
-      console.log("KAYDET_SUCCESS_V3", { isId, teklifNo });
-      setFiyatPanelAcik(false);
-      setTimeout(() => {
-        window.scrollTo(0, 0);
-        document.querySelectorAll('[class*="overflow-y-auto"], main, aside').forEach((el: any) => {
-          try { el.scrollTop = 0; } catch {}
-        });
-      }, 100);
-      setSonKayitModalAcik(true);
+      try { veri = raw ? JSON.parse(raw) : {}; } catch { veri = { hata: raw }; }
+      if (!res.ok) { alert(veri?.hata || "İş kaydedilemedi."); return; }
+      setSonTeklifNo(String(veri?.teklifNo || veri?.is?.teklifNo || ""));
+      setSonIsId(String(veri?.id || veri?.isId || veri?.is?.id || ""));
+      setYeniMusteri(veri?.yeniMusteriOlusturuldu === true);
+      try { localStorage.removeItem(TASLAK_KEY); } catch {}
+      setBasariEkrani(true);
     } catch (e: any) {
-      alert(e?.message || "Kaydetme sırasında hata oluştu.");
+      alert(e?.message || "Hata oluştu.");
     } finally {
       setKaydediliyor(false);
     }
   }
 
-  const menu = [
-    ["musteri", "Müşteri"],
-    ["malzeme", "Taş & Plaka"],
-    ["maliyet", "Maliyet"],
-    ["not", "Notlar"],
-  ] as const;
+  function whatsappGonder() {
+    const link = sonTeklifNo ? `${window.location.origin}/teklif/${sonTeklifNo}` : "";
+    if (!link) { alert("Önce kaydet."); return; }
+    window.open(`https://wa.me/?text=${encodeURIComponent(`Merhaba, teklifinizi inceleyip onaylayabilirsiniz:\n\n${link}`)}`, "_blank");
+  }
+  function pdfAc() { if (sonIsId) window.open(`/api/isler/${sonIsId}/pdf`, "_blank"); }
+  function tahsilatAc() { if (sonIsId) router.push(`/dashboard/tahsilatlar?isId=${sonIsId}`); else router.push('/dashboard/tahsilatlar'); }
+  async function linkKopyala() {
+    const link = sonTeklifNo ? `${window.location.origin}/teklif/${sonTeklifNo}` : "";
+    if (link) { await navigator.clipboard.writeText(link); alert("Kopyalandı."); }
+  }
 
-  const filtreliMusteriler = musteriler.filter((m) =>
-    String(m.ad || "").toLocaleLowerCase("tr-TR").includes(form.musteriAdi.toLocaleLowerCase("tr-TR"))
-  );
+  const adimlar: { id: Adim; label: string; kisa: string }[] = [
+    { id: "musteri",  label: "Müşteri & İş",   kisa: "Müşteri" },
+    { id: "olculer",  label: "Ölçüler",         kisa: "Ölçüler" },
+    { id: "fiyat",    label: "Fiyat & Kaydet",  kisa: "Fiyat"   },
+  ];
+  const aktifIdx   = adimlar.findIndex((a) => a.id === aktifAdim);
+  const onceki     = aktifIdx > 0 ? adimlar[aktifIdx - 1].id : null;
+  const sonraki    = aktifIdx < adimlar.length - 1 ? adimlar[aktifIdx + 1].id : null;
+  const filtreli   = musteriler.filter((m) => String(m.ad || "").toLocaleLowerCase("tr-TR").includes(musteriArama.toLocaleLowerCase("tr-TR")));
 
-  const aktifIndex = Math.max(0, menu.findIndex(([key]) => key === aktifBolum));
-  const oncekiBolum = aktifIndex > 0 ? menu[aktifIndex - 1][0] : null;
-  const sonrakiBolum = aktifIndex < menu.length - 1 ? menu[aktifIndex + 1][0] : null;
+  // ─── AI MODU ──────────────────────────────────────────────────────────────
+  if (aiMode) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#030712", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+        <div style={{ width: "100%", maxWidth: "680px" }}>
+          <div style={{ textAlign: "center", marginBottom: "28px" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "100px", padding: "6px 18px", marginBottom: "16px" }}>
+              <span>✨</span><span style={{ fontSize: "12px", color: "#6ee7b7", fontWeight: 700, letterSpacing: "0.1em" }}>AI MODU</span>
+            </div>
+            <h1 style={{ fontSize: "28px", fontWeight: 900, margin: "0 0 8px" }}>Yeni İşi Anlat</h1>
+            <p style={{ color: "#6b7280", fontSize: "14px" }}>Ölçüleri yaz veya konuş, AI formu doldursun</p>
+          </div>
+          <AiYeniIsPanel onApply={() => setAiMode(false)} onManual={() => setAiMode(false)} />
+          <button onClick={() => setAiMode(false)} style={{ marginTop: "12px", width: "100%", padding: "13px", background: "transparent", border: "1px solid #374151", borderRadius: "14px", color: "#9ca3af", fontSize: "14px", cursor: "pointer" }}>
+            Manuel giriş →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
+  // ─── BAŞARI EKRANI ─────────────────────────────────────────────────────────
+  if (basariEkrani) {
+    const karar = hesap.karYuzde >= 60 ? { renk: "#6ee7b7", baslik: "Premium fiyat 💪" }
+      : hesap.karYuzde >= 35 ? { renk: "#93c5fd", baslik: "Sağlıklı fiyat ✓" }
+      : hesap.karYuzde >= 20 ? { renk: "#fcd34d", baslik: "Dikkatli fiyat ⚠️" }
+      : { renk: "#f87171", baslik: "Riskli fiyat 🔴" };
+
+    return (
+      <div style={{ minHeight: "100vh", background: "#030712", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+        <div style={{ width: "100%", maxWidth: "400px" }}>
+          <div style={{ textAlign: "center", marginBottom: "28px" }}>
+            <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "rgba(16,185,129,0.15)", border: "2px solid #10b981", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", margin: "0 auto 14px" }}>✓</div>
+            <p style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.25em", color: "#10b981", textTransform: "uppercase", marginBottom: "6px" }}>İş Kaydedildi</p>
+            <h1 style={{ fontSize: "26px", fontWeight: 900, margin: "0 0 6px" }}>Teklif Hazır!</h1>
+            {sonTeklifNo && <p style={{ color: "#6b7280", fontSize: "13px" }}>#{sonTeklifNo}</p>}
+            {yeniMusteri && <p style={{ marginTop: "8px", fontSize: "13px", color: "#93c5fd" }}>👤 {form.musteriAdi} müşteri listesine eklendi</p>}
+          </div>
+
+          {/* Ana rakamlar */}
+          <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: "20px", padding: "20px", textAlign: "center", marginBottom: "12px" }}>
+            <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Teklif Tutarı</p>
+            <p style={{ fontSize: "38px", fontWeight: 900, color: "#10b981" }}>{tl(hesap.satisFiyati)}</p>
+            <p style={{ fontSize: "13px", color: karar.renk, marginTop: "4px", fontWeight: 600 }}>{karar.baslik} · %{hesap.karYuzde.toFixed(0)} kâr</p>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "20px" }}>
+            {[
+              { l: "Kâr",       v: tl(hesap.kar),                         c: "#fbbf24" },
+              { l: "Birim",     v: tl(hesap.birimFiyat) + "/mtül",        c: "#f9fafb" },
+              { l: "Plaka",     v: hesap.plakaSayisi + " adet",           c: "#f9fafb" },
+              { l: "Maliyet",   v: tl(hesap.toplamMaliyet),               c: "#f9fafb" },
+              { l: "Mtül",      v: hesap.toplamMtul.toFixed(2) + " mtül", c: "#f9fafb" },
+              { l: "Süre",      v: hesap.toplamDakika.toFixed(0) + " dk", c: "#f9fafb" },
+            ].map((k) => (
+              <div key={k.l} style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: "14px", padding: "12px 10px", textAlign: "center" }}>
+                <p style={{ fontSize: "10px", color: "#6b7280", marginBottom: "4px" }}>{k.l}</p>
+                <p style={{ fontSize: "13px", fontWeight: 800, color: k.c }}>{k.v}</p>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <button onClick={whatsappGonder} style={{ width: "100%", padding: "15px", background: "#16a34a", border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>📲 WhatsApp ile Gönder</button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+              <button onClick={pdfAc}       style={{ padding: "13px", background: "#1d4ed8", border: "none", borderRadius: "14px", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>
+              <button onClick={tahsilatAc}  style={{ padding: "13px", background: "#7c3aed", border: "none", borderRadius: "14px", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>💳 Tahsilat</button>
+            </div>
+            <button onClick={linkKopyala}   style={{ padding: "13px", background: "#1f2937", border: "1px solid #374151", borderRadius: "14px", color: "#d1d5db", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>🔗 Teklif Linkini Kopyala</button>
+            <button onClick={() => router.push("/dashboard/isler")} style={{ padding: "13px", background: "transparent", border: "1px solid #374151", borderRadius: "14px", color: "#9ca3af", fontSize: "14px", cursor: "pointer" }}>İşlere Dön</button>
+            <button onClick={() => { setBasariEkrani(false); setAktifAdim("musteri"); setForm(defaultForm()); }} style={{ padding: "13px", background: "transparent", border: "1px dashed #374151", borderRadius: "14px", color: "#6b7280", fontSize: "14px", cursor: "pointer" }}>+ Yeni İş</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── WIZARD ────────────────────────────────────────────────────────────────
   return (
-<div className="min-h-[100dvh] bg-[#030712] text-white overflow-hidden flex">
-      <style jsx global>{`
-        .plaka-v2-fix input,
-        .plaka-v2-fix select,
-        .plaka-v2-fix textarea {
-          color: #0f172a !important;
-          background: #ffffff !important;
-          opacity: 1 !important;
-          -webkit-text-fill-color: #0f172a !important;
+    <div style={{ height: "100dvh", background: "#030712", color: "#fff", display: "flex", overflow: "hidden" }}>
+      <style>{`
+        .plaka-v2-fix input,.plaka-v2-fix select,.plaka-v2-fix textarea{color:#0f172a!important;background:#ffffff!important;-webkit-text-fill-color:#0f172a!important;}
+        .plaka-v2-fix option{color:#0f172a!important;background:#ffffff!important;}
+        .yi-inp{width:100%;box-sizing:border-box;background:#111827;border:1.5px solid #1f2937;border-radius:12px;padding:10px 13px;color:#f9fafb;font-size:15px;outline:none;transition:border-color .15s;-webkit-appearance:none;}
+        .yi-inp:focus{border-color:#10b981;}
+        .yi-inp::placeholder{color:#4b5563;}
+        .yi-sel{width:100%;box-sizing:border-box;background:#111827;border:1.5px solid #1f2937;border-radius:12px;padding:10px 13px;color:#f9fafb;font-size:14px;outline:none;}
+        .yi-sel:focus{border-color:#10b981;}
+        .yi-label{font-size:11px;color:#6b7280;margin-bottom:5px;display:block;}
+        .yi-kart{background:#0a0f1a;border:1px solid #1f2937;border-radius:20px;padding:18px;}
+        .ikon-grid{display:grid;gap:8px;}
+        .ikon-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px 6px;border-radius:14px;border:1.5px solid #1f2937;background:#111827;color:#9ca3af;cursor:pointer;transition:all .15s;text-align:center;font-size:11px;line-height:1.3;}
+        .ikon-btn:hover{border-color:#374151;background:#1f2937;color:#d1d5db;}
+        .ikon-btn.aktif{border-color:#10b981;background:rgba(16,185,129,0.1);color:#10b981;}
+        .parca-row{display:grid;gap:6px;align-items:end;padding:10px;border-radius:12px;background:#0d1117;border:1px solid #1f2937;margin-bottom:6px;}
+        @media(max-width:640px){
+          .desktop-sidebar{display:none!important;}
+          .parca-row{grid-template-columns:1fr 1fr!important;}
+          .parca-row .parca-ad-col{grid-column:1/-1;}
         }
-
-        .plaka-v2-fix option {
-          color: #0f172a !important;
-          background: #ffffff !important;
-        }
-
-        @media (max-width: 767px) {
-          .yeni-is-v3-root > aside {
-            display: none !important;
-          }
-
-          .yeni-is-v3-root > main {
-            width: 100% !important;
-          }
-
-          .plaka-v2-fix {
-            width: 100vw !important;
-            max-width: 100vw !important;
-            overflow-x: hidden !important;
-          }
-
-          .plaka-v2-fix > * {
-            max-width: 100% !important;
-          }
-
-          .plaka-v2-fix .grid,
-          .plaka-v2-fix [class*="grid-cols-"] {
-            grid-template-columns: minmax(0, 1fr) !important;
-          }
-
-          .plaka-v2-fix input,
-          .plaka-v2-fix select,
-          .plaka-v2-fix textarea {
-            width: 100% !important;
-            min-width: 0 !important;
-            min-height: 48px !important;
-            font-size: 16px !important;
-          }
-
-          .plaka-v2-fix h1,
-          .plaka-v2-fix h2,
-          .plaka-v2-fix h3,
-          .plaka-v2-fix p,
-          .plaka-v2-fix span,
-          .plaka-v2-fix label {
-            word-break: normal !important;
-            overflow-wrap: normal !important;
-            white-space: normal !important;
-          }
-
-          .plaka-v2-fix [class*="tracking"] {
-            letter-spacing: 0.08em !important;
-          }
-
-          .plaka-v2-fix [class*="p-10"],
-          .plaka-v2-fix [class*="p-9"],
-          .plaka-v2-fix [class*="p-8"],
-          .plaka-v2-fix [class*="p-7"],
-          .plaka-v2-fix [class*="p-6"] {
-            padding: 16px !important;
-          }
-
-          .plaka-v2-fix [class*="gap-8"],
-          .plaka-v2-fix [class*="gap-7"],
-          .plaka-v2-fix [class*="gap-6"],
-          .plaka-v2-fix [class*="gap-5"] {
-            gap: 12px !important;
-          }
-
-          .plaka-v2-fix [class*="overflow-x-auto"] {
-            overflow-x: hidden !important;
-          }
-
-          .plaka-v2-fix img,
-          .plaka-v2-fix canvas,
-          .plaka-v2-fix svg {
-            max-width: 100% !important;
-            height: auto !important;
-          }
+        @media(min-width:641px){
+          .mobile-only{display:none!important;}
         }
       `}</style>
 
-      <aside className="hidden md:flex w-[24%] border-r border-slate-800 flex-col">
-        <div className="p-6 border-b border-slate-800">
-          <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Metrix</p>
-          <h1 className="text-2xl mt-2">Yeni İş</h1>
+      {/* Sidebar — masaüstü */}
+      <aside className="desktop-sidebar" style={{ width: "210px", borderRight: "1px solid #1f2937", display: "flex", flexDirection: "column", flexShrink: 0, background: "#030712" }}>
+        <div style={{ padding: "22px 18px", borderBottom: "1px solid #1f2937" }}>
+          <p style={{ fontSize: "10px", letterSpacing: "0.25em", color: "#4b5563", textTransform: "uppercase", marginBottom: "4px" }}>Metrix</p>
+          <h1 style={{ fontSize: "19px", fontWeight: 900 }}>Yeni İş</h1>
+          {taslakKaydedildi && <p style={{ fontSize: "10px", color: "#4b5563", marginTop: "4px" }}>Taslak ✓</p>}
         </div>
-
-        <div className="p-4 space-y-3">
-          {menu.map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setAktifBolum(key)}
-              className={`w-full text-left rounded-xl px-4 py-3 border ${
-                aktifBolum === key
-                  ? "bg-blue-600 border-blue-500 text-white"
-                  : "bg-[#0B1120] border-slate-800 text-slate-300 hover:bg-[#111827]"
-              }`}
-            >
-              {label}
-            </button>
+        <nav style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
+          {adimlar.map((a, i) => {
+            const tam = i < aktifIdx; const aktif = a.id === aktifAdim;
+            return (
+              <button key={a.id} onClick={() => setAktifAdim(a.id)} style={{ width: "100%", textAlign: "left", padding: "11px 13px", borderRadius: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", fontWeight: 600, transition: "all .15s", background: aktif ? "#10b981" : tam ? "rgba(16,185,129,0.08)" : "#0d1117", border: aktif ? "1px solid #10b981" : tam ? "1px solid rgba(16,185,129,0.25)" : "1px solid #1f2937", color: aktif ? "#fff" : tam ? "#6ee7b7" : "#9ca3af" }}>
+                <span style={{ width: "22px", height: "22px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 900, flexShrink: 0, background: aktif ? "rgba(255,255,255,0.2)" : tam ? "#10b981" : "#1f2937", color: "#fff" }}>{tam ? "✓" : i + 1}</span>
+                {a.label}
+              </button>
+            );
+          })}
+          <button onClick={() => setAiMode(true)} style={{ width: "100%", textAlign: "left", padding: "11px 13px", borderRadius: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "9px", background: "transparent", border: "1px solid rgba(16,185,129,0.2)", color: "#6ee7b7", fontSize: "13px", fontWeight: 600 }}>
+            <span>✨</span> AI Modu
+          </button>
+        </nav>
+        {/* Canlı özet */}
+        <div style={{ marginTop: "auto", padding: "14px", borderTop: "1px solid #1f2937" }}>
+          <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.2em", color: "#4b5563", marginBottom: "8px" }}>Canlı Özet</p>
+          {[
+            { l: "Teklif",  v: tl(hesap.satisFiyati), c: "#10b981" },
+            { l: "Maliyet", v: tl(hesap.toplamMaliyet), c: "#f9fafb" },
+            { l: "Kâr",    v: tl(hesap.kar),           c: "#fbbf24" },
+            { l: "Mtül",   v: hesap.toplamMtul.toFixed(2), c: "#f9fafb" },
+            { l: "Plaka",  v: hesap.plakaSayisi + " ad", c: "#f9fafb" },
+          ].map((s) => (
+            <div key={s.l} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #0d1117" }}>
+              <span style={{ fontSize: "11px", color: "#6b7280" }}>{s.l}</span>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: s.c }}>{s.v}</span>
+            </div>
           ))}
         </div>
-
-        <div className="mt-auto p-4 border-t border-slate-800">
-          <button onClick={() => router.push("/dashboard/isler")} className="w-full rounded-xl bg-slate-800 hover:bg-slate-700 p-3">
-            İşlere Dön
-          </button>
+        <div style={{ padding: "12px 14px", borderTop: "1px solid #1f2937" }}>
+          <button onClick={() => router.push("/dashboard/isler")} style={{ width: "100%", padding: "9px", background: "#0d1117", border: "1px solid #1f2937", borderRadius: "11px", color: "#9ca3af", fontSize: "12px", cursor: "pointer" }}>← İşlere Dön</button>
         </div>
       </aside>
 
-      <main className="relative min-h-[100dvh] w-full md:w-[51%] overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+120px)] pt-[calc(env(safe-area-inset-top)+168px)] md:p-6">
-        {/* MOBILE WIZARD HEADER */}
-        <div className="md:hidden fixed left-0 right-0 top-0 z-[1100] border-b border-slate-800 bg-[#030712]/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] backdrop-blur-xl">
-          <div className="ml-16">
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">
-              Yeni İş · Adım {aktifIndex + 1}/4
-            </p>
-            <h1 className="mt-1 text-lg font-black text-white">{menu[aktifIndex][1]}</h1>
+      {/* Ana içerik */}
+      <main ref={mainRef} style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+
+        {/* Sticky header */}
+        <div style={{ position: "sticky", top: 0, zIndex: 1100, background: "rgba(3,7,18,0.96)", backdropFilter: "blur(16px)", borderBottom: "1px solid #1f2937" }}>
+          <div className="mobile-only" style={{ padding: "12px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h1 style={{ fontSize: "16px", fontWeight: 900 }}>{adimlar[aktifIdx].label}</h1>
+            <span style={{ fontSize: "11px", color: "#6b7280" }}>{aktifIdx + 1}/{adimlar.length}</span>
           </div>
-
-          <div className="mt-4 grid grid-cols-4 gap-2">
-            {menu.map(([key, label], index) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setAktifBolum(key)}
-                className={`min-w-0 rounded-xl border px-2 py-2 text-center text-[10px] font-black transition ${
-                  aktifBolum === key
-                    ? "border-blue-400 bg-blue-600 text-white"
-                    : index < aktifIndex
-                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
-                    : "border-slate-800 bg-slate-900 text-slate-400"
-                }`}
-              >
-                <span className="block truncate">{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-
-        {/* MOBILE WIZARD HEADER */}
-        <div className="md:hidden fixed left-0 right-0 top-0 z-[1100] border-b border-slate-800 bg-[#030712]/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] backdrop-blur-xl">
-          <div className="ml-16">
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">
-              Yeni İş · Adım {aktifIndex + 1}/4
-            </p>
-            <h1 className="mt-1 text-lg font-black text-white">{menu[aktifIndex][1]}</h1>
-
-            <div className="mt-4 grid grid-cols-4 gap-2">
-              {menu.map(([key, label], index) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setAktifBolum(key)}
-                  className={`min-w-0 rounded-xl border px-2 py-2 text-center text-[10px] font-black transition ${
-                    aktifBolum === key
-                      ? "border-blue-400 bg-blue-600 text-white"
-                      : index < aktifIndex
-                      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
-                      : "border-slate-800 bg-slate-900 text-slate-400"
-                  }`}
-                >
-                  <span className="block truncate">{label}</span>
+          <div style={{ padding: "10px 16px 12px", display: "flex", gap: "6px" }}>
+            {adimlar.map((a, i) => {
+              const tam = i < aktifIdx; const aktif = a.id === aktifAdim;
+              return (
+                <button key={a.id} onClick={() => setAktifAdim(a.id)} style={{ flex: 1, padding: "7px 4px", borderRadius: "11px", fontSize: "10px", fontWeight: 700, cursor: "pointer", background: aktif ? "#10b981" : tam ? "rgba(16,185,129,0.1)" : "#0d1117", border: aktif ? "1px solid #10b981" : tam ? "1px solid rgba(16,185,129,0.3)" : "1px solid #1f2937", color: aktif ? "#fff" : tam ? "#6ee7b7" : "#6b7280" }}>
+                  <div>{tam ? "✓" : i + 1}</div>
+                  <div style={{ marginTop: "2px" }}>{a.kisa}</div>
                 </button>
-              ))}
-            </div>
+              );
+            })}
+          </div>
+          <div style={{ height: "2px", background: "#1f2937", margin: "0 16px 0" }}>
+            <div style={{ height: "2px", background: "#10b981", width: `${((aktifIdx + 1) / adimlar.length) * 100}%`, transition: "width .4s" }} />
           </div>
         </div>
 
-        <div className="min-h-full bg-[#0B1120] border border-slate-800 rounded-2xl p-6 overflow-hidden">
-          {aktifBolum === "musteri" && (
-            <div className="space-y-5">
-              <h2 className="text-xl">Müşteri ve İş Bilgisi</h2>
+        {/* İçerik */}
+        <div style={{ flex: 1, padding: "20px 16px 120px", maxWidth: "700px", width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="relative">
-                  <p className="text-xs text-slate-400 mb-2">Müşteri Adı</p>
-                  <input
-                    value={form.musteriAdi}
+          {/* ══ ADIM 1: Müşteri & İş ══ */}
+          {aktifAdim === "musteri" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+              {/* Müşteri */}
+              <div className="yi-kart">
+                <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>👤 Müşteri</p>
+                <div style={{ position: "relative" }}>
+                  <input className="yi-inp" placeholder="Müşteri ara veya yaz..." value={form.musteriId ? form.musteriAdi : musteriArama}
                     onFocus={() => setMusteriListeAcik(true)}
-                    onChange={(e) => {
-                      setAlan("musteriAdi", e.target.value);
-                      setAlan("musteriId", "");
-                      setMusteriListeAcik(true);
-                    }}
-                    className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
-                    placeholder="Müşteri seç veya yeni yaz..."
-                  />
-
-                  {musteriListeAcik && (
-                    <div className="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-700 bg-[#111827] shadow-xl">
-                      {filtreliMusteriler.slice(0, 10).map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => musteriSec(m)}
-                          className="block w-full border-b border-slate-800 px-4 py-3 text-left hover:bg-[#1f2937]"
-                        >
-                          <p className="text-sm">{m.ad}</p>
-                          <p className="text-xs text-slate-500">{m.telefon || m.email || "Kayıtlı müşteri"}</p>
+                    onChange={(e) => { setMusteriArama(e.target.value); setAlan("musteriId", ""); setAlan("musteriAdi", e.target.value); setMusteriListeAcik(true); }} />
+                  {form.musteriId && (
+                    <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "10px", padding: "8px 12px" }}>
+                      <span style={{ color: "#10b981" }}>✓</span>
+                      <span style={{ fontSize: "14px", fontWeight: 600, color: "#6ee7b7", flex: 1 }}>{form.musteriAdi}</span>
+                      <button onClick={() => { setAlan("musteriId", ""); setAlan("musteriAdi", ""); setMusteriArama(""); }} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "18px", lineHeight: 1 }}>×</button>
+                    </div>
+                  )}
+                  {musteriListeAcik && !form.musteriId && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", background: "#111827", border: "1px solid #374151", borderRadius: "14px", overflow: "hidden", zIndex: 50, maxHeight: "200px", overflowY: "auto", boxShadow: "0 16px 40px rgba(0,0,0,0.6)" }}>
+                      {filtreli.slice(0, 8).map((m) => (
+                        <button key={m.id} onClick={() => musteriSecVeCarpanOner(m)} style={{ width: "100%", padding: "11px 14px", textAlign: "left", background: "transparent", border: "none", borderBottom: "1px solid #1f2937", cursor: "pointer", color: "#f9fafb" }}
+                          onMouseOver={(e) => (e.currentTarget.style.background = "#1f2937")}
+                          onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}>
+                          <div style={{ fontSize: "14px", fontWeight: 600 }}>{m.ad}</div>
+                          {(m.telefon || m.email) && <div style={{ fontSize: "11px", color: "#6b7280" }}>{m.telefon || m.email}</div>}
                         </button>
                       ))}
-
                       {form.musteriAdi.trim() && (
-                        <button
-                          type="button"
-                          onClick={() => setMusteriListeAcik(false)}
-                          className="block w-full px-4 py-3 text-left text-emerald-400 hover:bg-[#1f2937]"
-                        >
-                          “{form.musteriAdi}” yeni müşteri olarak kullan
+                        <button onClick={() => setMusteriListeAcik(false)} style={{ width: "100%", padding: "11px 14px", textAlign: "left", background: "transparent", border: "none", cursor: "pointer", color: "#10b981", fontSize: "13px" }}>
+                          + "{form.musteriAdi}" yeni müşteri olarak kullan
                         </button>
                       )}
                     </div>
                   )}
                 </div>
 
-                <label className="block">
-                  <p className="text-xs text-slate-400 mb-2">İş Tarihi</p>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={form.isTarihi}
-                      onChange={(e) => setAlan("isTarihi", e.target.value)}
-                      className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 pr-12 outline-none focus:border-blue-500"
-                    />
-                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">📅</span>
+                {/* Müşteri tipi */}
+                <div style={{ marginTop: "12px" }}>
+                  <span className="yi-label">Müşteri Tipi</span>
+                  <div className="ikon-grid" style={{ gridTemplateColumns: "repeat(5,1fr)" }}>
+                    {MUSTERI_TIPLERI.map((t) => (
+                      <button key={t.id} onClick={() => { setAlan("musteriTipi", t.id); setAlan("carpan", t.carpan); }} className={`ikon-btn${form.musteriTipi === t.id ? " aktif" : ""}`}>
+                        <span style={{ fontSize: "20px" }}>{t.ikon}</span>
+                        <span>{t.label}</span>
+                      </button>
+                    ))}
                   </div>
-                </label>
+                </div>
+              </div>
 
-                <Input label="Ürün / Taş Adı" value={form.urunAdi} onChange={(v) => setAlan("urunAdi", v)} />
-                <Select label="Malzeme Tipi" value={form.malzemeTipi} onChange={(v) => setAlan("malzemeTipi", v)} options={["Porselen", "Kuvars", "Doğaltaş"]} />
-                <Select label="Müşteri Tipi" value={form.musteriTipi} onChange={(v) => setAlan("musteriTipi", v)} options={["Ev sahibi", "Mimar", "Müteahhit", "İmalatçı"]} />
+              {/* İş bilgisi */}
+              <div className="yi-kart">
+                <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>📋 İş Bilgisi</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <span className="yi-label">Taş / Ürün Adı</span>
+                    <input className="yi-inp" placeholder="Calacatta Gold" value={form.urunAdi} onChange={(e) => setAlan("urunAdi", e.target.value)} />
+                  </div>
+                  <div>
+                    <span className="yi-label">İş Tarihi</span>
+                    <input type="date" className="yi-inp" value={form.isTarihi} onChange={(e) => setAlan("isTarihi", e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
+              {/* İş modeli */}
+              <div className="yi-kart">
+                <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>⚙️ İş Modeli</p>
+                <div className="ikon-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+                  {IS_MODELLERI.map((m) => (
+                    <button key={m.id} onClick={() => setAlan("isModeli", m.id)} className={`ikon-btn${form.isModeli === m.id ? " aktif" : ""}`} style={{ padding: "12px 8px" }}>
+                      <span style={{ fontSize: "22px" }}>{m.ikon}</span>
+                      <span style={{ fontWeight: 700 }}>{m.label}</span>
+                      <span style={{ fontSize: "10px", opacity: 0.7, lineHeight: 1.2 }}>{m.aciklama}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mutfak tipi */}
+              <div className="yi-kart">
+                <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>🏠 Mutfak / Uygulama Tipi</p>
+                <div className="ikon-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+                  {MUTFAK_TIPLERI.map((t) => (
+                    <button key={t.id} onClick={() => mutfakTipiDegistir(t.id)} className={`ikon-btn${form.mutfakTipi === t.id ? " aktif" : ""}`} style={{ padding: "12px 8px", gap: "6px" }}>
+                      <div style={{ width: "56px", height: "40px", color: form.mutfakTipi === t.id ? "#10b981" : "#4b5563" }} dangerouslySetInnerHTML={{ __html: t.svg }} />
+                      <span style={{ fontWeight: 700 }}>{t.label}</span>
+                      <span style={{ fontSize: "10px", opacity: 0.6 }}>{t.aciklama}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end" }} className="desktop-sidebar" style2="">
+                <button onClick={() => sonraki && setAktifAdim(sonraki)} style={{ padding: "13px 32px", background: "#10b981", border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>İleri →</button>
               </div>
             </div>
           )}
 
-          {aktifBolum === "malzeme" && (
-            <div className="space-y-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <h2 className="text-xl">Taş ve Plaka</h2>
-                <button onClick={() => setPlakaAcik(true)} className="w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold hover:bg-indigo-500 md:w-auto">
-                  Plaka Planlayıcı Aç
+          {/* ══ ADIM 2: Ölçüler ══ */}
+          {aktifAdim === "olculer" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+              {/* Parça girişi */}
+              <div className="yi-kart">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+                  <p style={{ fontSize: "14px", fontWeight: 700 }}>📐 Kesim Parçaları</p>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <span style={{ fontSize: "12px", color: "#6b7280" }}>Toplam: <strong style={{ color: "#10b981" }}>{hesap.toplamMtul.toFixed(2)} mtül</strong></span>
+                  </div>
+                </div>
+
+                {/* Header */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 50px 50px 24px", gap: "6px", padding: "0 4px 6px", borderBottom: "1px solid #1f2937", marginBottom: "18px", marginTop: "8px" }}>
+                  {["Parça Adı","En (cm)","Boy (cm)","Adet","Ön Alın",""].map((h) => (
+                    <span key={h} style={{ fontSize: "10px", color: "#4b5563", fontWeight: 700 }}>{h}</span>
+                  ))}
+                </div>
+
+                {form.parcalar.map((p) => (
+                  <div key={p.id} className="parca-row" style={{ gridTemplateColumns: "1fr 80px 80px 50px 50px 24px" }}>
+                    <div className="parca-ad-col">
+                      <input className="yi-inp" style={{ fontSize: "13px", padding: "8px 10px" }} value={p.ad} onChange={(e) => parcaGuncelle(p.id, "ad", e.target.value)} placeholder="Parça adı" />
+                    </div>
+                    <input className="yi-inp" style={{ fontSize: "13px", padding: "8px 10px" }} type="text" inputMode="decimal" placeholder="0" value={p.en} onChange={(e) => parcaGuncelleVeHesapla(p.id, "en", e.target.value)} />
+                    <div style={{ position: "relative" }}>
+                      <input className="yi-inp" style={{ fontSize: "13px", padding: "8px 10px" }} type="text" inputMode="decimal" placeholder="0" value={p.boy} onChange={(e) => parcaGuncelleVeHesapla(p.id, "boy", e.target.value)} />
+                      {n(p.boy) > 0 && n(p.adet) > 0 && (
+                        <div style={{ position: "absolute", top: "-18px", right: "2px", fontSize: "10px", color: "#10b981", fontWeight: 700, whiteSpace: "nowrap" }}>
+                          {((n(p.boy) / 100) * (n(p.adet) || 1)).toFixed(2)} mtül
+                        </div>
+                      )}
+                    </div>
+                    <input className="yi-inp" style={{ fontSize: "13px", padding: "8px 10px" }} type="text" inputMode="decimal" placeholder="1" value={p.adet} onChange={(e) => parcaGuncelleVeHesapla(p.id, "adet", e.target.value)} />
+                    <button onClick={() => parcaGuncelleVeHesapla(p.id, "onAlin", !p.onAlin)} style={{ width: "36px", height: "36px", borderRadius: "8px", border: "none", background: p.onAlin ? "#10b981" : "#1f2937", color: "#fff", cursor: "pointer", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {p.onAlin ? "✓" : ""}
+                    </button>
+                    <button onClick={() => parcaSil(p.id)} style={{ width: "24px", height: "36px", background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                  </div>
+                ))}
+
+                {/* ÖN ALIN TOPLAM SATIRI — ön alın seçili parça varsa göster */}
+                {(() => {
+                  const oaParcalar = form.parcalar.filter((p) => p.onAlin);
+                  if (oaParcalar.length === 0) return null;
+                  const toplamBoy = oaParcalar.reduce((acc, p) => acc + n(p.boy) * (n(p.adet) || 1), 0);
+                  const toplamAdet = oaParcalar.reduce((acc, p) => acc + (n(p.adet) || 1), 0);
+                  const toplamMtul = toplamBoy / 100;
+                  const oaEn = form.onAlinEnOverride?.["toplam"] ?? "4";
+                  return (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 50px 50px 24px", gap: "6px", alignItems: "center", padding: "10px 12px", background: "rgba(251,191,36,0.07)", borderRadius: "12px", border: "1px solid rgba(251,191,36,0.25)", marginTop: "4px" }}>
+                      <div style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 700 }}>↳ Ön Alın (otomatik)</div>
+                      <input
+                        className="yi-inp"
+                        style={{ fontSize: "13px", padding: "8px 10px", borderColor: "rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.05)", color: "#fbbf24" }}
+                        type="text" inputMode="decimal" value={oaEn}
+                        onChange={(e) => setForm((prev) => ({ ...prev, onAlinEnOverride: { ...(prev.onAlinEnOverride || {}), toplam: e.target.value } }))}
+                      />
+                      <div style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "#fbbf24", textAlign: "center", fontWeight: 700 }}>{toplamBoy}</div>
+                      <div style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "#fbbf24", textAlign: "center", fontWeight: 700 }}>{toplamAdet}</div>
+                      <div style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 900, textAlign: "center" }}>{toplamMtul.toFixed(2)} mtül</div>
+                      <div />
+                    </div>
+                  );
+                })()}
+
+                <button onClick={parcaEkle} style={{ marginTop: "8px", width: "100%", padding: "10px", background: "transparent", border: "1px dashed #374151", borderRadius: "12px", color: "#10b981", fontSize: "13px", cursor: "pointer", fontWeight: 600 }}>
+                  + Parça Ekle
                 </button>
+
+                {hesap.toplamMtul > 0 && (
+                  <div style={{ marginTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                    <div style={{ background: "#0d1117", borderRadius: "12px", padding: "10px", textAlign: "center" }}>
+                      <p style={{ fontSize: "10px", color: "#6b7280" }}>Toplam Mtül</p>
+                      <p style={{ fontSize: "16px", fontWeight: 900, color: "#10b981" }}>{hesap.toplamMtul.toFixed(2)}</p>
+                    </div>
+                    <div style={{ background: "#0d1117", borderRadius: "12px", padding: "10px", textAlign: "center" }}>
+                      <p style={{ fontSize: "10px", color: "#6b7280" }}>Alan (m²)</p>
+                      <p style={{ fontSize: "16px", fontWeight: 900 }}>{(hesap.toplamParcaAlani / 10000).toFixed(2)}</p>
+                    </div>
+                    <div style={{ background: "#0d1117", borderRadius: "12px", padding: "10px", textAlign: "center" }}>
+                      <p style={{ fontSize: "10px", color: "#6b7280" }}>Tahmini Plaka</p>
+                      <p style={{ fontSize: "16px", fontWeight: 900, color: "#fbbf24" }}>{hesap.plakaSayisi} adet</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input label="Plaka Fiyatı €" value={form.plakaFiyatiEuro} onChange={(v) => setAlan("plakaFiyatiEuro", v)} />
-                <Input label="Kur" value={form.kullanilanKur} onChange={(v) => setAlan("kullanilanKur", v)} />
-                <Input label="Plaka Sayısı" value={form.manuelPlakaSayisi} onChange={(v) => setAlan("manuelPlakaSayisi", v)} />
-                <Input label="Plaka Genişlik cm" value={form.plakaGenislikCm} onChange={(v) => setAlan("plakaGenislikCm", v)} />
-                <Input label="Plaka Yükseklik cm" value={form.plakaUzunlukCm} onChange={(v) => setAlan("plakaUzunlukCm", v)} />
-                <Input label="Plakadan Alınan Mtül" value={form.plakadanAlinanMtul} onChange={(v) => setAlan("plakadanAlinanMtul", v)} />
+              {/* Ek işler */}
+              <div className="yi-kart">
+                <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>🔧 Ek İşler</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <span className="yi-label">Eviye deliği</span>
+                    <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.eviyes} onChange={(e) => setAlan("eviyes", e.target.value)} />
+                  </div>
+                  <div>
+                    <span className="yi-label">Ocak deliği</span>
+                    <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.ocaklar} onChange={(e) => setAlan("ocaklar", e.target.value)} />
+                  </div>
+                  <div>
+                    <span className="yi-label">Priz / delik</span>
+                    <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.prizler} onChange={(e) => setAlan("prizler", e.target.value)} />
+                  </div>
+                  <div>
+                    <span className="yi-label">Pahlama (mtül)</span>
+                    <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.pahlamaMtul} onChange={(e) => setAlan("pahlamaMtul", e.target.value)} />
+                  </div>
+                  <div>
+                    <span className="yi-label">45° Kesim (mtül)</span>
+                    <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.kesim45Mtul} onChange={(e) => setAlan("kesim45Mtul", e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Plaka bilgisi — sadece "tam" modda */}
+              {form.isModeli === "tam" && (
+                <div className="yi-kart">
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                    <p style={{ fontSize: "14px", fontWeight: 700 }}>🪨 Plaka Bilgisi</p>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                    <button onClick={plakaHesapla} disabled={plakaHesaplaniyor} style={{ padding: "7px 14px", background: plakaHesaplaniyor ? "#374151" : "#10b981", border: "none", borderRadius: "10px", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: plakaHesaplaniyor ? "not-allowed" : "pointer" }}>
+                      {plakaHesaplaniyor ? "⏳ Hesaplanıyor..." : "🧮 Plaka Hesapla"}
+                    </button>
+                    <button onClick={() => {
+                      const rows: any[] = [];
+                      form.parcalar.forEach((p) => {
+                        const en = n(p.en), boy = n(p.boy), adet = Math.max(1, n(p.adet) || 1);
+                        if (en <= 0 || boy <= 0) return;
+                        const oaEn = n(form.onAlinEnOverride?.['toplam']) || 4;
+                        for (let i = 0; i < adet; i++) {
+                          if (p.onAlin) {
+                            rows.push({ parcaTuru: p.ad + ' Ön Alın', uzunluk: String(boy), genislik: String(oaEn), sureDakika: '8' });
+                          }
+                          rows.push({ parcaTuru: p.ad, uzunluk: String(boy), genislik: String(en), sureDakika: String(n(form.tezgahDakika) || 25) });
+                        }
+                      });
+                      setPlakaInitialRows(rows);
+                      setPlakaAcik(true);
+                    }} style={{ padding: "7px 14px", background: "#1d4ed8", border: "none", borderRadius: "10px", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
+                      📐 Görsel Planlayıcı
+                    </button>
+                  </div>
+                  </div>
+                  {form.plakaLayoutJson && (
+                    <div style={{ marginBottom: "10px", background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "10px", padding: "8px 12px", fontSize: "12px", color: "#6ee7b7" }}>
+                      ✓ Plan aktarıldı — {hesap.plakaSayisi} plaka
+                    </div>
+                  )}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div>
+                      <span className="yi-label">Plaka Fiyatı (TL)</span>
+                      <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.plakaFiyati} onChange={(e) => setAlan("plakaFiyati", e.target.value)} />
+                    </div>
+                    <div>
+                      <span className="yi-label">veya Euro fiyatı</span>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <input className="yi-inp" type="text" inputMode="decimal" placeholder="€" value={form.plakaFiyatiEuro} onChange={(e) => setAlan("plakaFiyatiEuro", e.target.value)} style={{ flex: 1 }} />
+                        <input className="yi-inp" type="text" inputMode="decimal" placeholder="Kur" value={form.kullanilanKur} onChange={(e) => setAlan("kullanilanKur", e.target.value)} style={{ width: "70px" }} />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="yi-label">Plaka En (cm)</span>
+                      <input className="yi-inp" type="text" inputMode="decimal" placeholder="160" value={form.plakaEn} onChange={(e) => setAlan("plakaEn", e.target.value)} />
+                    </div>
+                    <div>
+                      <span className="yi-label">Plaka Boy (cm)</span>
+                      <input className="yi-inp" type="text" inputMode="decimal" placeholder="320" value={form.plakaBoy} onChange={(e) => setAlan("plakaBoy", e.target.value)} />
+                    </div>
+                  </div>
+                  {hesap.malzemeMaliyeti > 0 && (
+                    <div style={{ marginTop: "12px", background: "#0d1117", borderRadius: "12px", padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "12px", color: "#6b7280" }}>{hesap.plakaSayisi} plaka × {tl(hesap.plakaFiyatiTl)}</span>
+                      <span style={{ fontSize: "18px", fontWeight: 900, color: "#10b981" }}>{tl(hesap.malzemeMaliyeti)}</span>
+                    </div>
+                  )}
+
+                  {/* Plaka hesap sonucu */}
+                  {plakaPlakaSayisi > 0 && (
+                    <div style={{ marginTop: "12px", background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "14px", padding: "14px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                        <div style={{ textAlign: "center" }}>
+                          <p style={{ fontSize: "10px", color: "#6b7280", marginBottom: "3px" }}>Gerekli Plaka</p>
+                          <p style={{ fontSize: "24px", fontWeight: 900, color: "#10b981" }}>{plakaPlakaSayisi}</p>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <p style={{ fontSize: "10px", color: "#6b7280", marginBottom: "3px" }}>Fire Oranı</p>
+                          <p style={{ fontSize: "24px", fontWeight: 900, color: plakaFireOrani > 30 ? "#f87171" : "#fbbf24" }}>%{plakaFireOrani.toFixed(0)}</p>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <p style={{ fontSize: "10px", color: "#6b7280", marginBottom: "3px" }}>Toplam Maliyet</p>
+                          <p style={{ fontSize: "16px", fontWeight: 900, color: "#f9fafb" }}>{tl(plakaPlakaSayisi * n(form.plakaFiyati || "0"))}</p>
+                        </div>
+                      </div>
+
+                      {/* Plaka görsel önizleme */}
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        {plakaSlabs.slice(0, 8).map((slab: any, si: number) => {
+                          const pEn  = n(form.plakaEn)  || 160;
+                          const pBoy = n(form.plakaBoy) || 320;
+                          const sc = 90 / pBoy;
+                          const w = Math.round(pEn * sc);
+                          const h = 90;
+                          const RENKLER: Record<string, string> = {
+                            "on_alin": "#fbbf24", "tezgah": "#10b981",
+                            "tezgah_arasi": "#60a5fa", "ada_tezgah": "#a78bfa", "ada_ayak": "#f472b6",
+                          };
+                          const normalize = (s: string) => s.toLowerCase()
+                            .replace(/\s+/g,"_").replace(/[ı]/g,"i").replace(/[ş]/g,"s")
+                            .replace(/[ğ]/g,"g").replace(/[ü]/g,"u").replace(/[ö]/g,"o").replace(/[ç]/g,"c");
+                          return (
+                            <div key={si} style={{ textAlign: "center" }}>
+                              <div style={{ fontSize: "9px", color: "#6b7280", marginBottom: "3px", fontWeight: 600 }}>Plaka {si+1}</div>
+                              <svg width={w} height={h} style={{ background: "#0d1117", borderRadius: "6px", border: "1px solid #374151", display: "block" }}>
+                                {slab.yerlesim?.map((p: any, pi: number) => {
+                                  const k = normalize(String(p.parcaTuru || ""));
+                                  const renk = RENKLER[k] || "#6b7280";
+                                  const px = Math.round((p.x || 0) * sc);
+                                  const py = Math.round((p.y || 0) * sc);
+                                  const pw = Math.max(1, Math.round((p.genislik || 0) * sc));
+                                  const ph = Math.max(1, Math.round((p.yukseklik || 0) * sc));
+                                  return (
+                                    <rect key={pi} x={px} y={py} width={pw} height={ph}
+                                      fill={renk} opacity={0.8} stroke="#0d1117" strokeWidth={0.5}/>
+                                  );
+                                })}
+                              </svg>
+                              <div style={{ fontSize: "9px", color: "#4b5563", marginTop: "2px" }}>{slab.yerlesim?.length || 0} parça</div>
+                            </div>
+                          );
+                        })}
+                        {plakaSlabs.length > 8 && (
+                          <div style={{ display: "flex", alignItems: "center", padding: "0 8px", fontSize: "11px", color: "#6b7280" }}>+{plakaSlabs.length - 8} plaka</div>
+                        )}
+                      </div>
+
+                      {/* Renk açıklaması */}
+                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px" }}>
+                        {[["#fbbf24","Ön Alın"],["#10b981","Tezgah"],["#60a5fa","Tezgah Arası"],["#a78bfa","Ada"]].map(([renk,ad]) => (
+                          <div key={ad} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: renk }}/>
+                            <span style={{ fontSize: "10px", color: "#9ca3af" }}>{ad}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Gelişmiş: makine/süre */}
+              <div className="yi-kart">
+                <button onClick={() => setGelismisAcik(!gelismisAcik)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>
+                  <span>⚙️ Gelişmiş (Makine & Süre)</span>
+                  <span>{gelismisAcik ? "▲" : "▼"}</span>
+                </button>
+                {gelismisAcik && (
+                  <div style={{ marginTop: "14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    {[
+                      { label: "Tezgah dk/mtül",  dKey: "tezgahDakika",  mKey: "tezgahMakineId"  },
+                      { label: "Pahlama dk/mtül",  dKey: "pahlamaDakika", mKey: "pahlamaMakineId" },
+                      { label: "45° dk/mtül",      dKey: "kesim45Dakika", mKey: "kesim45MakineId" },
+                    ].map((r) => (
+                      <div key={r.label} style={{ gridColumn: "1/-1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "end" }}>
+                        <div>
+                          <span className="yi-label">{r.label}</span>
+                          <input className="yi-inp" type="text" inputMode="decimal" value={(form as any)[r.dKey]} onChange={(e) => setAlan(r.dKey as any, e.target.value)} />
+                        </div>
+                        <div>
+                          <span className="yi-label">Makine</span>
+                          <select className="yi-sel" value={(form as any)[r.mKey]} onChange={(e) => setAlan(r.mKey as any, e.target.value)}>
+                            {makineler.length === 0 && <option value="">Makine yok</option>}
+                            {makineler.map((m: any) => <option key={m.id} value={m.id}>{m.makineAdi} · {Number(m.dakikalikMaliyet ?? m.dkMaliyet ?? 0).toFixed(0)}₺/dk</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button onClick={() => sonraki && setAktifAdim(sonraki)} style={{ padding: "13px 32px", background: "#10b981", border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>İleri →</button>
               </div>
             </div>
           )}
 
-          {aktifBolum === "maliyet" && (
-            <div className="h-full flex flex-col">
-              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <h2 className="text-xl">Maliyet ve Üretim Süresi</h2>
-                <div className="text-xs text-slate-400">
-                  Satır bazlı üretim maliyeti
+          {/* ══ ADIM 3: Fiyat & Kaydet ══ */}
+          {aktifAdim === "fiyat" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+              {/* Canlı fiyat kartı */}
+              <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "20px", padding: "20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Teklif Tutarı</p>
+                    <p style={{ fontSize: "40px", fontWeight: 900, color: "#10b981", lineHeight: 1 }}>{tl(hesap.satisFiyati)}</p>
+                    {hesap.toplamMtul > 0 && <p style={{ fontSize: "13px", color: "#6b7280", marginTop: "4px" }}>{tl(hesap.birimFiyat)} / mtül · {hesap.toplamMtul.toFixed(2)} mtül</p>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ fontSize: "11px", color: "#6b7280" }}>Kâr</p>
+                    <p style={{ fontSize: "22px", fontWeight: 900, color: "#fbbf24" }}>{tl(hesap.kar)}</p>
+                    <p style={{ fontSize: "13px", color: hesap.karYuzde >= 30 ? "#6ee7b7" : "#f87171", fontWeight: 700 }}>%{hesap.karYuzde.toFixed(1)}</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr_0.75fr] gap-2 mb-2 px-2 text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                <div>İşlem / Mtül</div>
-                <div>Makine</div>
-                <div>Süre</div>
-              </div>
+              {/* Fiyatlandırma modu */}
+              <div className="yi-kart">
+                <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "14px" }}>💰 Fiyatlandırma</p>
 
-              <div className="space-y-1.5">
-                <OperationRow
-                  label="Tezgah"
-                  mtul={form.metrajMtul}
-                  setMtul={(v: string) => setAlan("metrajMtul", v)}
-                  makine={form.tezgahMakineId}
-                  setMakine={(v: string) => setAlan("tezgahMakineId", v)}
-                  dakika={form.birMtulDakika}
-                  setDakika={(v: string) => setAlan("birMtulDakika", v)}
-                  makineler={makineler}
-                />
+                {/* Mod seçimi */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px" }}>
+                  <button onClick={() => setAlan("fiyatModu", "carpan")} style={{ padding: "10px", borderRadius: "12px", border: form.fiyatModu === "carpan" ? "2px solid #10b981" : "1.5px solid #1f2937", background: form.fiyatModu === "carpan" ? "rgba(16,185,129,0.1)" : "#111827", color: form.fiyatModu === "carpan" ? "#10b981" : "#9ca3af", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                    ✕ Çarpan Modu
+                  </button>
+                  <button onClick={() => setAlan("fiyatModu", "kar")} style={{ padding: "10px", borderRadius: "12px", border: form.fiyatModu === "kar" ? "2px solid #10b981" : "1.5px solid #1f2937", background: form.fiyatModu === "kar" ? "rgba(16,185,129,0.1)" : "#111827", color: form.fiyatModu === "kar" ? "#10b981" : "#9ca3af", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                    % Kâr Modu
+                  </button>
+                </div>
 
-                <OperationRow
-                  label="Tezgah Arası"
-                  mtul={form.tezgahArasiMtul}
-                  setMtul={(v: string) => setAlan("tezgahArasiMtul", v)}
-                  makine={form.tezgahArasiMakineId}
-                  setMakine={(v: string) => setAlan("tezgahArasiMakineId", v)}
-                  dakika={form.tezgahArasiDakika}
-                  setDakika={(v: string) => setAlan("tezgahArasiDakika", v)}
-                  makineler={makineler}
-                />
+                {form.fiyatModu === "carpan" ? (
+                  <div>
+                    <span className="yi-label">Çarpan (Plaka maliyeti × çarpan = Satış)</span>
+                    {/* Hızlı seçimler */}
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
+                      {["2.0","2.3","2.5","2.8","3.0","3.5"].map((c) => (
+                        <button key={c} onClick={() => setAlan("carpan", c)} style={{ padding: "7px 14px", borderRadius: "100px", border: form.carpan === c ? "2px solid #10b981" : "1px solid #374151", background: form.carpan === c ? "rgba(16,185,129,0.1)" : "#111827", color: form.carpan === c ? "#10b981" : "#9ca3af", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                          ×{c}
+                        </button>
+                      ))}
+                    </div>
+                    <input className="yi-inp" type="text" inputMode="decimal" step="0.1" placeholder="3.0" value={form.carpan} onChange={(e) => setAlan("carpan", e.target.value)} />
+                    {hesap.malzemeMaliyeti > 0 && (
+                      <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
+                        {tl(hesap.malzemeMaliyeti)} × {form.carpan} = {tl(hesap.satisFiyati)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <span className="yi-label">Kâr Hedefi (%)</span>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
+                      {["20","25","30","40","50","60"].map((k) => (
+                        <button key={k} onClick={() => setAlan("karHedefi", k)} style={{ padding: "7px 14px", borderRadius: "100px", border: form.karHedefi === k ? "2px solid #10b981" : "1px solid #374151", background: form.karHedefi === k ? "rgba(16,185,129,0.1)" : "#111827", color: form.karHedefi === k ? "#10b981" : "#9ca3af", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                          %{k}
+                        </button>
+                      ))}
+                    </div>
+                    <input className="yi-inp" type="text" inputMode="decimal" placeholder="30" value={form.karHedefi} onChange={(e) => setAlan("karHedefi", e.target.value)} />
+                  </div>
+                )}
 
-                <OperationRow
-                  label="Ada"
-                  mtul={form.adaTezgahMtul}
-                  setMtul={(v: string) => setAlan("adaTezgahMtul", v)}
-                  makine={form.adaMakineId}
-                  setMakine={(v: string) => setAlan("adaMakineId", v)}
-                  dakika={form.adaTezgahDakika}
-                  setDakika={(v: string) => setAlan("adaTezgahDakika", v)}
-                  makineler={makineler}
-                />
-
-                <OperationRow
-                  label="Stres Alma"
-                  mtul={form.ozelIscilik1Mtul}
-                  setMtul={(v: string) => setAlan("ozelIscilik1Mtul", v)}
-                  makine={form.stresAlmaMakineId}
-                  setMakine={(v: string) => setAlan("stresAlmaMakineId", v)}
-                  dakika={form.ozelIscilik1Dakika}
-                  setDakika={(v: string) => setAlan("ozelIscilik1Dakika", v)}
-                  makineler={makineler}
-                />
-
-                <OperationRow
-                  label="Fason Ebatlama"
-                  mtul={form.ozelIscilik2Mtul}
-                  setMtul={(v: string) => setAlan("ozelIscilik2Mtul", v)}
-                  makine={form.fasonEbatlamaMakineId}
-                  setMakine={(v: string) => setAlan("fasonEbatlamaMakineId", v)}
-                  dakika={form.ozelIscilik2Dakika}
-                  setDakika={(v: string) => setAlan("ozelIscilik2Dakika", v)}
-                  makineler={makineler}
-                />
-
-                <OperationRow
-                  label="45 Kesim"
-                  mtul={form.kesim45Mtul}
-                  setMtul={(v: string) => setAlan("kesim45Mtul", v)}
-                  makine={form.kesim45MakineId}
-                  setMakine={(v: string) => setAlan("kesim45MakineId", v)}
-                  dakika={form.kesim45Dakika}
-                  setDakika={(v: string) => setAlan("kesim45Dakika", v)}
-                  makineler={makineler}
-                />
-
-                <OperationRow
-                  label="Pahlama"
-                  mtul={form.pahlamaMtul}
-                  setMtul={(v: string) => setAlan("pahlamaMtul", v)}
-                  makine={form.pahlamaMakineId}
-                  setMakine={(v: string) => setAlan("pahlamaMakineId", v)}
-                  dakika={form.pahlamaDakika}
-                  setDakika={(v: string) => setAlan("pahlamaDakika", v)}
-                  makineler={makineler}
-                />
-
-                <OperationRow
-                  label="Yapıştırma / Toplama"
-                  mtul={form.yapistirmaMtul}
-                  setMtul={(v: string) => setAlan("yapistirmaMtul", v)}
-                  makine={form.yapistirmaMakineId}
-                  setMakine={(v: string) => setAlan("yapistirmaMakineId", v)}
-                  dakika={form.yapistirmaDakika}
-                  setDakika={(v: string) => setAlan("yapistirmaDakika", v)}
-                  makineler={makineler}
-                />
-              </div>
-
-              <div className="mt-3 grid grid-cols-[1fr_0.75fr] gap-3">
-                <div></div>
-                <Input label="Kar %" value={form.karYuzdesi} onChange={(v) => setAlan("karYuzdesi", v)} />
-              </div>
-            </div>
-          )}
-
-          {aktifBolum === "not" && (
-            <div className="space-y-5">
-              <h2 className="text-xl">Notlar ve Canlı Özet</h2>
-              <textarea
-                value={form.notlar}
-                onChange={(e) => setAlan("notlar", e.target.value)}
-                className="w-full h-[220px] rounded-xl bg-[#111827] border border-slate-700 p-4 outline-none"
-                placeholder="İş notları..."
-              />
-
-              <div className="md:hidden space-y-3 pt-2">
-                <h3 className="text-sm font-bold uppercase tracking-[0.18em] text-slate-500">Canlı Özet</h3>
-                <div className="grid grid-cols-1 gap-3">
-                  <Card label="Teklif Tutarı" value={para(hesap.satis)} color="text-emerald-400" />
-                  <Card label="Toplam Maliyet" value={para(hesap.maliyet)} />
-                  <Card label="Kâr" value={para(hesap.kar)} color="text-yellow-400" />
-                  <Card label="Plaka" value={`${hesap.plakaSayisi} adet`} />
-                  <Card label="Süre" value={`${hesap.toplamDakika.toFixed(0)} dk`} />
-                  <Card label="45 Kesim Maliyeti" value={para(hesap.kesim45Maliyet)} />
-                  <Card label="Pahlama Maliyeti" value={para(hesap.pahlamaMaliyet)} />
-                  <Card label="Yapıştırma Maliyeti" value={para(hesap.yapistirmaMaliyet)} />
+                {/* Manuel birim fiyat override */}
+                <div style={{ marginTop: "14px", paddingTop: "14px", borderTop: "1px solid #1f2937" }}>
+                  <span className="yi-label">Manuel Birim Fiyat Override (opsiyonel, ₺/mtül)</span>
+                  <input className="yi-inp" type="text" inputMode="decimal" placeholder="Boş bırakırsan otomatik hesaplanır" value={form.manuelBirimFiyat} onChange={(e) => setAlan("manuelBirimFiyat", e.target.value)} />
+                  {form.manuelBirimFiyat && n(form.manuelBirimFiyat) > 0 && (
+                    <p style={{ fontSize: "12px", color: "#fbbf24", marginTop: "4px" }}>⚠️ Override aktif: {tl(n(form.manuelBirimFiyat))} × {hesap.toplamMtul.toFixed(2)} mtül = {tl(n(form.manuelBirimFiyat) * hesap.toplamMtul)}</p>
+                  )}
                 </div>
               </div>
+
+              {/* Maliyet dökümü */}
+              <div className="yi-kart">
+                <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>📊 Maliyet Dökümü</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {[
+                    { l: "Malzeme (Plaka)",     v: hesap.malzemeMaliyeti,   gizle: form.isModeli !== "tam" },
+                    { l: "İşçilik",             v: hesap.iscilikMaliyeti,   gizle: false },
+                    { l: "Toplam Maliyet",      v: hesap.toplamMaliyet,     gizle: false, kalin: true },
+                    { l: "Satış Fiyatı",        v: hesap.satisFiyati,       gizle: false, kalin: true, yesil: true },
+                    { l: "Kâr",                v: hesap.kar,               gizle: false, sari: true },
+                  ].filter((s) => !s.gizle).map((s) => (
+                    <div key={s.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: s.kalin ? "#0d1117" : "transparent", borderRadius: "10px", borderTop: s.kalin ? "1px solid #1f2937" : "none" }}>
+                      <span style={{ fontSize: "13px", color: "#9ca3af", fontWeight: s.kalin ? 700 : 400 }}>{s.l}</span>
+                      <span style={{ fontSize: s.kalin ? "16px" : "14px", fontWeight: s.kalin ? 900 : 600, color: s.yesil ? "#10b981" : s.sari ? "#fbbf24" : "#f9fafb" }}>{tl(s.v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* İş özeti */}
+              <div className="yi-kart">
+                <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>📋 İş Özeti</p>
+                {[
+                  { l: "Müşteri",      v: form.musteriAdi || "—" },
+                  { l: "Müşteri Tipi", v: form.musteriTipi },
+                  { l: "Taş / Ürün",   v: form.urunAdi    || "—" },
+                  { l: "İş Modeli",    v: IS_MODELLERI.find((m) => m.id === form.isModeli)?.label || form.isModeli },
+                  { l: "Mutfak Tipi",  v: MUTFAK_TIPLERI.find((t) => t.id === form.mutfakTipi)?.label || form.mutfakTipi },
+                  { l: "Toplam Mtül",  v: hesap.toplamMtul.toFixed(2) + " mtül" },
+                  { l: "Plaka",        v: hesap.plakaSayisi + " adet" },
+                  { l: "Üretim Süresi",v: hesap.toplamDakika.toFixed(0) + " dk" },
+                ].map((s, i, arr) => (
+                  <div key={s.l} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: i < arr.length - 1 ? "1px solid #1f2937" : "none" }}>
+                    <span style={{ fontSize: "12px", color: "#6b7280" }}>{s.l}</span>
+                    <span style={{ fontSize: "13px", fontWeight: 600 }}>{s.v}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Kalem Bazlı Maliyet & Birim Fiyat Tablosu */}
+              {hesap.toplamMtul > 0 && (
+                <div className="yi-kart">
+                  <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "14px" }}>📐 Kalem Bazlı Birim Analiz</p>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #1f2937" }}>
+                          {["Kalem","Mtül","Maliyet/mtül","Satış/mtül","Toplam Satış"].map((h) => (
+                            <th key={h} style={{ padding: "8px 6px", textAlign: h === "Kalem" ? "left" : "right", color: "#6b7280", fontWeight: 700, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const satirlar: any[] = [];
+                          const makineMaliyetFn = (id: string) => {
+                            const m = makineler.find((x: any) => x.id === id);
+                            return Number(m?.dakikalikMaliyet ?? m?.dkMaliyet ?? m?.dakikaMaliyet ?? m?.hesaplananDakikaMaliyeti ?? 0) || 106;
+                          };
+                          // Her parça için satır
+                          form.parcalar.forEach((p) => {
+                            const en = n(p.en), boy = n(p.boy), adet = n(p.adet) || 1;
+                            if (en > 0 && boy > 0) {
+                              const mtul = (boy / 100) * adet;
+                              const maliyetDk = mtul * n(form.tezgahDakika || "25");
+                              const maliyetTl = maliyetDk * makineMaliyetFn(form.tezgahMakineId);
+                              const maliyetMtul = mtul > 0 ? maliyetTl / mtul : 0;
+                              // Plaka maliyeti bu parçaya düşen pay
+                              const plakaPayi = hesap.toplamParcaAlani > 0
+                                ? (en * boy * adet / hesap.toplamParcaAlani) * hesap.malzemeMaliyeti
+                                : 0;
+                              const toplamMaliyetKalem = maliyetTl + plakaPayi;
+                              const maliyetMtulTam = mtul > 0 ? toplamMaliyetKalem / mtul : 0;
+                              const satisMtul = hesap.toplamMtul > 0 ? hesap.satisFiyati / hesap.toplamMtul : 0;
+                              const toplamSatis = satisMtul * mtul;
+                              satirlar.push({ ad: p.ad, mtul, maliyetMtul: maliyetMtulTam, satisMtul, toplamSatis });
+                            }
+                          });
+                          // Ek işler
+                          if (n(form.pahlamaMtul) > 0) {
+                            const mtul = n(form.pahlamaMtul);
+                            const maliyetTl = mtul * n(form.pahlamaDakika || "1") * makineMaliyetFn(form.pahlamaMakineId);
+                            satirlar.push({ ad: "Pahlama", mtul, maliyetMtul: mtul > 0 ? maliyetTl/mtul : 0, satisMtul: 0, toplamSatis: 0, ekIs: true });
+                          }
+                          if (n(form.kesim45Mtul) > 0) {
+                            const mtul = n(form.kesim45Mtul);
+                            const maliyetTl = mtul * n(form.kesim45Dakika || "4") * makineMaliyetFn(form.kesim45MakineId);
+                            satirlar.push({ ad: "45° Kesim", mtul, maliyetMtul: mtul > 0 ? maliyetTl/mtul : 0, satisMtul: 0, toplamSatis: 0, ekIs: true });
+                          }
+                          if (n(form.eviyes) > 0)  satirlar.push({ ad: `Eviye (${form.eviyes} ad)`,  mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.eviyes)  * 200 * makineMaliyetFn(form.tezgahMakineId) });
+                          if (n(form.ocaklar) > 0) satirlar.push({ ad: `Ocak (${form.ocaklar} ad)`,   mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.ocaklar) * 150 * makineMaliyetFn(form.tezgahMakineId) });
+                          if (n(form.prizler) > 0)  satirlar.push({ ad: `Priz/Delik (${form.prizler} ad)`, mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.prizler) * 50 * makineMaliyetFn(form.tezgahMakineId) });
+                          return satirlar.map((s, i) => (
+                            <tr key={i} style={{ borderBottom: "1px solid #0d1117", background: i % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent" }}>
+                              <td style={{ padding: "8px 6px", fontWeight: 600, color: s.ekIs ? "#9ca3af" : "#f9fafb" }}>
+                                {s.ad}
+                                {s.ekIs && <span style={{ marginLeft: "4px", fontSize: "10px", color: "#4b5563", background: "#1f2937", borderRadius: "4px", padding: "1px 4px" }}>Maliyete dahil</span>}
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "right", color: "#9ca3af" }}>{s.mtul > 0 ? s.mtul.toFixed(2) : "—"}</td>
+                              <td style={{ padding: "8px 6px", textAlign: "right", color: "#fbbf24" }}>
+                                {s.sabit ? tl(s.sabit) : s.maliyetMtul > 0 ? tl(s.maliyetMtul) + "/mtül" : "—"}
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "right", color: s.ekIs ? "#4b5563" : "#10b981" }}>
+                                {s.satisMtul > 0 ? tl(s.satisMtul) + "/mtül" : s.ekIs ? "Dahil" : "—"}
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 700, color: s.ekIs ? "#6b7280" : "#f9fafb" }}>
+                                {s.toplamSatis > 0 ? tl(s.toplamSatis) : s.sabit ? tl(s.sabit) : "—"}
+                              </td>
+                            </tr>
+                          ));
+                        })()}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ borderTop: "2px solid #1f2937", background: "#0d1117" }}>
+                          <td colSpan={2} style={{ padding: "10px 6px", fontWeight: 900, fontSize: "13px" }}>TOPLAM</td>
+                          <td style={{ padding: "10px 6px", textAlign: "right", color: "#fbbf24", fontWeight: 700 }}>{tl(hesap.toplamMaliyet)}</td>
+                          <td style={{ padding: "10px 6px", textAlign: "right", color: "#10b981", fontWeight: 700 }}>{hesap.toplamMtul > 0 ? tl(hesap.satisFiyati / hesap.toplamMtul) + "/mtül" : "—"}</td>
+                          <td style={{ padding: "10px 6px", textAlign: "right", color: "#10b981", fontWeight: 900, fontSize: "15px" }}>{tl(hesap.satisFiyati)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Notlar */}
+              <div>
+                <span className="yi-label">Notlar</span>
+                <textarea className="yi-inp" style={{ height: "80px", resize: "none" }} placeholder="Özel notlar, müşteri talepleri..." value={form.notlar} onChange={(e) => setAlan("notlar", e.target.value)} />
+              </div>
+
+              {/* Kaydet butonu */}
+              <button onClick={kaydet} disabled={kaydediliyor} style={{ width: "100%", padding: "18px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "16px", color: "#fff", fontSize: "17px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer", boxShadow: kaydediliyor ? "none" : "0 8px 32px rgba(16,185,129,0.4)" }}>
+                {kaydediliyor ? "Kaydediliyor..." : "✓ Hesapla & Kaydet"}
+              </button>
             </div>
           )}
         </div>
 
-        {/* MOBILE WIZARD ACTIONS */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-[1200] pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => oncekiBolum ? setAktifBolum(oncekiBolum) : router.push("/dashboard/isler")}
-              className="pointer-events-auto rounded-2xl border border-slate-700 bg-slate-950/95 px-5 py-4 text-sm font-bold text-slate-200 shadow-2xl backdrop-blur-xl"
-            >
-              {oncekiBolum ? "← Geri" : "İşlere Dön"}
+        {/* Mobil alt çubuk */}
+        <div className="mobile-only" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 1200, padding: "10px 16px", paddingBottom: "calc(env(safe-area-inset-bottom) + 10px)", background: "rgba(3,7,18,0.97)", backdropFilter: "blur(16px)", borderTop: "1px solid #1f2937", display: "flex", gap: "10px" }}>
+          <button onClick={() => onceki ? setAktifAdim(onceki) : router.push("/dashboard/isler")} style={{ padding: "13px 18px", background: "#0d1117", border: "1px solid #374151", borderRadius: "13px", color: "#d1d5db", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+            {onceki ? "← Geri" : "← Dön"}
+          </button>
+          {sonraki ? (
+            <button onClick={() => setAktifAdim(sonraki)} style={{ flex: 1, padding: "13px", background: "#10b981", border: "none", borderRadius: "13px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>
+              İleri →
             </button>
-
-            {sonrakiBolum ? (
-              <button
-                type="button"
-                onClick={() => setAktifBolum(sonrakiBolum)}
-                className="pointer-events-auto ml-auto rounded-2xl bg-blue-600 px-8 py-4 text-sm font-black text-white shadow-[0_18px_40px_rgba(37,99,235,0.45)]"
-              >
-                İleri →
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={kaydet}
-                disabled={kaydediliyor}
-                className="pointer-events-auto ml-auto rounded-2xl bg-emerald-600 px-6 py-4 text-sm font-black text-white shadow-[0_18px_40px_rgba(16,185,129,0.36)] disabled:bg-slate-700"
-              >
-                {kaydediliyor ? "Kaydediliyor..." : "Hesapla & Kaydet"}
-              </button>
-            )}
-          </div>
+          ) : (
+            <button onClick={kaydet} disabled={kaydediliyor} style={{ flex: 1, padding: "13px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "13px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer" }}>
+              {kaydediliyor ? "Kaydediliyor..." : "✓ Kaydet"}
+            </button>
+          )}
         </div>
-
       </main>
 
-      <aside className="hidden md:flex w-[25%] border-l border-slate-800 p-6 flex-col min-h-0">
-        <div className="min-h-0 flex-1 overflow-hidden space-y-3">
-          <h2 className="text-sm text-slate-400">Canlı Özet</h2>
-
-        <Card label="Teklif Tutarı" value={para(hesap.satis)} color="text-emerald-400" />
-        <Card label="Toplam Maliyet" value={para(hesap.maliyet)} />
-        <Card label="Kâr" value={para(hesap.kar)} color="text-yellow-400" />
-        <Card label="Plaka" value={`${hesap.plakaSayisi} adet`} />
-        <Card label="Süre" value={`${hesap.toplamDakika.toFixed(0)} dk`} />
-        <Card label="45 Kesim Maliyeti" value={para(hesap.kesim45Maliyet)} />
-        <Card label="Pahlama Maliyeti" value={para(hesap.pahlamaMaliyet)} />
-        <Card label="Yapıştırma Maliyeti" value={para(hesap.yapistirmaMaliyet)} />
-
-        </div>
-
-        <div className="mt-4 border-t border-slate-800 pt-4">
-          <button
-            onClick={kaydet}
-            disabled={kaydediliyor}
-            className="w-full rounded-xl bg-green-600 hover:bg-green-500 disabled:bg-slate-700 p-4 text-lg font-semibold"
-          >
-            {kaydediliyor ? "Kaydediliyor..." : "Hesapla & Kaydet"}
-          </button>
-
-      {/* SATIS_AKSIYON_MODAL */}
-      {fiyatPanelAcik && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-3xl rounded-[32px] border border-slate-700 bg-[#0B1120] p-6 text-white shadow-2xl">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.25em] text-purple-300">FIYAT_KONTROL_MODAL</p>
-                <h2 className="mt-2 text-2xl font-black">Fiyat Kontrol Paneli</h2>
-                <p className="mt-2 text-sm text-slate-400">Kalem bazlı satış fiyatı, katsayı ve kâr kararını burada görürsün.</p>
-              </div>
-              <button type="button" onClick={() => setFiyatPanelAcik(false)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm">Kapat</button>
-            </div>
-
-            <div className="mb-5 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
-                <p className="text-xs text-slate-400">Satış</p>
-                <p className="mt-2 text-xl font-black text-emerald-300">{tl(fiyatPanelToplam())}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
-                <p className="text-xs text-slate-400">Maliyet</p>
-                <p className="mt-2 text-xl font-black">{tl(hesap.maliyet)}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
-                <p className="text-xs text-slate-400">Kâr</p>
-                <p className="mt-2 text-xl font-black text-amber-300">{tl(fiyatPanelKar())} · %{fiyatPanelKarYuzde().toFixed(1)}</p>
-              </div>
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-slate-700">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-900 text-slate-400">
-                  <tr>
-                    <th className="p-3 text-left">Kalem</th>
-                    <th className="p-3 text-right">Mtül</th>
-                    <th className="p-3 text-right">Katsayı</th>
-                    <th className="p-3 text-right">Birim</th>
-                    <th className="p-3 text-right">Toplam</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fiyatAnaliziSatirlari().map((r) => (
-                    <tr key={r.ad} className="border-t border-slate-800">
-                      <td className="p-3 font-semibold">{r.ad}</td>
-                      <td className="p-3 text-right">{r.mtul.toFixed(2)}</td>
-                      <td className="p-3 text-right">{r.katsayi}</td>
-                      <td className="p-3 text-right">
-    <input
-      value={fiyatOverride[r.ad] ?? r.birim.toFixed(2)}
-      onChange={(e) =>
-        setFiyatOverride({
-          ...fiyatOverride,
-          [r.ad]: Number(e.target.value || 0),
-        })
-      }
-      className="w-28 rounded bg-slate-800 px-2 py-1 text-right"
-    />
-    <span className="ml-1 text-xs text-slate-400">TL</span>
-  </td>
-                      <td className="p-3 text-right font-bold">{tl((fiyatOverride[r.ad] ?? r.birim) * r.mtul)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-5">
-              <button
-                type="button"
-                onClick={manuelFiyatlariKaydet}
-                className="w-full rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white hover:bg-emerald-500"
-              >
-                💾 Manuel Fiyatları Kaydet ve Teklifi Güncelle
-              </button>
-            </div>
-
-            {(() => {
-              const karar = fiyatKarari()
-              return (
-                <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-900 p-5">
-                  <p className={`text-lg font-black ${karar.renk}`}>{karar.baslik}</p>
-                  <p className="mt-2 text-sm text-slate-300">{karar.metin}</p>
-                </div>
-              )
-            })()}
-          </div>
-        </div>
-      )}
-
-      {sonKayitModalAcik && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg rounded-[32px] border border-slate-700 bg-[#0B1120] p-6 text-white shadow-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-300">TEKLİF HAZIR</p>
-            <h2 className="mt-2 text-2xl font-black">Satış aksiyonu seç</h2>
-            <p className="mt-2 text-sm text-slate-400">Teklif kaydedildi. Müşteriye gönderebilir veya PDF açabilirsin.</p>
-
-            <div className="mt-5 space-y-3">
-              <button type="button" onClick={whatsappTeklifGonder} className="w-full rounded-2xl bg-green-600 px-5 py-4 text-sm font-black text-white hover:bg-green-500">
-                📲 WhatsApp ile Gönder
-              </button>
-
-              <button type="button" onClick={teklifLinkiKopyala} className="w-full rounded-2xl bg-slate-800 px-5 py-4 text-sm font-black text-white hover:bg-slate-700">
-                🔗 Linki Kopyala
-              </button>
-
-              <button type="button" onClick={() => setFiyatPanelAcik(true)} className="w-full rounded-2xl bg-purple-600 px-5 py-4 text-sm font-black text-white hover:bg-purple-500">
-                💰 Fiyat Kontrol Paneli
-              </button>
-
-              <button type="button" onClick={pdfTeklifAc} className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white hover:bg-blue-500">
-                📄 PDF Aç
-              </button>
-
-              <button type="button" onClick={() => setSonKayitModalAcik(false)} className="w-full rounded-2xl border border-slate-700 px-5 py-4 text-sm font-bold text-slate-300 hover:bg-slate-800">
-                Kapat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-        </div>
-      </aside>
-
-
-      {sonKayitModalAcik && (
-        <div data-global-teklif-modal="true" className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 p-4">
-          <div className="w-full max-w-lg rounded-[32px] border border-slate-700 bg-[#0B1120] p-6 text-white shadow-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-300">TEKLİF HAZIR</p>
-            <h2 className="mt-2 text-2xl font-black">Satış aksiyonu seç</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Teklif kaydedildi. Müşteriye gönderebilir, linki kopyalayabilir veya PDF açabilirsin.
-            </p>
-
-            <div className="mt-5 space-y-3">
-              <button type="button" onClick={whatsappTeklifGonder} className="w-full rounded-2xl bg-green-600 px-5 py-4 text-sm font-black text-white hover:bg-green-500">
-                📲 WhatsApp ile Gönder
-              </button>
-
-              <button type="button" onClick={teklifLinkiKopyala} className="w-full rounded-2xl bg-slate-800 px-5 py-4 text-sm font-black text-white hover:bg-slate-700">
-                🔗 Linki Kopyala
-              </button>
-
-              <button type="button" onClick={() => setFiyatPanelAcik(true)} className="w-full rounded-2xl bg-purple-600 px-5 py-4 text-sm font-black text-white hover:bg-purple-500">
-                💰 Fiyat Kontrol Paneli
-              </button>
-
-              <button type="button" onClick={pdfTeklifAc} className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white hover:bg-blue-500">
-                📄 PDF Aç
-              </button>
-
-              <button type="button" onClick={() => setSonKayitModalAcik(false)} className="w-full rounded-2xl border border-slate-700 px-5 py-4 text-sm font-bold text-slate-300 hover:bg-slate-800">
-                Kapat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Plaka modal */}
       {plakaAcik && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-0 md:p-4" onClick={() => setPlakaAcik(false)}>
-          <div className="plaka-v2-fix h-[100dvh] w-full overflow-y-auto rounded-none bg-[#030712] p-3 pb-[calc(env(safe-area-inset-bottom)+90px)] md:h-[95vh] md:w-[95vw] md:rounded-2xl md:p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 z-30 mb-4 flex items-start justify-between gap-3 border-b border-slate-800 bg-[#030712]/95 pb-3 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-              <div className="min-w-0">
-                <h2 className="text-xl">Plaka Planlayıcı</h2>
-                <p className="text-sm text-slate-400">Ürün, ölçü ve fiyat bilgileri otomatik aktarıldı.</p>
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setPlakaAcik(false)}>
+          {/* Sabit kapat butonu — her zaman görünür */}
+          <button onClick={() => setPlakaAcik(false)} style={{ position: "fixed", top: "16px", right: "16px", zIndex: 9999, padding: "10px 20px", background: "#ef4444", border: "none", borderRadius: "12px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer", boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}>✕ Kapat</button>
+          <div className="plaka-v2-fix" style={{ height: "100dvh", width: "100%", overflowY: "auto", background: "#030712", padding: "16px", paddingTop: "60px", boxSizing: "border-box" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ position: "sticky", top: 0, zIndex: 30, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1f2937", paddingBottom: "12px", marginBottom: "16px", background: "rgba(3,7,18,0.97)", backdropFilter: "blur(20px)", paddingTop: "8px" }}>
+              <div>
+                <h2 style={{ fontSize: "19px", fontWeight: 900, color: "#fff" }}>Plaka Planlayıcı</h2>
+                <p style={{ fontSize: "12px", color: "#6b7280" }}>Kesimler otomatik aktarılacak</p>
               </div>
-              <button onClick={() => setPlakaAcik(false)} className="shrink-0 rounded-xl border border-slate-700 px-4 py-2">
-                Kapat
-              </button>
+              <button onClick={() => setPlakaAcik(false)} style={{ padding: "10px 18px", background: "#ef4444", border: "none", borderRadius: "12px", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕ Kapat</button>
             </div>
-
-            <PlakaPlanlayiciV2
-              embedded
+            <PlakaPlanlayiciV2 embedded
               initialProductName={form.urunAdi}
-              initialPlakaGenislik={form.plakaGenislikCm}
-              initialPlakaYukseklik={form.plakaUzunlukCm}
+              initialPlakaGenislik={form.plakaEn}
+              initialPlakaYukseklik={form.plakaBoy}
               initialPlakaFiyati={form.plakaFiyatiEuro}
-              onApply={aiAktar}
+              initialRows={plakaInitialRows}
+              onApply={(sonuc: any) => {
+                if (sonuc?.plakaLayoutJson) setAlan("plakaLayoutJson", sonuc.plakaLayoutJson);
+                if (sonuc?.plakaImageUrl)  setAlan("plakaImageUrl",  sonuc.plakaImageUrl);
+                if (sonuc?.ortalamaPlakaFiyati > 0) setAlan("plakaFiyatiEuro", String(Number(sonuc.ortalamaPlakaFiyati).toFixed(2)));
+                // Parçaları değiştirme — sadece layout bilgisini aktar
+                if (false) {
+                  setForm((p) => {
+                    const yeniParcalar = [...p.parcalar];
+                    const tezgahIdx = yeniParcalar.findIndex((x) => x.tip === "tezgah");
+                    if (tezgahIdx >= 0) {
+                      yeniParcalar[tezgahIdx] = { ...yeniParcalar[tezgahIdx] };
+                    }
+                    return { ...p, parcalar: yeniParcalar };
+                  });
+                }
+                setPlakaAcik(false);
+              }}
             />
           </div>
         </div>
@@ -1163,200 +1403,3 @@ export default function YeniIsV3Page() {
     </div>
   );
 }
-
-function OperationRow({
-  label,
-  mtul,
-  setMtul,
-  makine,
-  setMakine,
-  dakika,
-  setDakika,
-  makineler,
-}: any) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr_0.75fr] gap-2 items-end rounded-xl border border-slate-800 bg-[#111827]/60 px-2.5 py-1.5">
-      <label className="block">
-        <p className="text-[10px] text-slate-400 mb-1">{label} Mtül</p>
-        <input
-          value={mtul}
-          onChange={(e) => setMtul(e.target.value)}
-          onBlur={(e) => setMtul(normalizeMtulDisplay(e.target.value))}
-          className="w-full h-9 rounded-lg bg-[#0B1120] border border-slate-700 px-3 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <label className="block min-w-0">
-        <p className="text-[10px] text-slate-400 mb-1">Makine</p>
-        <select
-          value={makine}
-          onChange={(e) => setMakine(e.target.value)}
-          className="w-full h-9 rounded-lg bg-[#0B1120] border border-slate-700 px-2 text-[11px] leading-none outline-none focus:border-blue-500 truncate"
-        >
-          {makineler.length === 0 && <option value="">Makine yok</option>}
-          {makineler.map((m: any) => (
-            <option key={m.id} value={m.id}>
-              {m.makineAdi} · {Number(
-  m.dakikalikMaliyet ??
-  m.dkMaliyet ??
-  m.dakikaMaliyet ??
-  m.hesaplananDakikaMaliyeti ??
-  m.minuteCost ??
-  0
-).toFixed(2)}₺/dk
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="block">
-        <p className="text-[10px] text-slate-400 mb-1">Süre dk/mtül</p>
-        <input
-          value={dakika}
-          onChange={(e) => setDakika(e.target.value)}
-          className="w-full h-9 rounded-lg bg-[#0B1120] border border-slate-700 px-3 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-    </div>
-  );
-}
-
-function Input({ label, value, onChange, type = "text" }: any) {
-  return (
-    <label className="block">
-      <p className="text-xs text-slate-400 mb-2">{label}</p>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
-      />
-    </label>
-  );
-}
-
-function Select({ label, value, onChange, options }: any) {
-  return (
-    <label className="block">
-      <p className="text-xs text-slate-400 mb-2">{label}</p>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
-      >
-        {options.map((o: string) => (
-          <option key={o} value={o}>{o}</option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function SelectMakine({ label, value, onChange, makineler }: any) {
-  return (
-    <label className="block">
-      <p className="text-xs text-slate-400 mb-2">{label}</p>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl bg-[#111827] border border-slate-700 px-4 py-3 outline-none focus:border-blue-500"
-      >
-        {makineler.length === 0 && <option value="">Makine yok</option>}
-        {makineler.map((m: any) => (
-          <option key={m.id} value={m.id}>
-            {m.makineAdi} · {Number(
-  m.dakikalikMaliyet ??
-  m.dkMaliyet ??
-  m.dakikaMaliyet ??
-  m.hesaplananDakikaMaliyeti ??
-  m.minuteCost ??
-  0
-).toFixed(2)}₺/dk
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function Card({ label, value, color = "text-white" }: any) {
-  return (
-    <div className="bg-[#0B1120] border border-slate-800 rounded-xl p-4">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className={`text-xl mt-2 ${color}`}>{value}</p>
-    </div>
-  );
-}
-
-
-
-function PopupCard({ label, value }: any) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-[#111827] p-4">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
-    
-      {sonKayitModalAcik && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg rounded-[32px] border border-slate-700 bg-[#0B1120] p-6 text-white shadow-2xl">
-            <div className="mb-5">
-              <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-300">TEKLİF HAZIR</p>
-              <h2 className="mt-2 text-2xl font-black">Satış aksiyonu seç</h2>
-              <p className="mt-2 text-sm text-slate-400">
-                Teklif kaydedildi. Müşteriye online onay linki gönderebilir, PDF açabilir veya fiyat kırılımını kontrol edebilirsin.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={whatsappTeklifGonder}
-                className="w-full rounded-2xl bg-green-600 px-5 py-4 text-sm font-black text-white hover:bg-green-500"
-              >
-                📲 WhatsApp ile Müşteriye Gönder
-              </button>
-
-              <button
-                type="button"
-                onClick={teklifLinkiKopyala}
-                className="w-full rounded-2xl bg-slate-900 px-5 py-4 text-sm font-black text-white hover:bg-slate-800"
-              >
-                🔗 Online Teklif Linkini Kopyala
-              </button>
-
-              <button
-                type="button"
-                onClick={pdfTeklifAc}
-                className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white hover:bg-blue-500"
-              >
-                📄 PDF Teklifi Aç
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSonKayitModalAcik(false)}
-                className="w-full rounded-2xl border border-slate-700 px-5 py-4 text-sm font-bold text-slate-300 hover:bg-slate-800"
-              >
-                Kapat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-</div>
-  );
-}
-
-function PopupInput({ label, value, onChange }: any) {
-  return (
-    <label className="block">
-      <p className="mb-1 text-xs text-slate-400">{label}</p>
-      <input
-        value={Number(value || 0).toFixed(2)}
-        onChange={(e) => onChange(e.target.value.replace(",", "."))}
-        className="w-full rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
-      />
-    </label>
-  );
-}
-

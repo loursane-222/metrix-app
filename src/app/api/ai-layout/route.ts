@@ -13,7 +13,6 @@ type Piece = {
   y?: number;
   slabIndex?: number;
   damarGrubu?: string;
-  oncelik?: number;
 };
 
 type Slab = {
@@ -21,346 +20,193 @@ type Slab = {
   yerlesim: Piece[];
 };
 
-const tezgahSetParts = [
-  "tezgah",
-  "tezgah arası",
-  "ön alın",
-  "l dönüş tezgah",
-  "l tezgah arası",
-  "l ön alın",
-];
-
-const highVeinParts = new Set([
-  ...tezgahSetParts,
-  "ada tezgah",
-  "ada ayak",
-  "ada iç dönüş",
-  "ada dış dönüş",
-  "tezgah ayak",
-]);
-
 function norm(v?: string) {
-  return (v || "").toLowerCase().trim();
+  return String(v || "")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i").replace(/İ/g, "i")
+    .replace(/ş/g, "s").replace(/ğ/g, "g")
+    .replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c")
+    .replace(/[-_]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function getVeinGroup(piece: Piece) {
-  const t = norm(piece.parcaTuru);
-
-  if (tezgahSetParts.includes(t)) {
-    return `${piece.tipAdi || piece.label}-tezgah-grubu`;
-  }
-
-  if (["ada tezgah", "ada ayak", "ada iç dönüş", "ada dış dönüş"].includes(t)) {
-    return `${piece.tipAdi || piece.label}-ada-grubu`;
-  }
-
-  if (t === "davlumbaz") {
-    return `${piece.tipAdi || piece.label}-duvar-grubu`;
-  }
-
-  return `${piece.tipAdi || piece.label}-serbest`;
+function kind(piece: Piece): string {
+  const raw = norm(`${piece.parcaTuru || ""} ${piece.label || ""}`);
+  if (raw.includes("on alin")) return "on_alin";
+  if (raw.includes("tezgah arasi")) return "tezgah_arasi";
+  if (raw.includes("ada tezgah")) return "ada_tezgah";
+  if (raw.includes("tezgah") && !raw.includes("arasi")) return "tezgah";
+  if (raw.includes("ada ayak")) return "ada_ayak";
+  if (raw.includes("supurgelik")) return "supurgelik";
+  return raw.replace(/ /g, "_");
 }
 
-function getSetKey(piece: Piece) {
-  const t = norm(piece.parcaTuru);
-  if (!tezgahSetParts.includes(t)) return "";
-
-  const label = piece.label || "";
-
-  // Örnek label:
-  // "Tip-1-1 / tezgah"
-  // "Tip-1-2 / ön alın"
-  // Burada amaç Tip-1-1, Tip-1-2 gibi her mutfağı ayrı damar seti yapmak.
-  const beforeSlash = label.split("/")[0]?.trim();
-
-  if (beforeSlash) {
-    return `${beforeSlash}-damar-seti`;
-  }
-
-  return `${piece.tipAdi || "tip"}-${piece.id}-damar-seti`;
+function kindOrder(k: string): number {
+  if (k === "on_alin") return 1;
+  if (k === "tezgah") return 2;
+  if (k === "tezgah_arasi") return 3;
+  return 9;
 }
 
-function getPriority(piece: Piece) {
-  const t = norm(piece.parcaTuru);
-
-  if (t === "ada tezgah") return 100;
-  if (t === "tezgah") return 95;
-  if (t === "l dönüş tezgah") return 94;
-  if (t === "tezgah arası") return 90;
-  if (t === "l tezgah arası") return 89;
-  if (t === "ön alın") return 88;
-  if (t === "l ön alın") return 87;
-  if (t === "ada ayak") return 86;
-  if (t === "ada iç dönüş") return 84;
-  if (t === "ada dış dönüş") return 83;
-  if (t === "tezgah ayak") return 78;
-  if (t === "davlumbaz") return 70;
-  if (t === "süpürgelik") return 20;
-
-  return 50;
+function normalizePlaka(input: { genislik: number; yukseklik: number }) {
+  const a = Number(input?.genislik || 0);
+  const b = Number(input?.yukseklik || 0);
+  return { genislik: Math.max(a, b), yukseklik: Math.min(a, b) };
 }
 
-function canRotate(piece: Piece) {
-  return !highVeinParts.has(norm(piece.parcaTuru));
-}
+// ─── Ana paketleme algoritması ────────────────────────────────────────────────
+// Mantık:
+// 1. Setleri oluştur: her set = [ön alın?, tezgah?, tezgah arası?] kindOrder'a göre sıralı
+// 2. Her set için mevcut plakada YETERLİ YÜKSEKLIK olan bir "şerit" ara
+//    Şerit: plakanın tüm genişliğini kaplayan yatay bölge
+//    Bir plakada birden fazla set üst üste dizilir (y ekseninde)
+// 3. Set sığmıyorsa yeni plaka aç
 
-function normalizePieces(pieces: Piece[]) {
-  return pieces.map((p) => ({
-    ...p,
-    damarGrubu: getVeinGroup(p),
-    oncelik: getPriority(p),
-  }));
-}
+type SetItem = Piece & { _kind: string };
 
-function overlaps(a: Piece, b: Piece) {
-  const ax = a.x || 0;
-  const ay = a.y || 0;
-  const bx = b.x || 0;
-  const by = b.y || 0;
-
-  return !(
-    ax + a.genislik <= bx ||
-    bx + b.genislik <= ax ||
-    ay + a.yukseklik <= by ||
-    by + b.yukseklik <= ay
-  );
-}
-
-function fits(
+function packPieces(
   plaka: { genislik: number; yukseklik: number },
-  slab: Slab,
-  piece: Piece
-) {
-  const x = piece.x || 0;
-  const y = piece.y || 0;
+  inputPieces: Piece[]
+): Slab[] {
 
-  if (x < 0 || y < 0) return false;
-  if (x + piece.genislik > plaka.genislik) return false;
-  if (y + piece.yukseklik > plaka.yukseklik) return false;
+  // Türe göre ayır
+  const onAlinlar: SetItem[] = [];
+  const tezgahlar: SetItem[] = [];
+  const tezgahArasilari: SetItem[] = [];
+  const singles: SetItem[] = [];
 
-  return !slab.yerlesim.some((p) => overlaps(piece, p));
-}
-
-function placeSingleOnSlab(
-  plaka: { genislik: number; yukseklik: number },
-  slab: Slab,
-  piece: Piece
-) {
-  const step = 5;
-
-  const variants = [
-    { ...piece },
-    ...(canRotate(piece)
-      ? [{ ...piece, genislik: piece.yukseklik, yukseklik: piece.genislik }]
-      : []),
-  ];
-
-  for (const variant of variants) {
-    for (let y = 0; y <= plaka.yukseklik - variant.yukseklik; y += step) {
-      for (let x = 0; x <= plaka.genislik - variant.genislik; x += step) {
-        const candidate = { ...variant, x, y, slabIndex: slab.index };
-        if (fits(plaka, slab, candidate)) return candidate;
-      }
-    }
+  for (const p of inputPieces) {
+    const k = kind(p);
+    const pk = { ...p, _kind: k };
+    if (k === "on_alin") onAlinlar.push(pk);
+    else if (k === "tezgah") tezgahlar.push(pk);
+    else if (k === "tezgah_arasi") tezgahArasilari.push(pk);
+    else singles.push(pk);
   }
 
-  return null;
-}
+  // Setleri oluştur
+  const maxSets = Math.max(onAlinlar.length, tezgahlar.length, tezgahArasilari.length, 1);
+  const sets: SetItem[][] = [];
+  for (let i = 0; i < maxSets; i++) {
+    const set: SetItem[] = [];
+    if (onAlinlar[i]) set.push(onAlinlar[i]);
+    if (tezgahlar[i]) set.push(tezgahlar[i]);
+    if (tezgahArasilari[i]) set.push(tezgahArasilari[i]);
+    if (set.length) sets.push([...set].sort((a, b) => kindOrder(a._kind) - kindOrder(b._kind)));
+  }
 
+  // Her plaka için "dolu yükseklik" takip et (y ekseninde ne kadar doldu)
+  // Her set plaka genişliğince yayılır (x=0'dan başlar, genislik=plakaGenislik)
+  // Parçalar kendi genişliklerini korur ama x=0'dan yerleşir
+  // Set yüksekliği = setteki parçaların yükseklik toplamı
 
-function getSetLayouts(setItems: Piece[]) {
-  const orderWeight = (p: Piece) => {
-    const t = norm(p.parcaTuru);
-
-    // Gerçek kesim sırası:
-    // Plakanın dışından: ön alın -> tezgah -> tezgah arası
-    if (t === "ön alın" || t === "l ön alın") return 1;
-    if (t === "tezgah" || t === "l dönüş tezgah") return 2;
-    if (t === "tezgah arası" || t === "l tezgah arası") return 3;
-
-    return 9;
+  type SlabState = {
+    index: number;
+    yerlesim: (Piece & { _kind: string })[];
+    doluyukseklik: number; // şimdiye kadar kullanılan y
   };
 
-  const ordered = [...setItems].sort((a, b) => orderWeight(a) - orderWeight(b));
+  const slabStates: SlabState[] = [];
 
-  // Ana damar layout: üstten alta boşluksuz.
-  // Böylece ön alın tezgaha, tezgah da tezgah arasına öpüşür.
-  let y = 0;
-  const verticalKissing = ordered.map((p) => {
-    const item = { ...p, x: 0, y };
-    y += p.yukseklik;
-    return item;
-  });
-
-  // Yedek layout: eğer dikey blok sığmazsa yan yana dene.
-  let x = 0;
-  const horizontalFallback = ordered.map((p) => {
-    const item = { ...p, x, y: 0 };
-    x += p.genislik;
-    return item;
-  });
-
-  return [verticalKissing, horizontalFallback];
-}
-
-
-function setFitsAt(
-  plaka: { genislik: number; yukseklik: number },
-  slab: Slab,
-  layout: Piece[],
-  startX: number,
-  startY: number
-) {
-  const moved = layout.map((p) => ({
-    ...p,
-    x: (p.x || 0) + startX,
-    y: (p.y || 0) + startY,
-    slabIndex: slab.index,
-    damarGrubu: getSetKey(p) || p.damarGrubu,
-  }));
-
-  const maxX = Math.max(...moved.map((p) => (p.x || 0) + p.genislik));
-  const maxY = Math.max(...moved.map((p) => (p.y || 0) + p.yukseklik));
-
-  if (maxX > plaka.genislik || maxY > plaka.yukseklik) return null;
-
-  for (const piece of moved) {
-    if (!fits(plaka, slab, piece)) return null;
+  function yeniSlab(): SlabState {
+    const s: SlabState = { index: slabStates.length, yerlesim: [], doluyukseklik: 0 };
+    slabStates.push(s);
+    return s;
   }
 
-  return moved;
-}
+  function setYuksekligi(set: SetItem[]): number {
+    return set.reduce((s, p) => s + p.yukseklik, 0);
+  }
 
-function placeSetOnSlab(
-  plaka: { genislik: number; yukseklik: number },
-  slab: Slab,
-  setItems: Piece[]
-) {
-  const layouts = getSetLayouts(setItems);
-  const step = 5;
+  function setGenisligi(set: SetItem[]): number {
+    return Math.max(...set.map(p => p.genislik));
+  }
 
-  for (const layout of layouts) {
-    const layoutW = Math.max(...layout.map((p) => (p.x || 0) + p.genislik));
-    const layoutH = Math.max(...layout.map((p) => (p.y || 0) + p.yukseklik));
-
-    if (layoutW > plaka.genislik || layoutH > plaka.yukseklik) continue;
-
-    for (let y = 0; y <= plaka.yukseklik - layoutH; y += step) {
-      for (let x = 0; x <= plaka.genislik - layoutW; x += step) {
-        const candidate = setFitsAt(plaka, slab, layout, x, y);
-        if (candidate) return candidate;
-      }
+  // Seti bir plakaya yerleştir
+  function setYerlestir(slab: SlabState, set: SetItem[], startY: number) {
+    let curY = startY;
+    for (const p of set) {
+      slab.yerlesim.push({
+        ...p,
+        x: 0,
+        y: curY,
+        slabIndex: slab.index,
+        parcaTuru: p._kind,
+        damarGrubu: `slab${slab.index}-y${startY}`,
+      });
+      curY += p.yukseklik;
     }
+    slab.doluyukseklik = curY;
   }
 
-  return null;
-}
+  // Setleri yerleştir
+  for (const set of sets) {
+    const setH = setYuksekligi(set);
+    const setW = setGenisligi(set);
 
-function groupPiecesForVeinSets(pieces: Piece[]) {
-  const sets = new Map<string, Piece[]>();
-  const singles: Piece[] = [];
-
-  for (const piece of normalizePieces(pieces)) {
-    const key = getSetKey(piece);
-    if (!key) {
-      singles.push(piece);
+    // Plakaya sığıp sığmadığını kontrol et
+    if (setH > plaka.yukseklik || setW > plaka.genislik) {
+      // Sığmıyor ama yine de yerleştir (hata göstergesi)
+      if (!slabStates.length) yeniSlab();
+      setYerlestir(slabStates[slabStates.length - 1], set, slabStates[slabStates.length - 1].doluyukseklik);
       continue;
     }
 
-    if (!sets.has(key)) sets.set(key, []);
-    sets.get(key)!.push(piece);
-  }
-
-  return {
-    veinSets: Array.from(sets.entries()).map(([key, items]) => ({ key, items })),
-    singles,
-  };
-}
-
-function placeSinglePiece(
-  plaka: { genislik: number; yukseklik: number },
-  slabs: Slab[],
-  piece: Piece
-) {
-  for (const slab of slabs) {
-    const candidate = placeSingleOnSlab(plaka, slab, piece);
-    if (candidate) {
-      slab.yerlesim.push(candidate);
-      return;
-    }
-  }
-
-  const newSlab: Slab = { index: slabs.length, yerlesim: [] };
-  const candidate = placeSingleOnSlab(plaka, newSlab, piece);
-
-  if (candidate) {
-    newSlab.yerlesim.push(candidate);
-  } else {
-    newSlab.yerlesim.push({
-      ...piece,
-      x: 0,
-      y: 0,
-      slabIndex: newSlab.index,
-      label: piece.label + " / PLAKAYA SIĞMIYOR",
-    });
-  }
-
-  slabs.push(newSlab);
-}
-
-function packPieces(plaka: { genislik: number; yukseklik: number }, inputPieces: Piece[]) {
-  const { veinSets, singles } = groupPiecesForVeinSets(inputPieces);
-  const slabs: Slab[] = [];
-
-  const sortedSets = veinSets.sort((a, b) => {
-    const areaA = a.items.reduce((sum, p) => sum + p.genislik * p.yukseklik, 0);
-    const areaB = b.items.reduce((sum, p) => sum + p.genislik * p.yukseklik, 0);
-    return areaB - areaA;
-  });
-
-  for (const set of sortedSets) {
-    let placed = false;
-
-    for (const slab of slabs) {
-      const candidate = placeSetOnSlab(plaka, slab, set.items);
-      if (candidate) {
-        slab.yerlesim.push(...candidate);
-        placed = true;
+    // Mevcut plakalarda alt kısmında yeterli yer var mı?
+    let yerlestirildi = false;
+    for (const slab of slabStates) {
+      const kalanY = plaka.yukseklik - slab.doluyukseklik;
+      if (kalanY >= setH) {
+        setYerlestir(slab, set, slab.doluyukseklik);
+        yerlestirildi = true;
         break;
       }
     }
 
-    if (!placed) {
-      const newSlab: Slab = { index: slabs.length, yerlesim: [] };
-      const candidate = placeSetOnSlab(plaka, newSlab, set.items);
-
-      if (candidate) {
-        newSlab.yerlesim.push(...candidate);
-        slabs.push(newSlab);
-      } else {
-        for (const piece of set.items) {
-          placeSinglePiece(plaka, slabs, {
-            ...piece,
-            label: piece.label + " / SET BÖLÜNDÜ",
-          });
-        }
-      }
+    if (!yerlestirildi) {
+      const yeni = yeniSlab();
+      setYerlestir(yeni, set, 0);
     }
   }
 
-  const sortedSingles = singles.sort((a, b) => {
-    if ((b.oncelik || 0) !== (a.oncelik || 0)) return (b.oncelik || 0) - (a.oncelik || 0);
-    return b.genislik * b.yukseklik - a.genislik * a.yukseklik;
-  });
-
-  for (const piece of sortedSingles) {
-    placeSinglePiece(plaka, slabs, piece);
+  // Singles — aynı mantıkla üst üste
+  for (const piece of singles) {
+    let yerlestirildi = false;
+    for (const slab of slabStates) {
+      const kalanY = plaka.yukseklik - slab.doluyukseklik;
+      if (kalanY >= piece.yukseklik && piece.genislik <= plaka.genislik) {
+        slab.yerlesim.push({
+          ...piece,
+          x: 0,
+          y: slab.doluyukseklik,
+          slabIndex: slab.index,
+          parcaTuru: piece._kind,
+          damarGrubu: `slab${slab.index}-single`,
+        });
+        slab.doluyukseklik += piece.yukseklik;
+        yerlestirildi = true;
+        break;
+      }
+    }
+    if (!yerlestirildi) {
+      const yeni = yeniSlab();
+      yeni.yerlesim.push({
+        ...piece,
+        x: 0,
+        y: 0,
+        slabIndex: yeni.index,
+        parcaTuru: piece._kind,
+        damarGrubu: `slab${yeni.index}-single`,
+      });
+      yeni.doluyukseklik = piece.yukseklik;
+    }
   }
 
-  return slabs.filter((s) => s.yerlesim.length > 0).map((s, index) => ({
-    index,
-    yerlesim: s.yerlesim.map((p) => ({ ...p, slabIndex: index })),
-  }));
+  return slabStates
+    .filter(s => s.yerlesim.length > 0)
+    .map((s, index) => ({
+      index,
+      yerlesim: s.yerlesim.map(p => ({ ...p, slabIndex: index })),
+    }));
 }
 
 export async function POST(req: Request) {
@@ -370,41 +216,46 @@ export async function POST(req: Request) {
     if (!plaka?.genislik || !plaka?.yukseklik) {
       return NextResponse.json({ error: "Plaka ölçüsü eksik." }, { status: 400 });
     }
-
     if (!Array.isArray(pieces) || pieces.length === 0) {
       return NextResponse.json({ error: "Parça yok." }, { status: 400 });
     }
 
-    const slabs = packPieces(plaka, pieces);
+    const cleanPieces: Piece[] = pieces.map((p: Piece, i: number) => ({
+      ...p,
+      id: p.id || i + 1,
+      genislik: Number(p.genislik || 0),
+      yukseklik: Number(p.yukseklik || 0),
+      label: p.label || p.parcaTuru || `Parça ${i + 1}`,
+    }));
 
-    const toplamParcaAlani = pieces.reduce(
-      (sum: number, p: Piece) => sum + p.genislik * p.yukseklik,
-      0
+    const normalizedPlaka = normalizePlaka({
+      genislik: Number(plaka.genislik),
+      yukseklik: Number(plaka.yukseklik),
+    });
+
+    const slabs = packPieces(normalizedPlaka, cleanPieces);
+
+    const toplamParcaAlani = cleanPieces.reduce(
+      (sum, p) => sum + p.genislik * p.yukseklik, 0
     );
-
-    const plakaAlani = plaka.genislik * plaka.yukseklik;
+    const plakaAlani = normalizedPlaka.genislik * normalizedPlaka.yukseklik;
     const toplamPlakaAlani = slabs.length * plakaAlani;
-    const fireOrani =
-      toplamPlakaAlani > 0
-        ? Math.max(0, ((toplamPlakaAlani - toplamParcaAlani) / toplamPlakaAlani) * 100)
-        : 0;
-
-    const damarGruplari = Array.from(
-      new Set(slabs.flatMap((s) => s.yerlesim.map((p) => p.damarGrubu || "")))
-    ).filter(Boolean);
+    const fireOrani = toplamPlakaAlani > 0
+      ? Math.max(0, ((toplamPlakaAlani - toplamParcaAlani) / toplamPlakaAlani) * 100)
+      : 0;
 
     return NextResponse.json({
       ok: true,
+      plaka: normalizedPlaka,
       slabs,
       plakaSayisi: slabs.length,
       toplamParcaAlani,
       toplamPlakaAlani,
       fireOrani: Number(fireOrani.toFixed(2)),
-      damarGruplari,
-      yorum: `${slabs.length} plaka üzerinde taşmadan yerleşim yapıldı. Damar takibi için ${damarGruplari.length} ilişki grubu dikkate alındı. Fire oranı yaklaşık %${fireOrani.toFixed(2)}.`,
+      yorum: `${slabs.length} plaka — ön alın dıştan içe, setler plaka alt kısmına üst üste yerleştirildi.`,
     });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "AI layout hatası." }, { status: 500 });
+    return NextResponse.json({ error: "Layout hatası." }, { status: 500 });
   }
 }

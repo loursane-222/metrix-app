@@ -22,36 +22,39 @@ export default function DashboardPage() {
   
 const sicakTeklifler = useMemo(() => data?.sicakTeklifler || [], [data]);
 
-const [aiMesajlar, setAiMesajlar] = useState({});
+const [aiMesajlar, setAiMesajlar] = useState<Record<string, any>>({});
 
 useEffect(() => {
+  if (sicakTeklifler.length === 0) return;
+
   const run = async () => {
     const top = sicakTeklifler.slice(0, 3);
 
-    const results = {};
+    const entries = await Promise.all(
+      top.map(async (t: any) => {
+        try {
+          const res = await fetch("/api/ai-sales", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              musteri: t.musteri,
+              tutar: t.tutar,
+              goruntulenme: t.goruntulenme,
+              pdf: t.pdf
+            })
+          });
+          const json = await res.json();
+          return [t.teklifNo, json] as const;
+        } catch {
+          return [t.teklifNo, null] as const;
+        }
+      })
+    );
 
-    for (const t of top) {
-      try {
-        const res = await fetch("/api/ai-sales", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            musteri: t.musteri,
-            tutar: t.tutar,
-            goruntulenme: t.goruntulenme,
-            pdf: t.pdf
-          })
-        });
-
-        const json = await res.json();
-        results[t.teklifNo] = json;
-      } catch {}
-    }
-
-    setAiMesajlar(results);
+    setAiMesajlar(Object.fromEntries(entries.filter(([, v]) => v !== null)));
   };
 
-  if (sicakTeklifler.length > 0) run();
+  run();
 }, [sicakTeklifler]);
 
   const operasyonPlan = useMemo(() => data?.operasyonPlan || [], [data]);
