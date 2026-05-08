@@ -1,7 +1,6 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
+import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { jwtVerify } from 'jose'
 
 
 

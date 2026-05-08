@@ -115,15 +115,15 @@ export default function AtolyePage() {
 
   async function yukle() {
     const [a, m, ar, g] = await Promise.all([
-      fetch('/api/atolye'),
-      fetch('/api/makineler'),
-      fetch('/api/araclar'),
-      fetch('/api/aylik-gider'),
+      fetch('/api/atolye').catch(() => null),
+      fetch('/api/makineler').catch(() => null),
+      fetch('/api/araclar').catch(() => null),
+      fetch('/api/aylik-gider').catch(() => null),
     ])
-    const av = await a.json()
-    const mv = await m.json()
-    const arv = await ar.json()
-    const gv = await g.json()
+    const av = a?.ok ? await a.json().catch(() => ({})) : {}
+    const mv = m?.ok ? await m.json().catch(() => ({})) : {}
+    const arv = ar?.ok ? await ar.json().catch(() => ({})) : {}
+    const gv = g?.ok ? await g.json().catch(() => ({})) : {}
 
     if (av.atolye) {
       const x = av.atolye
