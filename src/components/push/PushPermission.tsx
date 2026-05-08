@@ -14,24 +14,48 @@ const firebaseConfig = {
 const VAPID_KEY =
   "BLmAn43zqAzo3RuPh89CzH3Ob_BjGI0DL0a9scSS_mSCQqTqHWvi9OAUKbsoNxLGqjNFYiEzJdhgtMOltVsAQjs";
 
+function isPWA() {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as any).standalone === true
+  );
+}
+
+function isIOS() {
+  if (typeof window === "undefined") return false;
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
 export default function PushPermission() {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showIOSHint, setShowIOSHint] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!("Notification" in window)) return;
+
     const saved = localStorage.getItem("metrix_push_enabled");
     const dismissed = localStorage.getItem("metrix_push_dismissed");
     if (saved === "1") return;
     if (dismissed === "1") return;
+
+    // iOS'ta PWA değilse "Ana ekrana ekle" ipucu göster
+    if (isIOS() && !isPWA()) {
+      setShowIOSHint(true);
+      return;
+    }
+
+    if (!("Notification" in window)) return;
     if (Notification.permission === "denied") return;
+
     setVisible(true);
   }, []);
 
   async function enablePush() {
     try {
       setBusy(true);
+
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         localStorage.setItem("metrix_push_dismissed", "1");
@@ -67,7 +91,6 @@ export default function PushPermission() {
       const role = currentUser.role;
 
       if (role === "personel") {
-        // Personel token kaydı
         await fetch("/api/push/save-personel", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -78,7 +101,6 @@ export default function PushPermission() {
           }),
         });
       } else {
-        // Admin/patron token kaydı
         await fetch("/api/push/save", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -93,7 +115,7 @@ export default function PushPermission() {
     } catch (e: any) {
       console.error(e);
       setVisible(false);
-      alert("Bildirim açılırken hata oluştu: " + (e?.message || e));
+      alert("Bildirim açılırken hata: " + (e?.message || e));
     } finally {
       setBusy(false);
     }
@@ -102,24 +124,53 @@ export default function PushPermission() {
   function dismiss() {
     localStorage.setItem("metrix_push_dismissed", "1");
     setVisible(false);
+    setShowIOSHint(false);
+  }
+
+  // iOS'ta PWA değilse ana ekrana ekle ipucu
+  if (showIOSHint) {
+    return (
+      <div style={{
+        position: "fixed", left: 16, right: 16, bottom: 24, zIndex: 99999,
+        background: "#111827", color: "white", borderRadius: 18, padding: 16,
+        boxShadow: "0 20px 60px rgba(0,0,0,.40)", maxWidth: 520, margin: "0 auto",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      }}>
+        <button onClick={dismiss} style={{
+          position: "absolute", right: 12, top: 10, border: 0,
+          background: "transparent", color: "white", fontSize: 20, cursor: "pointer",
+        }}>×</button>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>
+          Bildirimleri almak ister misin?
+        </div>
+        <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.5 }}>
+          iPhone bildirimleri için uygulamayı ana ekrana ekle:
+          Safari alt menüsünden <strong>Paylaş</strong> (
+          <span style={{ fontSize: 14 }}>⬆</span>
+          ) → <strong>Ana Ekrana Ekle</strong> → Uygulamayı oradan aç.
+        </div>
+      </div>
+    );
   }
 
   if (!visible) return null;
 
   return (
     <div style={{
-      position: "fixed", left: 16, right: 16, bottom: 16, zIndex: 99999,
+      position: "fixed", left: 16, right: 16, bottom: 24, zIndex: 99999,
       background: "#111827", color: "white", borderRadius: 18, padding: 16,
-      boxShadow: "0 20px 60px rgba(0,0,0,.30)", maxWidth: 520, margin: "0 auto",
-      fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+      boxShadow: "0 20px 60px rgba(0,0,0,.40)", maxWidth: 520, margin: "0 auto",
+      fontFamily: "system-ui, -apple-system, sans-serif",
     }}>
       <button onClick={dismiss} style={{
         position: "absolute", right: 12, top: 10, border: 0,
         background: "transparent", color: "white", fontSize: 20, cursor: "pointer",
-      }} aria-label="Kapat">×</button>
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>Metrix bildirimlerini aç</div>
+      }}>×</button>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>
+        Metrix bildirimlerini aç
+      </div>
       <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 12 }}>
-        İş programı, personel atama ve onaylanan işler için telefona bildirim gelsin.
+        İş programı, personel atama ve onaylanan işler için bildirim gelsin.
       </div>
       <button onClick={enablePush} disabled={busy} style={{
         width: "100%", border: 0, borderRadius: 14, padding: "12px 14px",
