@@ -21,42 +21,29 @@ export default function PushPermission() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("Notification" in window)) return;
-
     const saved = localStorage.getItem("metrix_push_enabled");
     const dismissed = localStorage.getItem("metrix_push_dismissed");
-
     if (saved === "1") return;
     if (dismissed === "1") return;
     if (Notification.permission === "denied") return;
-
     setVisible(true);
   }, []);
 
   async function enablePush() {
     try {
       setBusy(true);
-
       const permission = await Notification.requestPermission();
-
       if (permission !== "granted") {
         localStorage.setItem("metrix_push_dismissed", "1");
         setVisible(false);
         return;
       }
 
-      const currentUserRes = await fetch("/api/auth/current-user", {
-        cache: "no-store",
-      });
-
+      const currentUserRes = await fetch("/api/auth/current-user", { cache: "no-store" });
       const currentUser = await currentUserRes.json();
-
-      if (!currentUser?.userId) {
-        setVisible(false);
-        return;
-      }
+      if (!currentUser?.userId) { setVisible(false); return; }
 
       const supported = await isSupported();
-
       if (!supported) {
         alert("Bu tarayıcı web bildirimi desteklemiyor.");
         setVisible(false);
@@ -65,17 +52,9 @@ export default function PushPermission() {
 
       const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
       const messaging = getMessaging(app);
-
-      const registration = await navigator.serviceWorker.register(
-        "/firebase-messaging-sw.js"
-      );
-
+      const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
       await navigator.serviceWorker.ready;
-
-      if (!registration.active) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-      }
-
+      if (!registration.active) await new Promise((r) => setTimeout(r, 1500));
       const readyRegistration = await navigator.serviceWorker.ready;
 
       const token = await getToken(messaging, {
@@ -83,18 +62,29 @@ export default function PushPermission() {
         serviceWorkerRegistration: readyRegistration,
       });
 
-      if (!token) {
-        setVisible(false);
-        return;
-      }
+      if (!token) { setVisible(false); return; }
 
-      await fetch("/api/push/save", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId: currentUser.userId, token }),
-      });
+      const role = currentUser.role;
+
+      if (role === "personel") {
+        // Personel token kaydı
+        await fetch("/api/push/save-personel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            personelId: currentUser.personelId,
+            atolyeId: currentUser.atolyeId,
+            token,
+          }),
+        });
+      } else {
+        // Admin/patron token kaydı
+        await fetch("/api/push/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: currentUser.userId, token }),
+        });
+      }
 
       localStorage.setItem("metrix_push_enabled", "1");
       localStorage.removeItem("metrix_push_dismissed");
@@ -117,62 +107,24 @@ export default function PushPermission() {
   if (!visible) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        left: 16,
-        right: 16,
-        bottom: 16,
-        zIndex: 99999,
-        background: "#111827",
-        color: "white",
-        borderRadius: 18,
-        padding: 16,
-        boxShadow: "0 20px 60px rgba(0,0,0,.30)",
-        maxWidth: 520,
-        margin: "0 auto",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-      }}
-    >
-      <button
-        onClick={dismiss}
-        style={{
-          position: "absolute",
-          right: 12,
-          top: 10,
-          border: 0,
-          background: "transparent",
-          color: "white",
-          fontSize: 20,
-          cursor: "pointer",
-        }}
-        aria-label="Kapat"
-      >
-        ×
-      </button>
-
-      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>
-        Metrix bildirimlerini aç
-      </div>
-
+    <div style={{
+      position: "fixed", left: 16, right: 16, bottom: 16, zIndex: 99999,
+      background: "#111827", color: "white", borderRadius: 18, padding: 16,
+      boxShadow: "0 20px 60px rgba(0,0,0,.30)", maxWidth: 520, margin: "0 auto",
+      fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+    }}>
+      <button onClick={dismiss} style={{
+        position: "absolute", right: 12, top: 10, border: 0,
+        background: "transparent", color: "white", fontSize: 20, cursor: "pointer",
+      }} aria-label="Kapat">×</button>
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>Metrix bildirimlerini aç</div>
       <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 12 }}>
         İş programı, personel atama ve onaylanan işler için telefona bildirim gelsin.
       </div>
-
-      <button
-        onClick={enablePush}
-        disabled={busy}
-        style={{
-          width: "100%",
-          border: 0,
-          borderRadius: 14,
-          padding: "12px 14px",
-          background: "white",
-          color: "#111827",
-          fontWeight: 800,
-          cursor: "pointer",
-        }}
-      >
+      <button onClick={enablePush} disabled={busy} style={{
+        width: "100%", border: 0, borderRadius: 14, padding: "12px 14px",
+        background: "white", color: "#111827", fontWeight: 800, cursor: "pointer",
+      }}>
         {busy ? "Açılıyor..." : "Bildirimleri Aç"}
       </button>
     </div>

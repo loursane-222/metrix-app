@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import InAppToast, { showToast } from "@/components/push/InAppToast";
 
 function fmt(n: number) {
   if (n >= 1000000) return (n / 1000000).toFixed(1).replace(".", ",") + "M";
@@ -118,14 +119,35 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [sekme, setSekme] = useState<"yillik" | "aylik">("aylik");
 
+  const lastAkisIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((r) => r.json())
-      .then((json) => {
-        if (json?.error) setError(json.error);
-        else setData(json);
-      })
-      .catch(() => setError("Dashboard verisi alinamadi."));
+    async function fetchDashboard(first) {
+      try {
+        const r = await fetch("/api/dashboard");
+        const json = await r.json();
+        if (json?.error) { setError(json.error); return; }
+
+        if (!first && json?.anaAkis?.length > 0) {
+          const newest = json.anaAkis[0];
+          if (lastAkisIdRef.current && newest.id !== lastAkisIdRef.current) {
+            showToast("Metrix", newest.message);
+          }
+        }
+
+        if (json?.anaAkis?.length > 0) {
+          lastAkisIdRef.current = json.anaAkis[0].id;
+        }
+
+        setData(json);
+      } catch {
+        setError("Dashboard verisi alinamadi.");
+      }
+    }
+
+    fetchDashboard(true);
+    const interval = setInterval(() => fetchDashboard(false), 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const finans: FinansBlok = useMemo(
@@ -180,6 +202,7 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-[#030712] px-3 pb-28 pt-4 md:px-6 md:pb-8 md:pt-6">
+      <InAppToast />
       <div className="mx-auto max-w-2xl space-y-4">
 
         <div className="flex items-center justify-between">

@@ -58,7 +58,7 @@ export default function IslerPage() {
     const sonBakis = i.teklifSonGoruntulenmeTarihi ? new Date(i.teklifSonGoruntulenmeTarihi).getTime() : null
     const teklifYasiSaat = (simdi - created) / 1000 / 60 / 60
     const son24SaatteBakildi = sonBakis ? (simdi - sonBakis) / 1000 / 60 / 60 <= 24 : false
-    if (onaylandi) return { seviye: "onay", baslik: "Teklif onaylandı", metin: "Bu iş artık satış sonrası operasyon akışında.", renk: "text-emerald-300", skor: 5, etiket: "Kapandı", aksiyon: "Operasyona al", barColor: "#10b981" }
+    if (onaylandi) return { seviye: "onay", baslik: "Teklif onaylandı", metin: "Bu iş artık satış sonrası operasyon akışında.", renk: "text-emerald-300", skor: 5, etiket: "", aksiyon: "Operasyona al", barColor: "#10b981" }
     if (goruntulenme === 0) {
       if (teklifYasiSaat >= 72) return { seviye: "72s", baslik: "72 saattir açılmadı", metin: "Bu teklif soğuyor. Telefonla arama veya güçlü takip mesajı gerekli.", renk: "text-red-300", skor: 0, etiket: "Soğuk", aksiyon: "Ara veya yeniden gönder", barColor: "#ef4444" }
       if (teklifYasiSaat >= 48) return { seviye: "48s", baslik: "48 saattir açılmadı", metin: "İkinci takip mesajı zamanı.", renk: "text-amber-300", skor: 1, etiket: "Zayıf", aksiyon: "Takip mesajı gönder", barColor: "#f59e0b" }
@@ -134,6 +134,7 @@ export default function IslerPage() {
 
   const [isler, setIsler] = useState<any[]>([])
   const [aktifIs, setAktifIs] = useState<any | null>(null)
+  const [scheduleMap, setScheduleMap] = useState<Record<string, any[]>>({})
   const [plakaAcik, setPlakaAcik] = useState(false)
   const [uretimPlaniAcik, setUretimPlaniAcik] = useState(false)
   const [tahsilatAcik, setTahsilatAcik] = useState(false)
@@ -146,10 +147,22 @@ export default function IslerPage() {
       try { return JSON.parse(text) } catch { return [] }
     }).then(v => {
       const liste = Array.isArray(v) ? v : (v.isler || [])
-      // En yeni en üstte
       liste.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
       setIsler(liste)
       if (liste.length > 0) setAktifIs(liste[0])
+    })
+
+    const now = new Date()
+    fetch(`/api/schedule?year=${now.getFullYear()}&month=${now.getMonth() + 1}`).then(async r => {
+      try {
+        const data = await r.json()
+        const arr = Array.isArray(data) ? data : []
+        const map: Record<string, any[]> = {}
+        arr.forEach((s: any) => {
+          if (s.isId) map[s.isId] = s.phases || []
+        })
+        setScheduleMap(map)
+      } catch {}
     })
   }, [])
 
@@ -158,7 +171,8 @@ export default function IslerPage() {
     const onaylanan = isler.filter(i => i.durum === 'onaylandi').length
     const bekleyen = isler.filter(i => i.durum === 'teklif_verildi').length
     const kayip = isler.filter(i => i.durum === 'kaybedildi').length
-    return { toplam, onaylanan, bekleyen, kayip }
+    const montajTamamlandi = isler.filter(i => i.durum === 'montaj_tamamlandi').length
+    return { toplam, onaylanan, bekleyen, kayip, montajTamamlandi }
   }, [isler])
 
   const aktifMaliyet = Number(aktifIs?.toplamMaliyet || 0)
@@ -167,14 +181,34 @@ export default function IslerPage() {
   const aktifKarYuzde = aktifMaliyet > 0 ? (aktifKar / aktifMaliyet) * 100 : 0
   const isYuku = Math.round((Number(aktifIs?.toplamSureDakika || 0) / 720) * 100)
 
+  function aktifFazBilgisi(isId: string) {
+    const phases: any[] = scheduleMap[isId] || []
+    if (!phases.length) return null
+    const SIRA = ['OLCU', 'IMALAT', 'MONTAJ']
+    const fazEtiket: Record<string, string> = { OLCU: 'Ölçü', IMALAT: 'İmalat', MONTAJ: 'Montaj' }
+    // Tamamlanmamış en erken faz
+    const aktif = SIRA.map(p => phases.find((ph: any) => ph.phase === p)).filter(Boolean)
+      .find((ph: any) => !ph.isCompleted)
+    if (!aktif) {
+      // Hepsi tamamlanmış
+      const montaj = phases.find((ph: any) => ph.phase === 'MONTAJ')
+      if (montaj?.completedAt) return { label: 'Teslim Edildi', date: null, done: true }
+      return null
+    }
+    const tarih = aktif.plannedStart ? new Date(aktif.plannedStart).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : null
+    return { label: (fazEtiket[aktif.phase] || aktif.phase) + ' Programı', date: tarih, done: false }
+  }
+
   function durumRenk(durum?: string) {
     if (durum === 'onaylandi') return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+    if (durum === 'montaj_tamamlandi') return 'text-teal-400 border-teal-500/30 bg-teal-500/10'
     if (durum === 'kaybedildi') return 'text-red-400 border-red-500/30 bg-red-500/10'
     return 'text-amber-400 border-amber-500/30 bg-amber-500/10'
   }
 
   function durumEtiket(durum?: string) {
     if (durum === 'onaylandi') return 'Onaylandı'
+    if (durum === 'montaj_tamamlandi') return '✓ Montaj Tamam'
     if (durum === 'kaybedildi') return 'Kaybedildi'
     if (durum === 'teklif_verildi') return 'Beklemede'
     return durum || 'Belirsiz'
@@ -243,22 +277,24 @@ export default function IslerPage() {
               </div>
 
               {/* Durum filtreleri */}
-              <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <div className="mt-3 flex flex-wrap gap-2">
                 {[
                   { key: "tumu", label: `Tümü (${ozet.toplam})`, renk: "text-white border-slate-600 bg-slate-700" },
                   { key: "teklif_verildi", label: `Beklemede (${ozet.bekleyen})`, renk: "text-amber-300 border-amber-500/40 bg-amber-500/10" },
                   { key: "onaylandi", label: `Onaylı (${ozet.onaylanan})`, renk: "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" },
+                  { key: "program_bekliyor", label: `Program Bekliyor`, renk: "text-orange-300 border-orange-500/40 bg-orange-500/10" },
+                  { key: "montaj_tamamlandi", label: `Montaj Tamam (${ozet.montajTamamlandi})`, renk: "text-teal-300 border-teal-500/40 bg-teal-500/10" },
                   { key: "kaybedildi", label: `Kayıp (${ozet.kayip})`, renk: "text-red-300 border-red-500/40 bg-red-500/10" },
                 ].map((chip) => (
                   <button key={chip.key} onClick={() => setDurumFiltre(chip.key)}
-                    className={`shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition ${durumFiltre === chip.key ? chip.renk : "border-slate-700 bg-transparent text-slate-400"}`}>
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${durumFiltre === chip.key ? chip.renk : "border-slate-700 bg-transparent text-slate-400"}`}>
                     {chip.label}
                   </button>
                 ))}
               </div>
 
               {/* Zaman filtreleri */}
-              <div className="mt-2 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {[
                   { key: "tumu", label: "Tüm Zamanlar" },
                   { key: "ay", label: "Bu Ay" },
@@ -292,6 +328,21 @@ export default function IslerPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-base font-black">{is.musteriAdi}</p>
+                      {(() => {
+                        const faz = aktifFazBilgisi(is.id);
+                        if (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) return (
+                          <button onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
+                            className="mt-1 flex items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[11px] font-semibold text-orange-300">
+                            ⚠ Program Bekliyor
+                          </button>
+                        );
+                        if (!faz) return null;
+                        return (
+                          <div className={`mt-1 flex items-center gap-1 text-[11px] font-semibold ${faz.done ? 'text-teal-400' : 'text-blue-300'}`}>
+                            <span>{faz.done ? '✓ Teslim Edildi' : `${faz.label}${faz.date ? ': ' + faz.date : ''}`}</span>
+                          </div>
+                        );
+                      })()}
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm text-slate-400">{is.urunAdi}</p>
                         {is.tasDurumu && (
@@ -450,21 +501,23 @@ export default function IslerPage() {
             )}
           </div>
           {/* Durum chip */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <div className="flex flex-wrap gap-1.5">
             {[
               { key: "tumu", label: "Tümü", renk: "text-white border-slate-600 bg-slate-700" },
               { key: "teklif_verildi", label: "Beklemede", renk: "text-amber-300 border-amber-500/40 bg-amber-500/10" },
               { key: "onaylandi", label: "Onaylı", renk: "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" },
+              { key: "program_bekliyor", label: "Program Bekliyor", renk: "text-orange-300 border-orange-500/40 bg-orange-500/10" },
+              { key: "montaj_tamamlandi", label: "Montaj Tamam", renk: "text-teal-300 border-teal-500/40 bg-teal-500/10" },
               { key: "kaybedildi", label: "Kayıp", renk: "text-red-300 border-red-500/40 bg-red-500/10" },
             ].map((chip) => (
               <button key={chip.key} onClick={() => setDurumFiltre(chip.key)}
-                className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold transition ${durumFiltre === chip.key ? chip.renk : "border-slate-700 bg-transparent text-slate-500"}`}>
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${durumFiltre === chip.key ? chip.renk : "border-slate-700 bg-transparent text-slate-500"}`}>
                 {chip.label}
               </button>
             ))}
           </div>
           {/* Zaman chip */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <div className="flex flex-wrap gap-1.5">
             {[
               { key: "tumu", label: "Tüm Zamanlar" },
               { key: "ay", label: "Bu Ay" },
@@ -494,6 +547,21 @@ export default function IslerPage() {
               <div className="flex justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold">{is.musteriAdi}</p>
+                  {(() => {
+                    const faz = aktifFazBilgisi(is.id);
+                    if (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) return (
+                      <button onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
+                        className="mt-0.5 flex items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-semibold text-orange-300">
+                        ⚠ Program Bekliyor
+                      </button>
+                    );
+                    if (!faz) return null;
+                    return (
+                      <p className={`text-[11px] font-semibold ${faz.done ? 'text-teal-400' : 'text-blue-300'}`}>
+                        {faz.done ? '✓ Teslim Edildi' : `${faz.label}${faz.date ? ': ' + faz.date : ''}`}
+                      </p>
+                    );
+                  })()}
                   <div className="mt-1 flex items-center gap-2">
                     <p className="text-xs text-slate-400">{is.urunAdi}</p>
                     {is.tasDurumu && (
@@ -664,6 +732,7 @@ export default function IslerPage() {
               {[
                 { key: "teklif_verildi", label: "Beklemede", renk: "bg-amber-500/10 border-amber-500/30 text-amber-300" },
                 { key: "onaylandi", label: "Onaylandı", renk: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" },
+                { key: "montaj_tamamlandi", label: "Montaj Tamam", renk: "bg-teal-500/10 border-teal-500/30 text-teal-300" },
                 { key: "kaybedildi", label: "Kaybedildi", renk: "bg-red-500/10 border-red-500/30 text-red-300" },
               ].map(d => (
                 <button key={d.key} onClick={() => durumDegistir(d.key)} disabled={durumDegistirYukleniyor || aktifIs.durum === d.key}

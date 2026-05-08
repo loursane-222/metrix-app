@@ -319,6 +319,14 @@ export async function togglePhaseCompletion(data: {
     });
   }
 
+  // MONTAJ tamamlandığında işi "montaj_tamamlandi" yap
+  if (phase.phase === "MONTAJ" && data.isCompleted === true) {
+    await prisma.is.update({
+      where: { id: phase.workSchedule.isId },
+      data: { durum: "montaj_tamamlandi" },
+    });
+  }
+
   const updated = await prisma.schedulePhase.update({
     where: { id: data.schedulePhaseId },
     data: {

@@ -424,3 +424,13 @@ model OdemeTaksiti {
 
   @@map("odeme_taksitleri")
 }
+
+model PersonelPushToken {
+  id         String   @id @default(cuid())
+  personelId String
+  atolyeId   String
+  token      String   @unique
+  createdAt  DateTime @default(now())
+
+  @@index([atolyeId])
+}
