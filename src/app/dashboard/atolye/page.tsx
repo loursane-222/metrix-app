@@ -11,6 +11,37 @@ function Input({ label, value, onChange }: any) {
   )
 }
 
+
+function ParaInput({ label, fieldKey, ort, value, onChange }: { label: string; fieldKey: string; ort?: number; value: string; onChange: (key: string, val: string) => void }) {
+  const display = tlInput(value)
+  const hasOrt = ort && ort > 0 && String(Math.round(ort)) !== value.replace(/\./g, '')
+  return (
+    <label className="block">
+      <div className="mb-0.5 flex items-center justify-between">
+        <p className="text-[10px] text-slate-400">{label}</p>
+        {hasOrt && (
+          <span className="text-[9px] text-blue-400 cursor-pointer" onClick={() => onChange(fieldKey, String(Math.round(ort!)))}>
+            ort: {Math.round(ort!).toLocaleString('tr-TR')} ₺ ↑
+          </span>
+        )}
+      </div>
+      <div className="relative">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={display}
+          onChange={e => {
+            const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '')
+            onChange(fieldKey, raw)
+          }}
+          className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 pr-7 text-sm text-white outline-none focus:border-blue-500"
+        />
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500">₺</span>
+      </div>
+    </label>
+  )
+}
+
 type Makine = {
   id: string; makineAdi: string; alinanBedel: number; paraBirimi: string
   amortismanSuresiAy: number; aylikAktifCalismaSaati: number
@@ -341,36 +372,7 @@ export default function AtolyePage() {
     setGecmisGiderler(prev => prev.filter(x => x.id !== id))
   }
 
-  function ParaInput({ label, fieldKey, ort }: { label: string; fieldKey: keyof FormState; ort?: number }) {
-    const val = form[fieldKey] as string
-    const display = tlInput(val)
-    const hasOrt = ort && ort > 0 && String(Math.round(ort)) !== val.replace(/\./g, '')
-    return (
-      <label className="block">
-        <div className="mb-0.5 flex items-center justify-between">
-          <p className="text-[10px] text-slate-400">{label}</p>
-          {hasOrt && (
-            <span className="text-[9px] text-blue-400 cursor-pointer" onClick={() => setAlan(fieldKey, String(Math.round(ort!)))}>
-              ort: {Math.round(ort!).toLocaleString('tr-TR')} ₺ ↑
-            </span>
-          )}
-        </div>
-        <div className="relative">
-          <input
-            type="text"
-            inputMode="numeric"
-            value={display}
-            onChange={e => {
-              const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '')
-              setAlan(fieldKey, raw)
-            }}
-            className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 pr-7 text-sm text-white outline-none focus:border-blue-500"
-          />
-          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500">₺</span>
-        </div>
-      </label>
-    )
-  }
+// ParaInput moved to top-level
 
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] text-white p-2 md:h-screen md:overflow-hidden md:p-3">
@@ -426,19 +428,19 @@ export default function AtolyePage() {
             {aktifSol === 'gider' && (
               <div className="grid gap-2">
                 <p className="text-[10px] uppercase tracking-widest text-blue-400 pt-1">Personel</p>
-                <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} />
-                <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} />
-                <ParaInput label="Yemek Gideri" fieldKey="yemekGideri" ort={ortalamalar.yemekGideri} />
-                <ParaInput label="Yol Gideri" fieldKey="yolGideri" ort={ortalamalar.yolGideri} />
+                <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} value={form["toplamMaas"] as string} onChange={setAlan} />
+                <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} value={form["sgkGideri"] as string} onChange={setAlan} />
+                <ParaInput label="Yemek Gideri" fieldKey="yemekGideri" ort={ortalamalar.yemekGideri} value={form["yemekGideri"] as string} onChange={setAlan} />
+                <ParaInput label="Yol Gideri" fieldKey="yolGideri" ort={ortalamalar.yolGideri} value={form["yolGideri"] as string} onChange={setAlan} />
 
                 <p className="text-[10px] uppercase tracking-widest text-blue-400 pt-2">Sabit Giderler</p>
-                <ParaInput label="Kira" fieldKey="kira" ort={ortalamalar.kira} />
-                <ParaInput label="Elektrik" fieldKey="elektrik" ort={ortalamalar.elektrik} />
-                <ParaInput label="Su" fieldKey="su" ort={ortalamalar.su} />
-                <ParaInput label="Doğalgaz" fieldKey="dogalgaz" ort={ortalamalar.dogalgaz} />
-                <ParaInput label="İnternet" fieldKey="internet" ort={ortalamalar.internet} />
-                <ParaInput label="Sarf Malzeme" fieldKey="sarfMalzeme" ort={ortalamalar.sarfMalzeme} />
-                <ParaInput label="Diğer Giderler" fieldKey="digerGider" ort={ortalamalar.diger} />
+                <ParaInput label="Kira" fieldKey="kira" ort={ortalamalar.kira} value={form["kira"] as string} onChange={setAlan} />
+                <ParaInput label="Elektrik" fieldKey="elektrik" ort={ortalamalar.elektrik} value={form["elektrik"] as string} onChange={setAlan} />
+                <ParaInput label="Su" fieldKey="su" ort={ortalamalar.su} value={form["su"] as string} onChange={setAlan} />
+                <ParaInput label="Doğalgaz" fieldKey="dogalgaz" ort={ortalamalar.dogalgaz} value={form["dogalgaz"] as string} onChange={setAlan} />
+                <ParaInput label="İnternet" fieldKey="internet" ort={ortalamalar.internet} value={form["internet"] as string} onChange={setAlan} />
+                <ParaInput label="Sarf Malzeme" fieldKey="sarfMalzeme" ort={ortalamalar.sarfMalzeme} value={form["sarfMalzeme"] as string} onChange={setAlan} />
+                <ParaInput label="Diğer Giderler" fieldKey="digerGider" ort={ortalamalar.diger} value={form["digerGider"] as string} onChange={setAlan} />
 
                 {gecmisGiderler.length > 0 && (
                   <div className="mt-3">
