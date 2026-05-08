@@ -76,7 +76,7 @@ function defaultTaksitler(musteriTipi: string, toplamTutar: number, baslangic: D
   }));
 }
 
-type Sekme = "musteri" | "tahsilat" | "plan";
+type Sekme = "musteri" | "tahsilat" | "plan" | "sablon";
 
 export default function TahsilatlarPage() {
   const router = useRouter();
@@ -102,9 +102,15 @@ export default function TahsilatlarPage() {
   const [draftTaksitler, setDraftTaksitler] = useState<any[]>([]);
   const [planKaydediliyor, setPlanKaydediliyor] = useState(false);
   const [aktifSekme, setAktifSekme]         = useState<Sekme>("musteri");
+  const [sablonlar, setSablonlar]           = useState<any[]>([]);
+  const [sablonYukleniyor, setSablonYukleniyor] = useState(false);
+  const [sablonDuzenle, setSablonDuzenle]   = useState<any | null>(null);
+  const [sablonSil, setSablonSil]           = useState<string | null>(null);
+  const [aktifTip, setAktifTip]             = useState("bayi");
 
   useEffect(() => {
-    fetch("/api/musteriler-lite").then(r => r.json()).then(v => setMusteriler(v.musteriler || []));
+    fetch("/api/musteriler-lite?borclu=1").then(r => r.json()).then(v => setMusteriler(v.musteriler || []));
+    fetchSablonlar();
     fetch("/api/odeme-plani?bugun=1").then(r => r.json()).then(v => setBugunListesi(v.bugunListesi || [])).catch(() => {});
   }, []);
 
@@ -124,15 +130,42 @@ export default function TahsilatlarPage() {
     if (m) musteriSec(m);
   }, [musteriIdParam, musteriler]);
 
+  const fetchSablonlar = async () => {
+    setSablonYukleniyor(true);
+    try {
+      const res = await fetch("/api/odeme-sablonlari").then(r => r.json());
+      setSablonlar(res.sablonlar || []);
+    } finally { setSablonYukleniyor(false); }
+  };
+
+  const sablonKaydet = async (sablon: any) => {
+    const method = sablon.id && !sablon.id.startsWith("default_") ? "PUT" : "POST";
+    const res = await fetch("/api/odeme-sablonlari", {
+      method, headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sablon),
+    }).then(r => r.json());
+    if (res.sablon || res.hata === undefined) await fetchSablonlar();
+    setSablonDuzenle(null);
+  };
+
+  const sablonSilFn = async (id: string) => {
+    if (id.startsWith("default_")) return;
+    await fetch(`/api/odeme-sablonlari?id=${id}`, { method: "DELETE" });
+    await fetchSablonlar();
+    setSablonSil(null);
+  };
+
   const musteriSec = useCallback(async (m: Musteri, autoIsId?: string) => {
     setSeciliMusteri(m); setListeAcik(false); setMusteriArama("");
     setAktifIs(null); setOdemePlani(null); setYukleniyor(true);
     try {
       const [isRes, tahRes] = await Promise.all([
-        fetch(`/api/isler?musteriId=${m.id}&durum=onaylandi`).then(r => r.json()),
+        fetch(`/api/isler?musteriId=${m.id}`).then(r => r.json()),
         fetch(`/api/tahsilatlar?musteriId=${m.id}`).then(r => r.json()),
       ]);
-      const islerData: Is[] = isRes.isler || [];
+      const islerData: Is[] = (isRes.isler || []).filter(
+        (i: Is) => i.durum !== "kaybedildi" && Number(i.satisFiyati) > Number(i.tahsilat || 0)
+      );
       setIsler(islerData);
       setTahsilatlar(tahRes.tahsilatlar || []);
       const hedefId = autoIsId || isIdParam;
@@ -315,10 +348,10 @@ export default function TahsilatlarPage() {
       {seciliMusteri && (
         <div className="kart">
           <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"8px", color:"#9ca3af" }}>
-            ✅ ONAYLI İŞLER ({isler.length})
+            ✅ İŞLER ({isler.length})
           </p>
           {yukleniyor && <p style={{ fontSize:"13px", color:"#4b5563" }}>Yükleniyor...</p>}
-          {!yukleniyor && isler.length === 0 && <p style={{ fontSize:"13px", color:"#4b5563" }}>Onaylı iş bulunamadı.</p>}
+          {!yukleniyor && isler.length === 0 && <p style={{ fontSize:"13px", color:"#4b5563" }}>Bu müşteriye ait iş bulunamadı.</p>}
           {isler.map(is => (
             <button key={is.id}
               onClick={() => { isSec(is); setAktifSekme("plan"); }}
@@ -535,6 +568,130 @@ export default function TahsilatlarPage() {
     </div>
   );
 
+  const PanelSablon = (
+    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px" }}>
+      <div className="kart">
+        <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"10px", color:"#9ca3af" }}>💳 ÖDEME ŞABLONLARI</p>
+        <p style={{ fontSize:"11px", color:"#4b5563", marginBottom:"12px" }}>Her müşteri tipi için 3 farklı ödeme planı tanımlayın. Teklif onayında müşteriye sunulur.</p>
+        <div style={{ display:"flex", gap:"6px", flexWrap:"wrap", marginBottom:"14px" }}>
+          {([["bayi","Bayi"],["mimar","Mimar"],["muteahhit","Müteahhit"],["son_kullanici","Ev Sahibi"],["imalatci","İmalatçı"]] as const).map(([tip,label]) => (
+            <button key={tip} onClick={() => setAktifTip(tip)}
+              style={{ padding:"6px 14px", borderRadius:"10px", border:`1px solid ${aktifTip===tip?"#10b981":"#374151"}`, background:aktifTip===tip?"rgba(16,185,129,0.1)":"#111827", color:aktifTip===tip?"#10b981":"#9ca3af", fontSize:"12px", fontWeight:700, cursor:"pointer" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {sablonYukleniyor && <p style={{ fontSize:"13px", color:"#4b5563" }}>Yükleniyor...</p>}
+        {sablonlar.filter(s => s.musteriTipi === aktifTip).map((sablon, idx) => (
+          <div key={sablon.id} style={{ background:"#0d1117", borderRadius:"13px", padding:"13px", marginBottom:"8px", border:"1px solid #1f2937" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"8px" }}>
+              <div>
+                <span style={{ fontSize:"13px", fontWeight:900, color:"#f9fafb" }}>{sablon.ad}</span>
+                <span style={{ fontSize:"11px", color:"#6b7280", marginLeft:"8px" }}>{sablon.aciklama}</span>
+              </div>
+              <div style={{ display:"flex", gap:"6px" }}>
+                <button onClick={() => setSablonDuzenle({ ...sablon, taksitler: sablon.taksitler })}
+                  style={{ padding:"4px 10px", borderRadius:"8px", border:"1px solid #374151", background:"#1f2937", color:"#9ca3af", fontSize:"11px", cursor:"pointer" }}>✏️</button>
+                {!sablon.id?.startsWith("default_") && (
+                  <button onClick={() => setSablonSil(sablon.id)}
+                    style={{ padding:"4px 10px", borderRadius:"8px", border:"1px solid rgba(239,68,68,0.3)", background:"rgba(239,68,68,0.07)", color:"#f87171", fontSize:"11px", cursor:"pointer" }}>×</button>
+                )}
+              </div>
+            </div>
+            {(sablon.taksitler as any[]).map((t: any, i: number) => (
+              <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:"11px", color:"#6b7280", padding:"3px 0", borderTop:"1px solid #1f2937" }}>
+                <span>{t.aciklama}</span>
+                <span style={{ color:"#10b981", fontWeight:700 }}>%{t.yuzde} · +{t.gunSonra}g</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        <button onClick={() => setSablonDuzenle({ musteriTipi: aktifTip, ad: "", aciklama: "", sira: (sablonlar.filter(s=>s.musteriTipi===aktifTip).length+1), taksitler:[{taksitNo:1,aciklama:"Peşinat",yuzde:50,gunSonra:0},{taksitNo:2,aciklama:"Teslimatta",yuzde:50,gunSonra:30}] })}
+          style={{ width:"100%", padding:"11px", background:"rgba(16,185,129,0.08)", border:"1px dashed rgba(16,185,129,0.3)", borderRadius:"12px", color:"#10b981", fontSize:"13px", fontWeight:700, cursor:"pointer", marginTop:"4px" }}>
+          + Yeni Şablon Ekle
+        </button>
+      </div>
+
+      {/* Şablon Düzenleme Modalı */}
+      {sablonDuzenle && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}>
+          <div style={{ background:"#0a0f1a", border:"1px solid #1f2937", borderRadius:"20px", padding:"20px", width:"100%", maxWidth:"480px", maxHeight:"90vh", overflowY:"auto" }}>
+            <p style={{ fontSize:"14px", fontWeight:900, marginBottom:"14px" }}>
+              {sablonDuzenle.id ? "Şablonu Düzenle" : "Yeni Şablon"}
+            </p>
+            <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
+              <div>
+                <span className="yi-label">Şablon Adı</span>
+                <input className="yi-inp" value={sablonDuzenle.ad} onChange={e => setSablonDuzenle((p:any) => ({...p, ad:e.target.value}))} placeholder="Standart, Esnek, Peşin..." />
+              </div>
+              <div>
+                <span className="yi-label">Açıklama</span>
+                <input className="yi-inp" value={sablonDuzenle.aciklama} onChange={e => setSablonDuzenle((p:any) => ({...p, aciklama:e.target.value}))} placeholder="Kısa açıklama..." />
+              </div>
+              <div>
+                <span className="yi-label">Taksit Sayısı</span>
+                <div style={{ display:"flex", gap:"6px" }}>
+                  {[1,2,3,4,5].map(n => (
+                    <button key={n} onClick={() => {
+                      const yeni = Array.from({length:n},(_,i)=>sablonDuzenle.taksitler[i]||{taksitNo:i+1,aciklama:`${i+1}. Taksit`,yuzde:Math.floor(100/n),gunSonra:i*30});
+                      setSablonDuzenle((p:any)=>({...p,taksitler:yeni}));
+                    }}
+                      style={{ padding:"6px 14px", borderRadius:"8px", border:`1px solid ${sablonDuzenle.taksitler.length===n?"#10b981":"#374151"}`, background:sablonDuzenle.taksitler.length===n?"rgba(16,185,129,0.1)":"#111827", color:sablonDuzenle.taksitler.length===n?"#10b981":"#9ca3af", fontSize:"13px", fontWeight:700, cursor:"pointer" }}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {sablonDuzenle.taksitler.map((t:any, i:number) => (
+                <div key={i} style={{ background:"#0d1117", borderRadius:"12px", padding:"12px", border:"1px solid #1f2937" }}>
+                  <div style={{ fontSize:"11px", color:"#6b7280", fontWeight:700, marginBottom:"8px" }}>{i+1}. TAKSİT</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 80px 80px", gap:"8px" }}>
+                    <div>
+                      <span className="yi-label">Açıklama</span>
+                      <input className="yi-inp" value={t.aciklama} onChange={e => setSablonDuzenle((p:any)=>({...p,taksitler:p.taksitler.map((x:any,j:number)=>j===i?{...x,aciklama:e.target.value}:x)}))} />
+                    </div>
+                    <div>
+                      <span className="yi-label">% Oran</span>
+                      <input className="yi-inp" type="number" value={t.yuzde} onChange={e => setSablonDuzenle((p:any)=>({...p,taksitler:p.taksitler.map((x:any,j:number)=>j===i?{...x,yuzde:Number(e.target.value)}:x)}))} />
+                    </div>
+                    <div>
+                      <span className="yi-label">+Gün</span>
+                      <input className="yi-inp" type="number" value={t.gunSonra} onChange={e => setSablonDuzenle((p:any)=>({...p,taksitler:p.taksitler.map((x:any,j:number)=>j===i?{...x,gunSonra:Number(e.target.value)}:x)}))} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ display:"flex", gap:"8px", marginTop:"4px" }}>
+                <button onClick={() => setSablonDuzenle(null)}
+                  style={{ flex:1, padding:"12px", background:"#1f2937", border:"none", borderRadius:"12px", color:"#9ca3af", fontSize:"13px", fontWeight:700, cursor:"pointer" }}>
+                  İptal
+                </button>
+                <button onClick={() => sablonKaydet(sablonDuzenle)}
+                  style={{ flex:2, padding:"12px", background:"#10b981", border:"none", borderRadius:"12px", color:"#fff", fontSize:"13px", fontWeight:900, cursor:"pointer" }}>
+                  ✓ Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Silme Onay Modalı */}
+      {sablonSil && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}>
+          <div style={{ background:"#0a0f1a", border:"1px solid rgba(239,68,68,0.3)", borderRadius:"20px", padding:"24px", maxWidth:"320px", width:"100%", textAlign:"center" }}>
+            <p style={{ fontSize:"15px", fontWeight:900, marginBottom:"10px" }}>Şablonu sil?</p>
+            <p style={{ fontSize:"13px", color:"#6b7280", marginBottom:"16px" }}>Bu işlem geri alınamaz.</p>
+            <div style={{ display:"flex", gap:"8px" }}>
+              <button onClick={() => setSablonSil(null)} style={{ flex:1, padding:"11px", background:"#1f2937", border:"none", borderRadius:"11px", color:"#9ca3af", fontWeight:700, cursor:"pointer" }}>İptal</button>
+              <button onClick={() => sablonSilFn(sablonSil)} style={{ flex:1, padding:"11px", background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.4)", borderRadius:"11px", color:"#f87171", fontWeight:900, cursor:"pointer" }}>Sil</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div style={{ height:"100dvh", background:"#030712", color:"#f9fafb", display:"flex", flexDirection:"column", overflow:"hidden" }}>
@@ -578,6 +735,7 @@ export default function TahsilatlarPage() {
           <div style={{ borderRight:"1px solid #1f2937", overflow:"hidden" }}>{PanelMusteri}</div>
           <div style={{ borderRight:"1px solid #1f2937", overflow:"hidden" }}>{PanelTahsilat}</div>
           <div style={{ overflow:"hidden" }}>{PanelPlan}</div>
+          <div style={{ borderLeft:"1px solid #1f2937", overflow:"hidden" }}>{PanelSablon}</div>
         </div>
 
         {/* Mobil: aktif panel */}
@@ -585,6 +743,7 @@ export default function TahsilatlarPage() {
           {aktifSekme === "musteri" && PanelMusteri}
           {aktifSekme === "tahsilat" && PanelTahsilat}
           {aktifSekme === "plan" && PanelPlan}
+          {aktifSekme === "sablon" && PanelSablon}
         </div>
 
         {/* Mobil alt sekme çubuğu */}
@@ -593,6 +752,7 @@ export default function TahsilatlarPage() {
             { id:"musteri" as Sekme, icon:"👤", label:"Müşteri", badge: seciliMusteri ? isler.length : 0 },
             { id:"tahsilat" as Sekme, icon:"💳", label:"Tahsilat", badge: tahsilatlar.length },
             { id:"plan" as Sekme, icon:"📅", label:"Ödeme Planı", badge: odemePlani?.taksitler.filter(t=>!t.odendiMi).length || 0 },
+            { id:"sablon" as Sekme, icon:"⚙️", label:"Şablonlar", badge: 0 },
           ] as const).map(s => (
             <button key={s.id} onClick={() => setAktifSekme(s.id)}
               className={`sekme-btn${aktifSekme===s.id?" aktif":""}`}>

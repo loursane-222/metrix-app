@@ -67,6 +67,7 @@ model Atolye {
   personeller Personel[]
   musteriler  Musteri[]
   aylikGiderler AylikGider[]
+  odemeSablonlari OdemeSablonu[]
 }
 
 model Makine {
@@ -433,4 +434,22 @@ model PersonelPushToken {
   createdAt  DateTime @default(now())
 
   @@index([atolyeId])
+}
+
+model OdemeSablonu {
+  id          String @id @default(cuid())
+  atolyeId    String
+  atolye      Atolye @relation(fields: [atolyeId], references: [id], onDelete: Cascade)
+
+  musteriTipi String  // bayi, mimar, muteahhit, son_kullanici, imalatci
+  ad          String  // "Standart", "Esnek", "Peşinatsız" gibi
+  aciklama    String  @default("")
+  sira        Int     @default(0) // 1,2,3 - hangi sırada gösterilsin
+
+  taksitler   Json    // [{ taksitNo, aciklama, yuzde, gunSonra }]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("odeme_sablonlari")
 }

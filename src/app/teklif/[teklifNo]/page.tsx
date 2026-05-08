@@ -222,11 +222,7 @@ export default async function Page({ params }: any) {
           </p>
         </div>
 
-        <form action={`/api/teklif/${is.teklifNo}/onayla`} method="post">
-          <button className="approve" type="submit">
-            ✔ Teklifi Onayla
-          </button>
-        </form>
+        <a className="approve" href={`/teklif/${is.teklifNo}/odeme-sec`}>✔ Teklifi Onayla</a>
 
         <a className="whatsappSecondary" href={whatsapp} target="_blank">
           WhatsApp ile soru sor

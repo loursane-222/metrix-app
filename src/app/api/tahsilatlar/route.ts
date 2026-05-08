@@ -8,9 +8,10 @@ import { jwtVerify } from 'jose'
 export async function GET(req: NextRequest) {
   const auth = await getAtolyeAuth()
   if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
   const musteriId = req.nextUrl.searchParams.get('musteriId')
   if (!musteriId) return NextResponse.json({ hata: 'musteriId gerekli.' }, { status: 400 })
-    const musteri = await prisma.musteri.findFirst({ where: { id: musteriId, atolyeId: atolyeId } })
+  const musteri = await prisma.musteri.findFirst({ where: { id: musteriId, atolyeId } })
   if (!musteri) return NextResponse.json({ hata: 'Müşteri bulunamadı.' }, { status: 404 })
   const tahsilatlar = await prisma.tahsilat.findMany({
     where: { musteriId },

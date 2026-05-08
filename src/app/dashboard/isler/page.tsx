@@ -23,6 +23,11 @@ export default function IslerPage() {
   const [durumFiltre, setDurumFiltre] = useState<string>("tumu")
   const [zamanFiltre, setZamanFiltre] = useState<string>("tumu")
   const [durumDegistirAcik, setDurumDegistirAcik] = useState(false)
+  const [odemePopupAcik, setOdemePopupAcik] = useState(false)
+  const [odemeSablonlar, setOdemeSablonlar] = useState<any[]>([])
+  const [odemeSecili, setOdemeSecili] = useState<string | null>(null)
+  const [odemeYukleniyor, setOdemeYukleniyor] = useState(false)
+  const [bekleyenDurum, setBekleyenDurum] = useState<string | null>(null)
   const [durumDegistirYukleniyor, setDurumDegistirYukleniyor] = useState(false)
 
   function aktifTeklifLinki() {
@@ -114,6 +119,18 @@ export default function IslerPage() {
 
   async function durumDegistir(yeniDurum: string) {
     if (!aktifIs?.id) return
+    if (yeniDurum === "onaylandi") {
+      setBekleyenDurum(yeniDurum)
+      setOdemeSecili(null)
+      setOdemePopupAcik(true)
+      setOdemeYukleniyor(true)
+      setDurumDegistirAcik(false)
+      fetch(`/api/teklif/${aktifIs.teklifNo}/odeme-sablonlari`)
+        .then(r => r.json())
+        .then(d => { setOdemeSablonlar(d.sablonlar || []); setOdemeYukleniyor(false); })
+        .catch(() => setOdemeYukleniyor(false))
+      return
+    }
     setDurumDegistirYukleniyor(true)
     try {
       const res = await fetch(`/api/isler/${aktifIs.id}`, {
@@ -125,6 +142,26 @@ export default function IslerPage() {
       setIsler(prev => prev.map(x => x.id === aktifIs.id ? { ...x, durum: yeniDurum } : x))
       setAktifIs((prev: any) => prev ? { ...prev, durum: yeniDurum } : prev)
       setDurumDegistirAcik(false)
+    } catch {
+      alert("Durum güncellenemedi.")
+    } finally {
+      setDurumDegistirYukleniyor(false)
+    }
+  }
+
+  async function odemeIleOnayla() {
+    if (!aktifIs?.id || !odemeSecili) return
+    setDurumDegistirYukleniyor(true)
+    try {
+      const res = await fetch(`/api/isler/${aktifIs.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ durum: "onaylandi", sablonId: odemeSecili }),
+      })
+      if (!res.ok) throw new Error("Güncelleme başarısız")
+      setIsler(prev => prev.map(x => x.id === aktifIs.id ? { ...x, durum: "onaylandi" } : x))
+      setAktifIs((prev: any) => prev ? { ...prev, durum: "onaylandi" } : prev)
+      setOdemePopupAcik(false)
     } catch {
       alert("Durum güncellenemedi.")
     } finally {
@@ -727,6 +764,48 @@ export default function IslerPage() {
       )}
 
       {/* DURUM DEĞİŞTİR MODAL */}
+      
+      {odemePopupAcik && aktifIs && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4" onClick={() => setOdemePopupAcik(false)}>
+          <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0B1120] p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Ödeme Planı</p>
+            <h2 className="mt-2 text-xl font-semibold mb-1">Ödeme planı seçin</h2>
+            <p className="text-sm text-slate-400 mb-4">{aktifIs.musteriAdi} · {Number(aktifIs.kdvDahilFiyat || aktifIs.satisFiyati || 0).toLocaleString('tr-TR', {minimumFractionDigits:2})} ₺</p>
+            {odemeYukleniyor && <p className="text-slate-400 text-sm">Yükleniyor…</p>}
+            <div className="grid gap-3 mb-4">
+              {odemeSablonlar.map((s: any) => {
+                const aktif = odemeSecili === s.id
+                const tutar = Number(aktifIs.kdvDahilFiyat || aktifIs.satisFiyati || 0)
+                return (
+                  <div key={s.id} onClick={() => setOdemeSecili(s.id)}
+                    className={`rounded-xl border px-4 py-3 cursor-pointer ${aktif ? 'border-blue-500 bg-blue-600/20' : 'border-slate-700 hover:bg-slate-800'}`}>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-semibold">{s.ad}</span>
+                      {aktif && <span className="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5">Seçildi</span>}
+                    </div>
+                    {s.aciklama && <p className="text-xs text-slate-400 mb-2">{s.aciklama}</p>}
+                    <div className="flex flex-col gap-1">
+                      {s.taksitler.map((t: any) => (
+                        <div key={t.taksitNo} className="text-xs text-slate-300">
+                          {t.aciklama} — <b>{((tutar * t.yuzde) / 100).toLocaleString('tr-TR', {minimumFractionDigits:2})} ₺</b> <span className="text-slate-500">(%{t.yuzde})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="grid gap-2">
+              <button disabled={!odemeSecili || durumDegistirYukleniyor} onClick={odemeIleOnayla}
+                className={`rounded-xl px-4 py-3 font-semibold ${odemeSecili ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                {durumDegistirYukleniyor ? 'İşleniyor…' : '✔ Onayla'}
+              </button>
+              <button onClick={() => setOdemePopupAcik(false)} className="rounded-xl border border-slate-700 px-4 py-3 text-slate-300 hover:bg-slate-800">Vazgeç</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {durumDegistirAcik && aktifIs && (
         <div className="fixed inset-0 z-[150] flex items-end md:items-center justify-center bg-black/70" onClick={() => setDurumDegistirAcik(false)}>
           <div className="w-full md:w-[360px] bg-[#0B1120] border border-slate-800 rounded-t-2xl md:rounded-2xl p-6" onClick={e => e.stopPropagation()}>

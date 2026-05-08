@@ -72,13 +72,33 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [savingDrag, setSavingDrag] = useState(false);
   const [personelSayisi, setPersonelSayisi] = useState(1);
+  const [personelTipleri, setPersonelTipleri] = useState({ olcucu: 0, usta: 0, montajci: 0 });
+
+  // Modal açıkken body scroll/zoom kilit
+  useEffect(() => {
+    const isOpen = !!(selectedTask || showCreate);
+    if (isOpen) {
+      document.body.classList.add("modal-open");
+    } else {
+      document.body.classList.remove("modal-open");
+    }
+    return () => document.body.classList.remove("modal-open");
+  }, [selectedTask, showCreate]);
 
   useEffect(() => {
     fetch("/api/personel", { credentials: "include", cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
-        const aktif = (d?.personeller || []).filter((p: any) => p.aktif !== false).length;
-        if (aktif > 0) setPersonelSayisi(aktif);
+        const personeller = (d?.personeller || []).filter((p: any) => p.aktif !== false);
+        if (personeller.length > 0) setPersonelSayisi(personeller.length);
+        const OLCUCU_GOREVLER = ["Ölçücü"];
+        const USTA_GOREVLER = ["Usta", "Ustabaşı", "Kalfa", "Kesimci"];
+        const MONTAJ_GOREVLER = ["Montajcı"];
+        setPersonelTipleri({
+          olcucu: personeller.filter((p: any) => OLCUCU_GOREVLER.includes(p.gorevi)).length,
+          usta: personeller.filter((p: any) => USTA_GOREVLER.includes(p.gorevi)).length,
+          montajci: personeller.filter((p: any) => MONTAJ_GOREVLER.includes(p.gorevi)).length,
+        });
       })
       .catch(() => {});
   }, []);
@@ -129,39 +149,54 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
 
   const selectedDayTasks = tasks.filter((task) => dayjs(task.date).isSame(currentDate, "day"));
 
+  // View'a göre aktif görev listesi ve iş günü sayısı
+  const viewStartOf = view === "month" ? currentDate.startOf("month") : view === "day" ? currentDate.startOf("day") : startOfWeek;
+  const viewEndOf = view === "month" ? currentDate.endOf("month") : view === "day" ? currentDate.endOf("day") : startOfWeek.add(6, "day").endOf("day");
+  
+  const viewTasks = tasks.filter((task) => {
+    const d = dayjs(task.date);
+    return !d.isBefore(viewStartOf, "day") && !d.isAfter(viewEndOf, "day");
+  });
+
+  // Periyottaki iş günü sayısı (Pzt-Cuma)
+  const isGunuSayisi = (() => {
+    if (view === "day") return [1,2,3,4,5].includes(currentDate.day()) ? 1 : 0;
+    if (view === "week") return 5;
+    // Aylık: o aydaki Pzt-Cuma sayısı
+    let count = 0;
+    const gunSayisi = viewEndOf.date();
+    for (let i = 1; i <= gunSayisi; i++) {
+      const gun = currentDate.date(i).day();
+      if (gun >= 1 && gun <= 5) count++;
+    }
+    return count;
+  })();
+
   const stats = {
-    total: weekTasks.length,
-    olcu: weekTasks.filter((t) => t.phase === "OLCU").length,
-    imalat: weekTasks.filter((t) => t.phase === "IMALAT").length,
-    montaj: weekTasks.filter((t) => t.phase === "MONTAJ").length,
-    completed: weekTasks.filter((t) => t.completed).length,
-    delayed: weekTasks.filter((t) => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length,
+    total: viewTasks.length,
+    olcu: viewTasks.filter((t) => t.phase === "OLCU").length,
+    imalat: viewTasks.filter((t) => t.phase === "IMALAT").length,
+    montaj: viewTasks.filter((t) => t.phase === "MONTAJ").length,
+    completed: viewTasks.filter((t) => t.completed).length,
+    delayed: viewTasks.filter((t) => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length,
   };
 
-  // Haftalık kapasite: personel × 5 iş günü × 480 dk
-  const haftaKapasiteDk = personelSayisi * 5 * 480;
-
-  // Her fazın toplam iş dakikasını hesapla (atanan kişi sayısına göre paralel)
-  const fazDakika = (phase: string) => {
-    const fazTasks = weekTasks.filter((t) => t.phase === phase);
-    return fazTasks.reduce((acc: number, t: any) => {
-      const isToplamDk = Math.round(Number(t.toplamSureDakika || 0));
-      const atananKisi = Math.max(1, (t.fazAtamalari || []).length);
-      // Paralel çalışma: süre / atanan kişi
-      return acc + Math.round(isToplamDk / atananKisi);
-    }, 0);
-  };
-
-  const olcuDk = fazDakika("OLCU");
-  const imalatDk = fazDakika("IMALAT");
-  const montajDk = fazDakika("MONTAJ");
-  const toplamYukDk = olcuDk + imalatDk + montajDk;
+  // Kapasite: personel tipi × iş günü sayısı × günlük iş kapasitesi
+  const olcuKapasiteHafta = Math.max(1, personelTipleri.olcucu) * isGunuSayisi * 5;
+  const imalatKapasiteHafta = Math.max(1, personelTipleri.usta) * isGunuSayisi * 3;
+  const montajKapasiteHafta = Math.max(1, personelTipleri.montajci) * isGunuSayisi * 2;
+  const genelKapasiteHafta = olcuKapasiteHafta + imalatKapasiteHafta + montajKapasiteHafta;
+  const haftaKapasiteDk = genelKapasiteHafta * 60;
+  const toplamYukDk = viewTasks.length * 60;
+  const olcuDk = stats.olcu * 60;
+  const imalatDk = stats.imalat * 60;
+  const montajDk = stats.montaj * 60;
 
   const density = {
-    olcu: haftaKapasiteDk > 0 ? Math.min(100, Math.round((olcuDk / haftaKapasiteDk) * 100)) : 0,
-    imalat: haftaKapasiteDk > 0 ? Math.min(100, Math.round((imalatDk / haftaKapasiteDk) * 100)) : 0,
-    montaj: haftaKapasiteDk > 0 ? Math.min(100, Math.round((montajDk / haftaKapasiteDk) * 100)) : 0,
-    genel: haftaKapasiteDk > 0 ? Math.min(100, Math.round((toplamYukDk / haftaKapasiteDk) * 100)) : 0,
+    olcu: olcuKapasiteHafta > 0 ? Math.min(100, Math.round((stats.olcu / olcuKapasiteHafta) * 100)) : 0,
+    imalat: imalatKapasiteHafta > 0 ? Math.min(100, Math.round((stats.imalat / imalatKapasiteHafta) * 100)) : 0,
+    montaj: montajKapasiteHafta > 0 ? Math.min(100, Math.round((stats.montaj / montajKapasiteHafta) * 100)) : 0,
+    genel: genelKapasiteHafta > 0 ? Math.min(100, Math.round((stats.total / genelKapasiteHafta) * 100)) : 0,
   };
 
   function meta(phase: string) {
@@ -491,13 +526,13 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
       {view === "month" && <MonthView />}
 
       <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
-        <DensityCard title="Ölçü Yoğunluğu" value={density.olcu} tone="text-blue-300" helper={`${stats.olcu} iş · ${olcuDk} dk`} />
-        <DensityCard title="İmalat Yoğunluğu" value={density.imalat} tone="text-amber-300" helper={`${stats.imalat} iş · ${imalatDk} dk`} />
-        <DensityCard title="Montaj Yoğunluğu" value={density.montaj} tone="text-emerald-300" helper={`${stats.montaj} iş · ${montajDk} dk`} />
-        <DensityCard title="Genel Yoğunluk" value={density.genel} tone="text-purple-300" helper={`${toplamYukDk} dk / ${haftaKapasiteDk} dk kapasite`} />
+        <DensityCard title="Ölçü Yoğunluğu" value={density.olcu} tone="text-blue-300" helper={`${stats.olcu} iş / ${olcuKapasiteHafta} kapasite`} />
+        <DensityCard title="İmalat Yoğunluğu" value={density.imalat} tone="text-amber-300" helper={`${stats.imalat} iş / ${imalatKapasiteHafta} kapasite`} />
+        <DensityCard title="Montaj Yoğunluğu" value={density.montaj} tone="text-emerald-300" helper={`${stats.montaj} iş / ${montajKapasiteHafta} kapasite`} />
+        <DensityCard title="Genel Yoğunluk" value={density.genel} tone="text-purple-300" helper={`${stats.total} iş / ${genelKapasiteHafta} kapasite`} />
       </div>
 
-      <ScheduleAiInsight schedules={schedules} weekStart={startOfWeek.toISOString()} />
+      <ScheduleAiInsight schedules={schedules} weekStart={startOfWeek.toISOString()} personelTipleri={personelTipleri} view={view} currentDate={currentDate.toISOString()} />
 
       <button
         onClick={() => setShowCreate(true)}

@@ -11,6 +11,10 @@ function IsDetayContent() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [tasPopup, setTasPopup] = useState(false);
+  const [odemePopup, setOdemePopup] = useState(false);
+  const [sablonlar, setSablonlar] = useState<any[]>([]);
+  const [seciliSablon, setSeciliSablon] = useState<string | null>(null);
+  const [odemeYukleniyor, setOdemeYukleniyor] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -51,7 +55,8 @@ function IsDetayContent() {
           id,
           durum: yeniDurum,
           fiyat,
-          tasDurumu
+          tasDurumu,
+          sablonId: seciliSablon || undefined
         })
       });
 
@@ -263,7 +268,15 @@ function IsDetayContent() {
 
         <button
           disabled={saving}
-          onClick={() => setTasPopup(true)}
+          onClick={() => {
+    setSeciliSablon(null);
+    setOdemePopup(true);
+    setOdemeYukleniyor(true);
+    fetch(`/api/teklif/${data?.teklifNo}/odeme-sablonlari`)
+      .then(r => r.json())
+      .then(d => { setSablonlar(d.sablonlar || []); setOdemeYukleniyor(false); })
+      .catch(() => setOdemeYukleniyor(false));
+  }}
           className={`rounded-xl py-4 text-lg font-semibold ${
             data.durum === "onaylandi"
               ? "bg-emerald-600"
@@ -285,6 +298,47 @@ function IsDetayContent() {
           Kaybedildi
         </button>
       </div>
+
+      
+      {odemePopup && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={() => setOdemePopup(false)}>
+          <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0B1120] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Ödeme Planı</p>
+            <h2 className="mt-2 text-xl font-semibold mb-4">Ödeme planı seçin</h2>
+            {odemeYukleniyor && <p className="text-slate-400 text-sm">Yükleniyor…</p>}
+            <div className="grid gap-3 mb-4">
+              {sablonlar.map((s: any) => {
+                const aktif = seciliSablon === s.id;
+                const tutar = Number(data?.kdvDahilFiyat || data?.satisFiyati || 0);
+                return (
+                  <div key={s.id} onClick={() => setSeciliSablon(s.id)}
+                    className={`rounded-xl border px-4 py-3 cursor-pointer ${aktif ? 'border-blue-500 bg-blue-600/20' : 'border-slate-700 hover:bg-slate-800'}`}>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-semibold">{s.ad}</span>
+                      {aktif && <span className="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5">Seçildi</span>}
+                    </div>
+                    {s.aciklama && <p className="text-xs text-slate-400 mb-2">{s.aciklama}</p>}
+                    <div className="flex flex-col gap-1">
+                      {s.taksitler.map((t: any) => (
+                        <div key={t.taksitNo} className="text-xs text-slate-300">
+                          {t.aciklama} — <b>{((tutar * t.yuzde) / 100).toLocaleString('tr-TR', {minimumFractionDigits:2})} ₺</b> <span className="text-slate-500">(%{t.yuzde})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="grid gap-2">
+              <button disabled={!seciliSablon} onClick={() => { setOdemePopup(false); setTasPopup(true); }}
+                className={`rounded-xl px-4 py-3 font-semibold ${seciliSablon ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                Devam Et →
+              </button>
+              <button onClick={() => setOdemePopup(false)} className="rounded-xl border border-slate-700 px-4 py-3 text-slate-300 hover:bg-slate-800">Vazgeç</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {tasPopup && (
         <div

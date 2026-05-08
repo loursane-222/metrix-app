@@ -199,7 +199,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params
     const body = await req.json()
-    const { durum } = body
+    const { durum, sablonId } = body
 
     if (!id || !durum) return NextResponse.json({ error: 'id ve durum gerekli' }, { status: 400 })
 
@@ -229,15 +229,40 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const musteriTipi = updated.musteri.musteriTipi || 'son_kullanici'
         const toplamTutar = Number(updated.satisFiyati || 0)
         if (toplamTutar > 0) {
-          const taksitVerileri = odemePlanOlustur(musteriTipi, toplamTutar, new Date())
-          await prisma.odemePlani.create({
-            data: {
-              isId: id,
-              musteriId: updated.musteriId,
-              toplamTutar,
-              musteriTipi,
-              taksitler: { create: taksitVerileri }
+          let taksitVerileri: any[]
+          if (sablonId && !sablonId.startsWith('default_')) {
+            const sablon = await prisma.odemeSablonu.findUnique({ where: { id: sablonId } })
+            if (sablon) {
+              const taksitler = sablon.taksitler as { taksitNo: number; aciklama: string; yuzde: number; gunSonra: number }[]
+              taksitVerileri = taksitler.map(t => ({
+                taksitNo: t.taksitNo, aciklama: t.aciklama,
+                tutar: Math.round((toplamTutar * t.yuzde) / 100 * 100) / 100,
+                vadeTarihi: new Date(Date.now() + t.gunSonra * 24 * 60 * 60 * 1000),
+              }))
+            } else {
+              taksitVerileri = odemePlanOlustur(musteriTipi, toplamTutar, new Date())
             }
+          } else if (sablonId && sablonId.startsWith('default_')) {
+            const VARSAYILAN: Record<string, any[]> = {
+              bayi: [{taksitNo:1,aciklama:"Peşinat",yuzde:30,gunSonra:0},{taksitNo:2,aciklama:"Teslimatta",yuzde:70,gunSonra:30}],
+              mimar: [{taksitNo:1,aciklama:"Peşinat",yuzde:25,gunSonra:0},{taksitNo:2,aciklama:"İmalat Başlangıcı",yuzde:25,gunSonra:15},{taksitNo:3,aciklama:"Teslimatta",yuzde:50,gunSonra:30}],
+              muteahhit: [{taksitNo:1,aciklama:"Peşinat",yuzde:20,gunSonra:0},{taksitNo:2,aciklama:"İmalat Başlangıcı",yuzde:30,gunSonra:15},{taksitNo:3,aciklama:"Hak Ediş",yuzde:50,gunSonra:45}],
+              son_kullanici: [{taksitNo:1,aciklama:"Peşinat",yuzde:50,gunSonra:0},{taksitNo:2,aciklama:"Teslimatta",yuzde:50,gunSonra:30}],
+              imalatci: [{taksitNo:1,aciklama:"Peşinat",yuzde:30,gunSonra:0},{taksitNo:2,aciklama:"İş Bitiminde",yuzde:70,gunSonra:30}],
+            }
+            const parts = sablonId.replace('default_','').split('_')
+            const tip = parts.slice(0, parts.length-1).join('_')
+            const grup = VARSAYILAN[tip] || VARSAYILAN['son_kullanici']
+            taksitVerileri = grup.map((t: any) => ({
+              taksitNo: t.taksitNo, aciklama: t.aciklama,
+              tutar: Math.round((toplamTutar * t.yuzde) / 100 * 100) / 100,
+              vadeTarihi: new Date(Date.now() + t.gunSonra * 24 * 60 * 60 * 1000),
+            }))
+          } else {
+            taksitVerileri = odemePlanOlustur(musteriTipi, toplamTutar, new Date())
+          }
+          await prisma.odemePlani.create({
+            data: { isId: id, musteriId: updated.musteriId, toplamTutar, musteriTipi, taksitler: { create: taksitVerileri } }
           })
         }
       }
