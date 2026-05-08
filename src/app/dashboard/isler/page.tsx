@@ -220,7 +220,7 @@ export default function IslerPage() {
 
     if (durumFiltre !== "tumu") {
       if (durumFiltre === "program_bekliyor") {
-        liste = liste.filter((item: any) => item.durum === "onaylandi" && !scheduleMap[item.id]?.length)
+        liste = liste.filter((item: any) => item.durum === "onaylandi" && !item.hasPlan)
       } else {
         liste = liste.filter((item: any) => item.durum === durumFiltre)
       }

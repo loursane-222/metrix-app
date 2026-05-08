@@ -42,10 +42,18 @@ export async function GET(req: NextRequest) {
   const isler = await prisma.is.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    include: { operasyonlar: true },
+    include: {
+      operasyonlar: true,
+      workSchedule: { select: { id: true } },
+    },
   })
 
-  return NextResponse.json({ isler })
+  const islerWithPlan = isler.map((i: any) => ({
+    ...i,
+    hasPlan: !!i.workSchedule,
+  }))
+
+  return NextResponse.json({ isler: islerWithPlan })
 }
 
 export async function POST(req: NextRequest) {
