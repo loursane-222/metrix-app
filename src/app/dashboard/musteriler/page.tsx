@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 function tl(v: any) {
   return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(Number(v || 0))
@@ -142,9 +142,11 @@ function AylikCiroChart({ aylikCiro }: { aylikCiro: Record<string, number> }) {
 
 export default function MusterilerPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [musteriler, setMusteriler] = useState<any[]>([])
   const [aktif, setAktif] = useState<any>(null)
+  const [duzenleOnLoad, setDuzenleOnLoad] = useState(false)
   const [arama, setArama] = useState('')
   const [yukleniyor, setYukleniyor] = useState(true)
   const [modal, setModal] = useState(false)
@@ -177,7 +179,15 @@ export default function MusterilerPage() {
   }
 
   useEffect(() => {
-    listeYukle()
+    const musteriIdParam = searchParams?.get('musteriId')
+    const duzenleParam = searchParams?.get('duzenle')
+    listeYukle(musteriIdParam || undefined).then(() => {
+      if (musteriIdParam && duzenleParam === '1') {
+        // listeYukle tamamlandıktan sonra duzenleAc tetiklenir
+        // aktif state'i set edildiğinde duzenleAc çalışacak
+        setDuzenleOnLoad(true)
+      }
+    })
     fetch('/api/atolye').then(r=>r.json()).then(d=>{
       if(d?.atolye) setAtolyelogo({ ad: d.atolye.atolyeAdi||'Duru Mermer', logoUrl: d.atolye.logoUrl||'' })
     }).catch(()=>{})
@@ -215,6 +225,17 @@ export default function MusterilerPage() {
   }, [aktif, islerDurum])
 
   function yeniAc() { setForm(bosForm); setDuzenle(false); setMobilDetayAcik(false); setModal(true) }
+  useEffect(() => {
+    if (duzenleOnLoad && aktif) {
+      setDuzenleOnLoad(false)
+      setForm({ firmaAdi: aktif.firmaAdi || '', ad: aktif.ad || '', soyad: aktif.soyad || '', telefon: aktif.telefon || '', email: aktif.email || '', acilisBakiyesi: aktif.acilisBakiyesi || '', bakiyeTipi: aktif.bakiyeTipi || 'borc', musteriTipi: aktif.musteriTipi || 'son_kullanici' })
+      setDuzenle(true)
+      setModal(true)
+      setMobilDetayAcik(false)
+      setMobilYeniAcik(false)
+    }
+  }, [duzenleOnLoad, aktif])
+
   function duzenleAc() {
     if (!aktif) return
     setForm({ firmaAdi: aktif.firmaAdi || '', ad: aktif.ad || '', soyad: aktif.soyad || '', telefon: aktif.telefon || '', email: aktif.email || '', acilisBakiyesi: aktif.acilisBakiyesi || '', bakiyeTipi: aktif.bakiyeTipi || 'borc', musteriTipi: aktif.musteriTipi || 'son_kullanici' })

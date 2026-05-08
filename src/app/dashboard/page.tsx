@@ -80,7 +80,13 @@ function AiWaButon({
     if (durum === "loading") return;
 
     if (mesaj) {
-      window.open(waHref(phone, mesaj), "_blank");
+      const a = document.createElement("a");
+      a.href = waHref(phone, mesaj);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       return;
     }
 
@@ -96,7 +102,13 @@ function AiWaButon({
       setMesaj(m);
       setDurum("done");
       if (m) {
-        window.open(waHref(phone, m), "_blank");
+        const a = document.createElement("a");
+        a.href = waHref(phone, m);
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       }
     } catch {
       setDurum("idle");
@@ -446,7 +458,7 @@ export default function DashboardPage() {
                       />
                     ) : (
                       <Link
-                        href="/dashboard/musteriler"
+                        href={v.musteriId ? `/dashboard/musteriler?musteriId=${v.musteriId}&duzenle=1` : "/dashboard/musteriler"}
                         className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/60 px-2 py-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
                       >
                         <span>Telefon kayitli degil</span>

@@ -314,6 +314,7 @@ export async function GET() {
         durum: gecenGun > 0 ? "gecmis" : "bugun",
         aciklama: t.aciklama || "",
         teklifNo: t.plan.is?.teklifNo || "",
+        musteriId: t.plan.musteri?.id || "",
       };
     });
 
