@@ -1,6 +1,16 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+function Input({ label, value, onChange }: any) {
+  return (
+    <label className="block">
+      <p className="mb-0.5 text-[10px] text-slate-400">{label}</p>
+      <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
+        className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500" />
+    </label>
+  )
+}
+
 type Makine = {
   id: string; makineAdi: string; alinanBedel: number; paraBirimi: string
   amortismanSuresiAy: number; aylikAktifCalismaSaati: number
@@ -785,15 +795,7 @@ export default function AtolyePage() {
   )
 }
 
-function Input({ label, value, onChange }: any) {
-  return (
-    <label className="block">
-      <p className="mb-0.5 text-[10px] text-slate-400">{label}</p>
-      <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
-        className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500" />
-    </label>
-  )
-}
+// Input moved to top-level
 function SideButton({ active, title, sub, onClick }: any) {
   return (
     <button onClick={onClick} className={`rounded-2xl border p-3 text-left ${active ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-800 bg-[#111827]'}`}>

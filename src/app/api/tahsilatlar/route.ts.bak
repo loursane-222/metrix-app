@@ -1,0 +1,80 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
+import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { jwtVerify } from 'jose'
+
+async function kullaniciAl() {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('metrix-token')?.value
+  if (!token) return null
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
+    const { payload } = await jwtVerify(token, secret)
+    return payload as { id: string; email: string }
+  } catch {
+    return null
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const kullanici = await kullaniciAl()
+  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const musteriId = req.nextUrl.searchParams.get('musteriId')
+  if (!musteriId) return NextResponse.json({ hata: 'musteriId gerekli.' }, { status: 400 })
+  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
+  if (!atolye) return NextResponse.json({ tahsilatlar: [] })
+  const musteri = await prisma.musteri.findFirst({ where: { id: musteriId, atolyeId: atolye.id } })
+  if (!musteri) return NextResponse.json({ hata: 'Müşteri bulunamadı.' }, { status: 404 })
+  const tahsilatlar = await prisma.tahsilat.findMany({
+    where: { musteriId },
+    include: {
+      is: { select: { id: true, teklifNo: true, urunAdi: true, satisFiyati: true } }
+    },
+    orderBy: { tarih: 'desc' }
+  })
+  return NextResponse.json({ tahsilatlar })
+}
+
+export async function POST(req: NextRequest) {
+  const kullanici = await kullaniciAl()
+  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
+  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
+  const body = await req.json()
+  const musteriId = String(body.musteriId || '').trim()
+  const tutar = Number(body.tutar || 0)
+  const tarih = body.tarih ? new Date(body.tarih) : new Date()
+  const isId = body.isId ? String(body.isId).trim() : null
+
+  if (!musteriId) return NextResponse.json({ hata: 'musteriId gerekli.' }, { status: 400 })
+  if (tutar <= 0) return NextResponse.json({ hata: 'Tutar 0\'dan büyük olmalı.' }, { status: 400 })
+
+  const musteri = await prisma.musteri.findFirst({ where: { id: musteriId, atolyeId: atolye.id } })
+  if (!musteri) return NextResponse.json({ hata: 'Müşteri bulunamadı.' }, { status: 404 })
+
+  // isId verilmişse doğrula
+  if (isId) {
+    const is = await prisma.is.findFirst({ where: { id: isId, musteriId, atolyeId: atolye.id } })
+    if (!is) return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
+  }
+
+  const tahsilat = await prisma.tahsilat.create({
+    data: { musteriId, tutar, tarih, isId },
+    include: { is: { select: { id: true, teklifNo: true, urunAdi: true, satisFiyati: true } } }
+  })
+  return NextResponse.json({ tahsilat })
+}
+
+export async function DELETE(req: NextRequest) {
+  const kullanici = await kullaniciAl()
+  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
+  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
+  const id = req.nextUrl.searchParams.get('id')
+  if (!id) return NextResponse.json({ hata: 'id gerekli.' }, { status: 400 })
+  const tahsilat = await prisma.tahsilat.findFirst({ where: { id }, include: { musteri: true } })
+  if (!tahsilat || tahsilat.musteri.atolyeId !== atolye.id) return NextResponse.json({ hata: 'Tahsilat bulunamadı.' }, { status: 404 })
+  await prisma.tahsilat.delete({ where: { id } })
+  return NextResponse.json({ ok: true })
+}
