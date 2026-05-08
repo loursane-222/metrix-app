@@ -115,6 +115,15 @@ function AiWaButon({
     }
   }
 
+  if (durum === "done" && mesaj) {
+    const waUrl = waHref(phone, mesaj);
+    return (
+      <a href={waUrl} className={className} style={{ display: "inline-block", textAlign: "center" }}>
+        WA Mesaj Gonder
+      </a>
+    );
+  }
+
   return (
     <button
       onClick={tikla}
