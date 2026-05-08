@@ -1,20 +1,7 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
 
-async function atolyeIdAl() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("metrix-token")?.value;
-  if (!token) return null;
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "metrix-gizli-anahtar-2024");
-    const { payload } = await jwtVerify(token, secret);
-    if ((payload as any).role === "personel") return (payload as any).atolyeId || null;
-    const user = await prisma.user.findUnique({ where: { id: (payload as any).id }, include: { atolye: true } });
-    return user?.atolye?.id || null;
-  } catch { return null; }
-}
 
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
   const taksitler: { taksitNo: number; aciklama: string; yuzdesi: number; gunSonra: number }[] = [];
@@ -43,7 +30,7 @@ function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: 
 
 export async function POST(req: Request) {
   try {
-    const atolyeId = await atolyeIdAl();
+    const auth = await getAtolyeAuth(); if (!auth) return NextResponse.json({ hata: "Yetkisiz." }, { status: 401 }); const atolyeId = auth.atolyeId;
     const { id, durum, fiyat, tasDurumu } = await req.json();
     if (!id) return Response.json({ error: "ID gerekli" }, { status: 400 });
 

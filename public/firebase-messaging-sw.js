@@ -12,8 +12,42 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage(function(payload) {
-  self.registration.showNotification(payload?.notification?.title || "Metrix", {
-    body: payload?.notification?.body || "Yeni bildiriminiz var.",
-    icon: "/icon-192.png"
+  const title = payload?.notification?.title || "Metrix";
+  const body = payload?.notification?.body || "Yeni bildiriminiz var.";
+  const actionUrl = payload?.data?.actionUrl || "/dashboard";
+
+  self.registration.showNotification(title, {
+    body,
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    vibrate: [200, 100, 200, 100, 200],
+    sound: "default",
+    requireInteraction: true,
+    data: { actionUrl },
+    actions: [
+      { action: "open", title: "Aç" },
+      { action: "close", title: "Kapat" }
+    ]
   });
+});
+
+self.addEventListener("notificationclick", function(event) {
+  event.notification.close();
+  if (event.action === "close") return;
+
+  const actionUrl = event.notification.data?.actionUrl || "/dashboard";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(function(clientList) {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          client.focus();
+          client.navigate(actionUrl);
+          return;
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(actionUrl);
+      }
+    })
+  );
 });

@@ -1,32 +1,10 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
-const prisma = globalForPrisma.prisma ?? new PrismaClient({ log: ['error', 'warn'] })
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
-async function atolyeIdAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-
-    const user = await prisma.user.findUnique({
-      where: { id: (payload as any).id },
-      include: { atolye: true },
-    })
-
-    return user?.atolye?.id || null
-  } catch {
-    return null
-  }
-}
 
 async function tabloHazirla() {
   await prisma.$executeRawUnsafe(`
@@ -47,8 +25,9 @@ async function tabloHazirla() {
 }
 
 export async function GET(req: NextRequest) {
-  const atolyeId = await atolyeIdAl()
-  if (!atolyeId) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   await tabloHazirla()
 
@@ -79,8 +58,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const atolyeId = await atolyeIdAl()
-  if (!atolyeId) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   await tabloHazirla()
 

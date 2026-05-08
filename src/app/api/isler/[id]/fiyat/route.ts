@@ -1,39 +1,24 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-const prisma = new PrismaClient()
 
-async function kullaniciAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string; email: string }
-  } catch {
-    return null
-  }
-}
 
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const kullanici = await kullaniciAl()
-    if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+    const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
 
     const { id } = await context.params
     const body = await req.json()
 
-    const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-    if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
-
+    
     const mevcut = await prisma.is.findFirst({
-      where: { id, atolyeId: atolye.id },
+      where: { id, atolyeId: atolyeId },
       select: {
         id: true,
         metrajMtul: true,

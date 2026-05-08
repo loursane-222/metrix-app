@@ -1,10 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { SignJWT } from 'jose'
-
-const prisma = new PrismaClient()
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,11 +27,8 @@ export async function POST(req: NextRequest) {
 
       const res = NextResponse.json({ mesaj: 'Giriş başarılı.' })
       res.cookies.set('metrix-token', token, {
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-
         httpOnly: true,
+        sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
         maxAge: sureDakika * 60,
         path: '/',
@@ -68,11 +62,8 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({ mesaj: 'Giriş başarılı.' })
     res.cookies.set('metrix-token', token, {
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        path: '/',
-
       httpOnly: true,
+      sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       maxAge: sureDakika * 60,
       path: '/',

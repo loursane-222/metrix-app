@@ -1,60 +1,14 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-import { cookies } from 'next/headers'
-import { jwtVerify } from 'jose'
 import bcrypt from 'bcryptjs'
 
-const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClient
-}
-
-const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ['error', 'warn'],
-  })
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma
-}
-
-async function atolyeIdAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-
-  if (!token) return null
-
-  try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024'
-    )
-
-    const { payload } = await jwtVerify(token, secret)
-
-    if ((payload as any).role === 'personel') {
-      return (payload as any).atolyeId || null
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: (payload as any).id },
-      include: { atolye: true },
-    })
-
-    return user?.atolye?.id || null
-  } catch (error) {
-    console.error('PERSONEL API - TOKEN HATASI:', error)
-    return null
-  }
-}
 
 export async function GET() {
   try {
-    const atolyeId = await atolyeIdAl()
-
-    if (!atolyeId) {
-      return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-    }
+    const auth = await getAtolyeAuth()
+    if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+    const atolyeId = auth.atolyeId
 
     const personeller = await prisma.personel.findMany({
       where: { atolyeId, aktif: true },
@@ -128,11 +82,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const atolyeId = await atolyeIdAl()
-
-    if (!atolyeId) {
-      return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-    }
+    const auth = await getAtolyeAuth()
+    if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+    const atolyeId = auth.atolyeId
 
     const mevcut = await prisma.personel.count({
       where: { atolyeId, aktif: true },
@@ -175,11 +127,9 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const atolyeId = await atolyeIdAl()
-
-    if (!atolyeId) {
-      return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-    }
+    const auth = await getAtolyeAuth()
+    if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+    const atolyeId = auth.atolyeId
 
     const veri = await req.json()
 

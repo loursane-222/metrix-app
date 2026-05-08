@@ -1,32 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { jwtVerify } from 'jose'
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 
 const MUSTERI_TIPLERI = ['bayi', 'mimar', 'son_kullanici', 'muteahhit']
 
-async function kullaniciAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string; email: string }
-  } catch {
-    return null
-  }
-}
+
 
 export async function GET() {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ musteriler: [] })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const musteriler = await prisma.musteri.findMany({
-    where: { atolyeId: atolye.id },
+    where: { atolyeId: atolyeId },
     include: {
       isler: {
         include: {
@@ -49,11 +35,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const body = await req.json()
 
@@ -79,35 +63,33 @@ export async function POST(req: NextRequest) {
   }
 
   const mevcut = await prisma.musteri.findFirst({
-    where: { atolyeId: atolye.id, firmaAdi, ad, soyad, email }
+    where: { atolyeId: atolyeId, firmaAdi, ad, soyad, email }
   })
 
   if (mevcut) return NextResponse.json({ musteri: mevcut })
 
   const musteri = await prisma.musteri.create({
-    data: { atolyeId: atolye.id, firmaAdi, ad, soyad, telefon, email, acilisBakiyesi, bakiyeTipi, musteriTipi }
+    data: { atolyeId: atolyeId, firmaAdi, ad, soyad, telefon, email, acilisBakiyesi, bakiyeTipi, musteriTipi }
   })
 
   try {
     const { logActivity } = await import('@/lib/activityLogger')
     const musteriAdi = musteri.firmaAdi || (musteri.ad + ' ' + musteri.soyad).trim() || 'Musteri'
     await logActivity({
-      atolyeId: atolye.id,
+      atolyeId: atolyeId,
       type: 'musteri_eklendi',
       message: musteriAdi + ' adli yeni musteri kaydi olusturuldu.',
       refId: musteri.id,
-      userId: kullanici.id,
+      userId: auth.userId,
     })
   } catch {}
   return NextResponse.json({ musteri })
 }
 
 export async function PUT(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const body = await req.json()
 
@@ -132,7 +114,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ hata: 'Geçersiz müşteri tipi.' }, { status: 400 })
   }
 
-  const mevcutMusteri = await prisma.musteri.findFirst({ where: { id, atolyeId: atolye.id } })
+  const mevcutMusteri = await prisma.musteri.findFirst({ where: { id, atolyeId: atolyeId } })
   if (!mevcutMusteri) return NextResponse.json({ hata: 'Müşteri bulunamadı.' }, { status: 404 })
 
   const musteri = await prisma.musteri.update({

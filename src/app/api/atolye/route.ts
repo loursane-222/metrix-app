@@ -1,24 +1,11 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-const prisma = new PrismaClient()
 
-async function kullaniciAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string; email: string }
-  } catch {
-    return null
-  }
-}
 
 function toplamHesapla(atolye: {
   toplamMaas: unknown; sgkGideri: unknown; yemekGideri: unknown; yolGideri: unknown;
@@ -39,28 +26,27 @@ function toplamHesapla(atolye: {
 }
 
 export async function GET() {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
 
   const atolye = await prisma.atolye.findUnique({
-    where: { userId: kullanici.id },
+    where: { userId: auth.userId },
     include: { makineler: true, araclar: true }
   })
-
-  if (!atolye) return NextResponse.json({ atolye: null, toplamAylikGider: 0, dakikaMaliyeti: 0, gunlukGider: 0 })
+  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
 
   const { toplamAylikGider, dakikaMaliyeti, gunlukGider } = toplamHesapla(atolye)
   return NextResponse.json({ atolye, toplamAylikGider, dakikaMaliyeti, gunlukGider })
 }
 
 export async function POST(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
 
   const veri = await req.json()
 
   const mevcutAtoyle = await prisma.atolye.findUnique({
-    where: { userId: kullanici.id },
+    where: { userId: auth.userId },
     include: { makineler: true, araclar: true }
   })
 
@@ -77,7 +63,7 @@ export async function POST(req: NextRequest) {
   const gunlukGider = toplamAylikGider / 26
 
   const atolye = await prisma.atolye.upsert({
-    where: { userId: kullanici.id },
+    where: { userId: auth.userId },
     update: {
       atolyeAdi: veri.atolyeAdi, sehir: veri.sehir, ilce: veri.ilce,
       telefon: veri.telefon || '', email: veri.email || '', adres: veri.adres || '',
@@ -101,7 +87,7 @@ export async function POST(req: NextRequest) {
       dakikaMaliyeti,
     },
     create: {
-      userId: kullanici.id,
+      userId: auth.userId,
       atolyeAdi: veri.atolyeAdi || '', sehir: veri.sehir || '', ilce: veri.ilce || '',
       telefon: veri.telefon || '', email: veri.email || '', adres: veri.adres || '',
         kurulusYili: parseInt(veri.kurulusYili) || 0,

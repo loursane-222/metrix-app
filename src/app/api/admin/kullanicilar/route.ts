@@ -1,10 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-const prisma = new PrismaClient()
 
 const ADMIN_EMAIL = 'admin@metrix.com'
 

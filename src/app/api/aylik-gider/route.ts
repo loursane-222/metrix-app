@@ -1,32 +1,19 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-const prisma = new PrismaClient()
 
-async function kullaniciAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string; email: string }
-  } catch { return null }
-}
 
 // GET — tüm giderler + kategori ortalamaları
 export async function GET() {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ giderler: [], ortalamalar: {} })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const giderler = await prisma.$queryRawUnsafe(`
     SELECT * FROM "AylikGider" WHERE "atolyeId" = $1 ORDER BY tarih DESC
-  `, atolye.id) as any[]
+  `, atolyeId) as any[]
 
   // Her kategori için ortalama hesapla
   const kategoriler = ['toplamMaas','sgkGideri','yemekGideri','yolGideri','kira','elektrik','su','dogalgaz','internet','sarfMalzeme','diger']
@@ -45,11 +32,9 @@ export async function GET() {
 
 // POST — yeni gider kaydet
 export async function POST(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı' }, { status: 404 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const { tarih, kategori, aciklama, tutar } = await req.json()
   if (!tarih || !kategori || !tutar) return NextResponse.json({ hata: 'Eksik alan' }, { status: 400 })
@@ -59,13 +44,13 @@ export async function POST(req: NextRequest) {
   await prisma.$executeRawUnsafe(`
     INSERT INTO "AylikGider" (id, "atolyeId", tarih, kategori, aciklama, tutar, "createdAt")
     VALUES ($1, $2, $3, $4, $5, $6, NOW())
-  `, id, atolye.id, new Date(tarih), kategori, aciklama || '', Number(tutar))
+  `, id, atolyeId, new Date(tarih), kategori, aciklama || '', Number(tutar))
 
   // Ortalamayla atölye tablosunu güncelle
   const rows = await prisma.$queryRawUnsafe(`
     SELECT kategori, AVG(tutar::numeric) as ort FROM "AylikGider"
     WHERE "atolyeId" = $1 GROUP BY kategori
-  `, atolye.id) as any[]
+  `, atolyeId) as any[]
 
   const guncelle: Record<string, number> = {}
   const kolonMap: Record<string, string> = {
@@ -81,7 +66,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (Object.keys(guncelle).length > 0) {
-    await prisma.atolye.update({ where: { id: atolye.id }, data: guncelle })
+    await prisma.atolye.update({ where: { id: atolyeId }, data: guncelle })
   }
 
   return NextResponse.json({ ok: true, id })
@@ -89,8 +74,8 @@ export async function POST(req: NextRequest) {
 
 // DELETE
 export async function DELETE(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
 
   const { id } = await req.json()
   if (!id) return NextResponse.json({ hata: 'ID gerekli' }, { status: 400 })

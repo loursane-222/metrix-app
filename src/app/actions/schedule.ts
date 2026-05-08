@@ -399,23 +399,6 @@ export async function movePhase(data: {
   if (!phase) throw new Error("Aşama bulunamadı");
   if (phase.workSchedule.is.atolyeId !== atolyeId) throw new Error("Yetkisiz");
 
-  const kirilanTasPlaka = Math.max(0, Number(data.kirilanTasPlaka || 0));
-
-  if (
-    phase.phase === "IMALAT" &&
-    data.isCompleted === true &&
-    kirilanTasPlaka > 0
-  ) {
-    await prisma.is.update({
-      where: { id: phase.workSchedule.isId },
-      data: {
-        kirilanTasPlaka: {
-          increment: kirilanTasPlaka,
-        },
-      },
-    });
-  }
-
   const updated = await prisma.schedulePhase.update({
     where: { id: data.schedulePhaseId },
     data: {

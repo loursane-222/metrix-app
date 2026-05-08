@@ -1,52 +1,7 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
 
-async function authContextAl() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("metrix-token")?.value;
-  if (!token) return null;
-
-  try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-
-    const { payload } = await jwtVerify(token, secret);
-
-    const user = await prisma.user.findUnique({
-      where: { id: (payload as any).id },
-      include: { atolye: true },
-    });
-
-    if (!user) return null;
-
-    if (user.atolye?.id) {
-      return {
-        atolyeId: user.atolye.id,
-        isOwner: true,
-        personelId: null as string | null,
-      };
-    }
-
-    const personel = await prisma.personel.findFirst({
-      where: { email: user.email, aktif: true },
-      select: { id: true, atolyeId: true },
-    });
-
-    if (!personel) return null;
-
-    return {
-      atolyeId: personel.atolyeId,
-      isOwner: false,
-      personelId: personel.id,
-    };
-  } catch {
-    return null;
-  }
-}
 
 function dateOnlyToUtc(dateText: string) {
   return new Date(`${dateText}T00:00:00.000Z`);
@@ -54,7 +9,9 @@ function dateOnlyToUtc(dateText: string) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const auth = await authContextAl();
+    const auth = await getAtolyeAuth();
+    const isOwner = auth?.role === "admin";
+    const personelId = auth?.personelId || null;
     if (!auth?.atolyeId) {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
     }
@@ -90,8 +47,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 403 });
     }
 
-    if (!auth.isOwner) {
-      const atanmisMi = phase.fazAtamalar.some((a) => a.personelId === auth.personelId);
+    if (!isOwner) {
+      const atanmisMi = phase.fazAtamalar.some((a) => a.personelId === personelId);
       if (!atanmisMi) {
         return NextResponse.json(
           { error: "Sadece size atanmış işleri taşıyabilirsiniz" },
@@ -116,6 +73,17 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
+    // Faz adı
+    const fazAdlari: Record<string, string> = { OLCU: 'Ölçü', IMALAT: 'İmalat', MONTAJ: 'Montaj' }
+    const fazAdi = fazAdlari[phase.phase] || phase.phase
+    const isAdi = phase.workSchedule.is.musteriAdi || phase.workSchedule.is.urunAdi || 'İş'
+    await logActivity({
+      atolyeId: auth.atolyeId,
+      type: 'takvim_guncellendi',
+      message: `${isAdi} – ${fazAdi} aşaması ${plannedDate} tarihine taşındı`,
+      refId: phase.workScheduleId,
+    })
+
     return NextResponse.json({ ok: true, phase: updated });
   } catch (error) {
     console.error(error);
@@ -125,3 +93,4 @@ export async function PATCH(req: NextRequest) {
     );
   }
 }
+// logActivity import zaten yok, dosya başına ekleyelim

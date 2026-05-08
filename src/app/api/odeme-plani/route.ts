@@ -1,20 +1,9 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-async function kullaniciAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string; email: string }
-  } catch {
-    return null
-  }
-}
 
 // Müşteri tipine göre ödeme planı taksit yapısı
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
@@ -50,11 +39,9 @@ function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: 
 
 // GET: İşe ait ödeme planını getir
 export async function GET(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const { searchParams } = new URL(req.url)
   const isId = searchParams.get('isId')
@@ -70,11 +57,9 @@ export async function GET(req: NextRequest) {
 
 // POST: İş onaylandığında otomatik ödeme planı oluştur
 export async function POST(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const body = await req.json()
   const { isId } = body
@@ -82,7 +67,7 @@ export async function POST(req: NextRequest) {
   if (!isId) return NextResponse.json({ hata: 'isId gerekli.' }, { status: 400 })
 
   const is = await prisma.is.findFirst({
-    where: { id: isId, atolyeId: atolye.id },
+    where: { id: isId, atolyeId: atolyeId },
     include: { musteri: true }
   })
   if (!is) return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
@@ -119,11 +104,9 @@ export async function POST(req: NextRequest) {
 
 // PUT: Taksit ödendi işaretle
 export async function PUT(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const body = await req.json()
   const { taksitId, odendiMi } = body
@@ -131,7 +114,7 @@ export async function PUT(req: NextRequest) {
   if (!taksitId) return NextResponse.json({ hata: 'taksitId gerekli.' }, { status: 400 })
 
   const taksit = await prisma.odemeTaksiti.findFirst({
-    where: { id: taksitId, plan: { is: { atolyeId: atolye.id } } }
+    where: { id: taksitId, plan: { is: { atolyeId: atolyeId } } }
   })
   if (!taksit) return NextResponse.json({ hata: 'Taksit bulunamadı.' }, { status: 404 })
 

@@ -570,7 +570,14 @@ export default function YeniIsV3Page() {
         malzemeTipi: "Porselen",
         musteriTipi: form.musteriTipi,
         isTarihi: form.isTarihi,
-        plakaFiyatiEuro: n(form.plakaFiyatiEuro) || (n(form.plakaFiyati) / n(form.kullanilanKur)) || 0,
+        plakaFiyatiEuro: n(form.plakaFiyatiEuro) > 0
+          ? n(form.plakaFiyatiEuro)
+          : n(form.plakaFiyati) > 0 && n(form.kullanilanKur) > 0
+            ? n(form.plakaFiyati) / n(form.kullanilanKur)
+            : 0,
+        plakaFiyatiTl: n(form.plakaFiyati) > 0
+          ? n(form.plakaFiyati)
+          : n(form.plakaFiyatiEuro) * n(form.kullanilanKur),
         kullanilanKur: n(form.kullanilanKur),
         karYuzdesi: String(hesap.karYuzde.toFixed(1)),
         metrajMtul: String(hesap.toplamMtul.toFixed(2)),
@@ -1460,7 +1467,13 @@ export default function YeniIsV3Page() {
               initialProductName={form.urunAdi}
               initialPlakaGenislik={form.plakaEn}
               initialPlakaYukseklik={form.plakaBoy}
-              initialPlakaFiyati={form.plakaFiyatiEuro}
+              initialPlakaFiyati={
+                form.plakaFiyatiEuro
+                  ? form.plakaFiyatiEuro
+                  : n(form.plakaFiyati) > 0 && n(form.kullanilanKur) > 0
+                    ? String((n(form.plakaFiyati) / n(form.kullanilanKur)).toFixed(2))
+                    : ""
+              }
               initialRows={plakaInitialRows}
               onApply={(sonuc: any) => {
                 if (sonuc?.plakaLayoutJson) setAlan("plakaLayoutJson", sonuc.plakaLayoutJson);

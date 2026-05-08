@@ -1,24 +1,7 @@
+import { getAtolyeAuth } from "@/lib/getAtolyeId"
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
-
-async function authContextAl() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("metrix-token")?.value;
-  if (!token) return null;
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "metrix-gizli-anahtar-2024");
-    const { payload } = await jwtVerify(token, secret);
-    const user = await prisma.user.findUnique({ where: { id: (payload as any).id }, include: { atolye: true } });
-    if (!user) return null;
-    if (user.atolye?.id) return { atolyeId: user.atolye.id, isOwner: true, personelId: null as string | null, userId: user.id };
-    const personel = await prisma.personel.findFirst({ where: { email: user.email, aktif: true }, select: { id: true, atolyeId: true } });
-    if (!personel) return null;
-    return { atolyeId: personel.atolyeId, isOwner: false, personelId: personel.id, userId: user.id };
-  } catch { return null; }
-}
 
 const phaseLabel: Record<string, string> = { OLCU: "Olcu", IMALAT: "Imalat", MONTAJ: "Montaj", TAS_ALINACAK: "Tas Alinacak" };
 
@@ -28,8 +11,10 @@ function dateOnlyToUtc(dateText: string) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const auth = await authContextAl();
+    const auth = await getAtolyeAuth();
     if (!auth?.atolyeId) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
+    const isOwner = auth.role === "admin";
+    const personelId = auth.personelId || null;
 
     const body = await req.json();
     const phaseId = String(body.phaseId || "");
@@ -52,8 +37,8 @@ export async function PATCH(req: NextRequest) {
     if (!phase) return NextResponse.json({ error: "Asama bulunamadi" }, { status: 404 });
     if (phase.workSchedule.is.atolyeId !== auth.atolyeId) return NextResponse.json({ error: "Yetkisiz" }, { status: 403 });
 
-    if (!auth.isOwner) {
-      const atanmisMi = phase.fazAtamalar.some((a) => a.personelId === auth.personelId);
+    if (!isOwner) {
+      const atanmisMi = phase.fazAtamalar.some((a) => a.personelId === personelId);
       if (!atanmisMi) return NextResponse.json({ error: "Sadece size atanmis isi duzenleyebilirsiniz" }, { status: 403 });
       if (personelIds !== null) return NextResponse.json({ error: "Personel atamasini sadece yonetici degistirebilir" }, { status: 403 });
     }

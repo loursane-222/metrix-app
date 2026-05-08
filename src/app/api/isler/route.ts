@@ -1,3 +1,4 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
@@ -5,18 +6,6 @@ import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
 
-async function kullaniciAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string; email: string }
-  } catch {
-    return null
-  }
-}
 
 function teklifNoOlustur(sayi: number): string {
   const yil = new Date().getFullYear()
@@ -25,17 +14,15 @@ function teklifNoOlustur(sayi: number): string {
 }
 
 export async function GET(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ isler: [] })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const { searchParams } = new URL(req.url)
   const musteriId = searchParams.get('musteriId')
   const durumFiltre = searchParams.get('durum') // 'onaylandi' gibi
 
-  const where: any = { atolyeId: atolye.id }
+  const where: any = { atolyeId: atolyeId }
   if (musteriId) where.musteriId = musteriId
   if (durumFiltre) where.durum = durumFiltre
 
@@ -57,14 +44,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const atolye = await prisma.atolye.findUnique({
-    where: { userId: kullanici.id },
+    where: { id: atolyeId },
     include: { makineler: true },
   })
-  if (!atolye) return NextResponse.json({ hata: 'Önce atölye profili oluşturun.' }, { status: 400 })
+  if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
 
   const veri = await req.json()
 
@@ -78,6 +66,7 @@ export async function POST(req: NextRequest) {
     plakaGenislikCm, plakaUzunlukCm, plakadanAlinanMtul,
     operasyonlar, isTarihi,
     manuelPlakaSayisi,
+    plakaFiyatiTl,
 
     ozelIscilik1Mtul, ozelIscilik1Dakika,
     ozelIscilik2Mtul, ozelIscilik2Dakika,
@@ -90,7 +79,7 @@ export async function POST(req: NextRequest) {
     const mevcutMusteri = await prisma.musteri.findFirst({
       where: {
         id: musteriId,
-        atolyeId: atolye.id
+        atolyeId: atolyeId
       }
     })
     if (mevcutMusteri) {
@@ -103,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     let mevcutMusteri = await prisma.musteri.findFirst({
       where: {
-        atolyeId: atolye.id,
+        atolyeId: atolyeId,
         OR: [
           { firmaAdi: aranan },
           { ad: aranan }
@@ -115,7 +104,7 @@ export async function POST(req: NextRequest) {
     if (!mevcutMusteri) {
       mevcutMusteri = await prisma.musteri.create({
         data: {
-          atolyeId: atolye.id,
+          atolyeId: atolyeId,
           firmaAdi: '',
           ad: aranan,
           soyad: '',
@@ -192,10 +181,12 @@ export async function POST(req: NextRequest) {
   const kullanilanPlakaSayisi =
     Number(manuelPlakaSayisi) > 0 ? Number(manuelPlakaSayisi) : otomatikPlakaSayisi
 
+  const plakaFiyatiTlHesap = parseFloat(plakaFiyatiTl) > 0
+    ? parseFloat(plakaFiyatiTl)
+    : (parseFloat(plakaFiyatiEuro) || 0) * (parseFloat(kullanilanKur) || 0)
+
   const malzemeMaliyeti =
-    kullanilanPlakaSayisi *
-    (parseFloat(plakaFiyatiEuro) || 0) *
-    (parseFloat(kullanilanKur) || 0)
+    kullanilanPlakaSayisi * plakaFiyatiTlHesap
 
   const toplamMaliyet = iscilikMaliyeti + malzemeMaliyeti
   const satisFiyati = toplamMaliyet * (1 + (parseFloat(karYuzdesi) || 0) / 100)
@@ -203,7 +194,7 @@ export async function POST(req: NextRequest) {
   const kdvDahilFiyat = satisFiyati + kdvTutari
   const mtulSatisFiyati = toplamMetraj > 0 ? satisFiyati / toplamMetraj : 0
 
-  const toplamIs = await prisma.is.count({ where: { atolyeId: atolye.id } })
+  const toplamIs = await prisma.is.count({ where: { atolyeId: atolyeId } })
   const teklifNo = teklifNoOlustur(toplamIs + 1)
 
   const teklifGecerlilikTarihi = new Date()
@@ -213,7 +204,7 @@ export async function POST(req: NextRequest) {
     data: {
       plakaLayoutJson: (veri as any).plakaLayoutJson || null,
       plakaImageUrl: (veri as any).plakaImageUrl || null,
-      atolyeId: atolye.id,
+      atolyeId: atolyeId,
       musteriId: bagliMusteriId,
       teklifNo,
       musteriAdi,
@@ -258,14 +249,14 @@ export async function POST(req: NextRequest) {
   })
 
   const tumIsler = await prisma.is.findMany({
-    where: { atolyeId: atolye.id, plakadanAlinanMtul: { gt: 0 } },
+    where: { atolyeId: atolyeId, plakadanAlinanMtul: { gt: 0 } },
     select: { plakadanAlinanMtul: true },
   })
 
   if (tumIsler.length > 0) {
     const ortalama = tumIsler.reduce((acc, i) => acc + normalizeMtulInput(i.plakadanAlinanMtul), 0) / tumIsler.length
     await prisma.atolye.update({
-      where: { id: atolye.id },
+      where: { id: atolyeId },
       data: { plakaBasinaMtul: ortalama },
     })
   }
@@ -273,11 +264,11 @@ export async function POST(req: NextRequest) {
   try {
     const { logActivity } = await import('@/lib/activityLogger')
     await logActivity({
-      atolyeId: atolye.id,
+      atolyeId: atolyeId,
       type: 'teklif_olusturuldu',
       message: musteriAdi + ' icin ' + teklifNo + ' numarali teklif olusturuldu. Tutar: ' + satisFiyati.toLocaleString('tr-TR') + ' TL',
       refId: is.id,
-      userId: kullanici.id,
+      userId: auth.userId,
     })
   } catch {}
 

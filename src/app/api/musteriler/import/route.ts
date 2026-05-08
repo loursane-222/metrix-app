@@ -1,24 +1,9 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-import { cookies } from 'next/headers'
-import { jwtVerify } from 'jose'
 import ExcelJS from 'exceljs'
 
-const prisma = new PrismaClient()
 
-async function kullaniciAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string }
-  } catch {
-    return null
-  }
-}
 
 function temiz(v: any) {
   return String(v || '').trim()
@@ -30,16 +15,9 @@ function num(v: any) {
 }
 
 export async function POST(req: NextRequest) {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({
-    where: { userId: kullanici.id }
-  })
-
-  if (!atolye) {
-    return NextResponse.json({ hata: 'Atölye bulunamadı. Önce sistem girişini tamamla.' }, { status: 404 })
-  }
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const formData = await req.formData()
   const file = formData.get('file')
@@ -91,7 +69,7 @@ export async function POST(req: NextRequest) {
     }
 
     const varMi = await prisma.musteri.findFirst({
-      where: { atolyeId: atolye.id, firmaAdi, ad, soyad, email }
+      where: { atolyeId: atolyeId, firmaAdi, ad, soyad, email }
     })
 
     if (varMi) {
@@ -101,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.musteri.create({
       data: {
-        atolyeId: atolye.id,
+        atolyeId: atolyeId,
         firmaAdi,
         ad,
         soyad,

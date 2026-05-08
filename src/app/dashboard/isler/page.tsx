@@ -335,10 +335,10 @@ export default function IslerPage() {
                       {(() => {
                         const faz = aktifFazBilgisi(is.id);
                         if (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) return (
-                          <button onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
-                            className="mt-1 flex items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[11px] font-semibold text-orange-300">
+                          <div onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
+                            className="mt-1 flex items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[11px] font-semibold text-orange-300 cursor-pointer">
                             ⚠ Program Bekliyor
-                          </button>
+                          </div>
                         );
                         if (!faz) return null;
                         return (

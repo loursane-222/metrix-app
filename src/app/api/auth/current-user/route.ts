@@ -3,6 +3,44 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 
+const MENU_YETKI_MAP: Record<string, string> = {
+  "/dashboard": "dashboard",
+  "/dashboard/isler": "teklifOlusturabilir",
+  "/dashboard/musteriler": "musteriGorebilir",
+  "/dashboard/is-programi": "isProgramiGorebilir",
+  "/dashboard/atolye": "atolyeAyarGorebilir",
+  "/dashboard/personel": "atolyeAyarGorebilir",
+  "/dashboard/plaka-planlayici": "teklifOlusturabilir",
+  "/dashboard/tahsilatlar": "maliyetGorebilir",
+};
+
+async function getPersonelMenuleri(personelId: string): Promise<string[]> {
+  try {
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT * FROM "personel_yetkileri" WHERE "personelId" = $1 LIMIT 1`,
+      personelId
+    );
+    const yetki = rows[0];
+
+    // Yetki kaydı yoksa sadece dashboard
+    if (!yetki) return ["/dashboard", "/dashboard/is-programi"];
+
+    const allowed = ["/dashboard"];
+
+    if (yetki.isProgramiGorebilir) allowed.push("/dashboard/is-programi");
+    if (yetki.teklifOlusturabilir) allowed.push("/dashboard/isler");
+    if (yetki.teklifOlusturabilir) allowed.push("/dashboard/plaka-planlayici");
+    if (yetki.musteriGorebilir) allowed.push("/dashboard/musteriler");
+    if (yetki.maliyetGorebilir) allowed.push("/dashboard/tahsilatlar");
+    if (yetki.atolyeAyarGorebilir) allowed.push("/dashboard/atolye");
+    if (yetki.atolyeAyarGorebilir) allowed.push("/dashboard/personel");
+
+    return allowed;
+  } catch {
+    return ["/dashboard", "/dashboard/is-programi"];
+  }
+}
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
@@ -20,13 +58,21 @@ export async function GET() {
     const role = (payload as any).role || "admin";
 
     if (role === "personel") {
+      const personelId = (payload as any).personelId || null;
+      const atolyeId = (payload as any).atolyeId || null;
+
+      const allowedMenus = personelId
+        ? await getPersonelMenuleri(personelId)
+        : ["/dashboard"];
+
       return NextResponse.json({
         userId: (payload as any).id,
         email: (payload as any).email,
         role,
-        personelId: (payload as any).personelId || null,
-        atolyeId: (payload as any).atolyeId || null,
+        personelId,
+        atolyeId,
         aktif: true,
+        allowedMenus,
       });
     }
 
@@ -40,7 +86,6 @@ export async function GET() {
     }
 
     let atolye = user.atolye;
-
     if (!atolye) {
       atolye = await prisma.atolye.create({
         data: {
@@ -51,10 +96,10 @@ export async function GET() {
       });
     }
 
-    const simdi = new Date()
-    const abonelikBitis = user.abonelikBitis
-    const abonelikPlani = (user as any).abonelikPlani || 'demo'
-    const demoBitti = abonelikBitis ? abonelikBitis < simdi : true
+    const simdi = new Date();
+    const abonelikBitis = user.abonelikBitis;
+    const abonelikPlani = (user as any).abonelikPlani || "demo";
+    const demoBitti = abonelikBitis ? abonelikBitis < simdi : true;
 
     return NextResponse.json({
       userId: user.id,
@@ -65,6 +110,7 @@ export async function GET() {
       abonelikPlani,
       demoBitti,
       atolyeId: atolye.id,
+      allowedMenus: null, // admin tüm menüleri görür
     });
   } catch (e) {
     console.error("current-user error:", e);

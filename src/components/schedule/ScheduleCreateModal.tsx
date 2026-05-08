@@ -293,7 +293,7 @@ export default function ScheduleCreateModal({
 
               <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
                 {mode === "ai" ? (
-                  <div className="space-y-3 pb-4">
+                  <div className="space-y-3 pb-24 md:pb-4">
                     {PHASES.map((phase) => {
                       const value = recommendation.plan?.[phase];
 
@@ -309,7 +309,8 @@ export default function ScheduleCreateModal({
                               type="date"
                               value={value ? dayjs(value).format("YYYY-MM-DD") : ""}
                               onChange={(e) => updateAiPlan(phase, e.target.value)}
-                              className="rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none"
+                              onClick={(e) => { try { (e.target as any).showPicker?.() } catch {} }}
+                              className="w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none sm:w-auto"
                             />
                           </div>
                         </div>
@@ -328,7 +329,7 @@ export default function ScheduleCreateModal({
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3 pb-4">
+                  <div className="space-y-3 pb-24 md:pb-4">
                     {PHASES.map((phase) => (
                       <div key={phase} className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
                         <div className="text-sm font-bold text-slate-300">{PHASE_LABELS[phase]}</div>
@@ -337,7 +338,8 @@ export default function ScheduleCreateModal({
                           type="date"
                           value={manualDates[phase]}
                           onChange={(e) => setManualDates({ ...manualDates, [phase]: e.target.value })}
-                          className="mt-3 w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none"
+                          onClick={(e) => { try { (e.target as any).showPicker?.() } catch {} }}
+                          className="mt-3 w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none cursor-pointer"
                         />
 
                         <select
@@ -358,7 +360,7 @@ export default function ScheduleCreateModal({
                 )}
               </div>
 
-              <div className="shrink-0 border-t border-white/10 pt-4">
+              <div className="shrink-0 border-t border-white/10 pt-4 pb-safe md:pb-0" style={{paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)"}}>
                 <button
                   onClick={() => createSchedule(mode === "manual")}
                   disabled={creating || !selectedReady}

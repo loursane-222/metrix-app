@@ -125,6 +125,15 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
+  async function logout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include", cache: "no-store" });
+    } catch {}
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = "/login";
+  }
+
   useEffect(() => {
     setMoreOpen(false);
   }, [pathname]);
@@ -208,6 +217,45 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
                   </svg>
                 </Link>
               ))}
+              <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)" }}>
+                <button
+                  onClick={() => { setMoreOpen(false); logout(); }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    padding: "13px 16px",
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: "rgba(239,68,68,0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: "#ef4444" }}>
+                      Çıkış Yap
+                    </p>
+                    <p style={{ margin: 0, fontSize: 12, color: "rgba(148,163,184,0.6)" }}>
+                      Oturumu kapat
+                    </p>
+                  </div>
+                </button>
+              </div>
               <div style={{ height: 8 }} />
             </div>
           </div>

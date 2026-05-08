@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import ScheduleCreateModal from "./ScheduleCreateModal";
@@ -71,6 +71,17 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
   const [schedules, setSchedules] = useState<any[]>(initialSchedules);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [savingDrag, setSavingDrag] = useState(false);
+  const [personelSayisi, setPersonelSayisi] = useState(1);
+
+  useEffect(() => {
+    fetch("/api/personel", { credentials: "include", cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const aktif = (d?.personeller || []).filter((p: any) => p.aktif !== false).length;
+        if (aktif > 0) setPersonelSayisi(aktif);
+      })
+      .catch(() => {});
+  }, []);
 
   const tasks = useMemo(() => {
     const mapped: any[] = [];
@@ -99,6 +110,8 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
           endDate: phase.plannedEnd,
           completed: phase.isCompleted,
           personelText,
+          toplamSureDakika: phase.workSchedule?.is?.toplamSureDakika || 0,
+          fazAtamalari: phase.fazAtamalar || [],
         });
       });
     });
@@ -125,11 +138,30 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
     delayed: weekTasks.filter((t) => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length,
   };
 
+  // Haftalık kapasite: personel × 5 iş günü × 480 dk
+  const haftaKapasiteDk = personelSayisi * 5 * 480;
+
+  // Her fazın toplam iş dakikasını hesapla (atanan kişi sayısına göre paralel)
+  const fazDakika = (phase: string) => {
+    const fazTasks = weekTasks.filter((t) => t.phase === phase);
+    return fazTasks.reduce((acc: number, t: any) => {
+      const isToplamDk = Math.round(Number(t.toplamSureDakika || 0));
+      const atananKisi = Math.max(1, (t.fazAtamalari || []).length);
+      // Paralel çalışma: süre / atanan kişi
+      return acc + Math.round(isToplamDk / atananKisi);
+    }, 0);
+  };
+
+  const olcuDk = fazDakika("OLCU");
+  const imalatDk = fazDakika("IMALAT");
+  const montajDk = fazDakika("MONTAJ");
+  const toplamYukDk = olcuDk + imalatDk + montajDk;
+
   const density = {
-    olcu: stats.total ? Math.round((stats.olcu / stats.total) * 100) : 0,
-    imalat: stats.total ? Math.round((stats.imalat / stats.total) * 100) : 0,
-    montaj: stats.total ? Math.round((stats.montaj / stats.total) * 100) : 0,
-    genel: Math.min(100, Math.round((stats.total / 21) * 100)),
+    olcu: haftaKapasiteDk > 0 ? Math.min(100, Math.round((olcuDk / haftaKapasiteDk) * 100)) : 0,
+    imalat: haftaKapasiteDk > 0 ? Math.min(100, Math.round((imalatDk / haftaKapasiteDk) * 100)) : 0,
+    montaj: haftaKapasiteDk > 0 ? Math.min(100, Math.round((montajDk / haftaKapasiteDk) * 100)) : 0,
+    genel: haftaKapasiteDk > 0 ? Math.min(100, Math.round((toplamYukDk / haftaKapasiteDk) * 100)) : 0,
   };
 
   function meta(phase: string) {
@@ -459,10 +491,10 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
       {view === "month" && <MonthView />}
 
       <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
-        <DensityCard title="Ölçü Yoğunluğu" value={density.olcu} tone="text-blue-300" helper={`${stats.olcu}/${stats.total || 0} iş`} />
-        <DensityCard title="İmalat Yoğunluğu" value={density.imalat} tone="text-amber-300" helper={`${stats.imalat}/${stats.total || 0} iş`} />
-        <DensityCard title="Montaj Yoğunluğu" value={density.montaj} tone="text-emerald-300" helper={`${stats.montaj}/${stats.total || 0} iş`} />
-        <DensityCard title="Genel Yoğunluk" value={density.genel} tone="text-purple-300" helper={`${stats.total}/21 kapasite`} />
+        <DensityCard title="Ölçü Yoğunluğu" value={density.olcu} tone="text-blue-300" helper={`${stats.olcu} iş · ${olcuDk} dk`} />
+        <DensityCard title="İmalat Yoğunluğu" value={density.imalat} tone="text-amber-300" helper={`${stats.imalat} iş · ${imalatDk} dk`} />
+        <DensityCard title="Montaj Yoğunluğu" value={density.montaj} tone="text-emerald-300" helper={`${stats.montaj} iş · ${montajDk} dk`} />
+        <DensityCard title="Genel Yoğunluk" value={density.genel} tone="text-purple-300" helper={`${toplamYukDk} dk / ${haftaKapasiteDk} dk kapasite`} />
       </div>
 
       <ScheduleAiInsight schedules={schedules} weekStart={startOfWeek.toISOString()} />

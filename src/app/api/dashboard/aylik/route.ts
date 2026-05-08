@@ -1,31 +1,18 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-const prisma = new PrismaClient()
 
-async function kullaniciAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    return payload as { id: string; email: string }
-  } catch { return null }
-}
 
 export async function GET() {
-  const kullanici = await kullaniciAl()
-  if (!kullanici) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
-
-  const atolye = await prisma.atolye.findUnique({ where: { userId: kullanici.id } })
-  if (!atolye) return NextResponse.json({ aylar: [] })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const isler = await prisma.is.findMany({
-    where: { atolyeId: atolye.id },
+    where: { atolyeId: atolyeId },
     select: {
       id: true, durum: true,
       satisFiyati: true, toplamMaliyet: true, tahsilat: true,

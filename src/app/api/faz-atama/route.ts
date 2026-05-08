@@ -1,30 +1,16 @@
+import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
-const prisma = new PrismaClient()
 
-async function atolyeIdAl() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('metrix-token')?.value
-  if (!token) return null
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
-    const user = await prisma.user.findUnique({
-      where: { id: (payload as any).id },
-      include: { atolye: true },
-    })
-    return user?.atolye?.id || null
-  } catch { return null }
-}
 
 // Bir faz için atamaları getir
 export async function GET(req: NextRequest) {
-  const atolyeId = await atolyeIdAl()
-  if (!atolyeId) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const { searchParams } = new URL(req.url)
   const schedulePhaseId = searchParams.get('schedulePhaseId')
@@ -39,8 +25,9 @@ export async function GET(req: NextRequest) {
 
 // Atama ekle
 export async function POST(req: NextRequest) {
-  const atolyeId = await atolyeIdAl()
-  if (!atolyeId) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const { schedulePhaseId, personelId } = await req.json()
 
@@ -57,8 +44,9 @@ export async function POST(req: NextRequest) {
 
 // Atama sil
 export async function DELETE(req: NextRequest) {
-  const atolyeId = await atolyeIdAl()
-  if (!atolyeId) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
