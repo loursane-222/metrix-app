@@ -98,19 +98,21 @@ function AiWaButon({
         body: JSON.stringify({ ...payload, tip }),
       });
       const json = await res.json();
+      if (json.error) {
+        alert("Hata: " + json.error + (json.detail ? " - " + json.detail : ""));
+        setDurum("idle");
+        return;
+      }
       const m = json.mesaj || "";
+      if (!m) {
+        alert("Mesaj uretilemedi, lutfen tekrar deneyin.");
+        setDurum("idle");
+        return;
+      }
       setMesaj(m);
       setDurum("done");
-      if (m) {
-        const a = document.createElement("a");
-        a.href = waHref(phone, m);
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-    } catch {
+    } catch (err: any) {
+      alert("Baglanti hatasi: " + (err?.message || String(err)));
       setDurum("idle");
     }
   }
