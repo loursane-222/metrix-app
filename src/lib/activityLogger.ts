@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 
-// Hangi activity type'ları hangi role gider
 const ADMIN_TYPES = [
   "satis", "tahsilat", "odeme", "teklif_onay", "teklif_kayip",
   "teklif_onayla", "teklif_kaybedildi", "odeme_hatirlatma",
@@ -19,55 +18,61 @@ function getTargetRole(type: string): "admin" | "personel" | "both" {
   if (isAdmin && isPersonel) return "both";
   if (isAdmin) return "admin";
   if (isPersonel) return "personel";
-  // bilinmeyen → admin
-  return "admin";
+  return "both";
 }
 
-async function sendPushToAtolyeByRole(
+async function sendFCMPush(tokens: string[], title: string, body: string) {
+  if (tokens.length === 0) return;
+  const serverKey = process.env.FIREBASE_SERVER_KEY;
+  if (!serverKey) return;
+
+  await Promise.allSettled(
+    tokens.map((token) =>
+      fetch("https://fcm.googleapis.com/fcm/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `key=${serverKey}`,
+        },
+        body: JSON.stringify({
+          to: token,
+          notification: { title, body },
+          webpush: {
+            notification: { title, body, icon: "/icon-192.png" },
+          },
+        }),
+      })
+    )
+  );
+}
+
+async function sendPushByRole(
   atolyeId: string,
   title: string,
   body: string,
   role: "admin" | "personel" | "both"
 ) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-
-    // Her iki role de gönder
     if (role === "admin" || role === "both") {
-      // Atölyenin sahibi (User) → admin tokenları
       const atolye = await prisma.atolye.findUnique({
         where: { id: atolyeId },
         select: { userId: true },
       });
       if (atolye?.userId) {
-        await fetch(`${baseUrl}/api/push/send`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            body,
-            userIds: [atolye.userId],
-          }),
-        }).catch(() => {});
+        const tokens = await prisma.pushToken.findMany({
+          where: { userId: atolye.userId },
+          select: { token: true },
+        });
+        await sendFCMPush(tokens.map((t) => t.token), title, body);
       }
     }
 
     if (role === "personel" || role === "both") {
-      // Atölyedeki tüm aktif personel push tokenları
       const tokens = await prisma.personelPushToken.findMany({
         where: { atolyeId },
+        select: { token: true },
       });
-      if (tokens.length > 0) {
-        await fetch(`${baseUrl}/api/push/send-personel`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            body,
-            tokens: tokens.map((t) => t.token),
-          }),
-        }).catch(() => {});
-      }
+      await sendFCMPush(tokens.map((t) => t.token), title, body);
     }
   } catch {
     // push hataları sessizce geçsin
@@ -101,9 +106,8 @@ export async function logActivity({
       },
     });
 
-    // Push bildirim gönder
     const role = getTargetRole(type);
-    await sendPushToAtolyeByRole(atolyeId, "Metrix", message, role);
+    await sendPushByRole(atolyeId, "Metrix", message, role);
   } catch {
     // log hataları sessizce geçsin
   }
