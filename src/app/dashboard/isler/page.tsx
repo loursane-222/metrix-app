@@ -595,7 +595,8 @@ export default function IslerPage() {
           )}
           {filtreliIsler.map((is) => (
             <div key={is.id} onClick={() => setAktifIs(is)}
-              className={`p-4 border-b border-slate-800 cursor-pointer hover:bg-[#111827] ${aktifIs?.id === is.id ? 'bg-[#111827]' : ''}`}>
+              className={`group relative p-4 border-b border-slate-800 cursor-pointer hover:bg-[#111827] ${aktifIs?.id === is.id ? 'bg-[#111827]' : ''}`}>
+
               <div className="flex justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold">{is.musteriAdi}</p>
@@ -623,7 +624,9 @@ export default function IslerPage() {
                     )}
                   </div>
                 </div>
-                <span className={`h-fit rounded-full border px-2 py-1 text-[10px] ${durumRenk(is.durum)}`}>{durumEtiket(is.durum)}</span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`h-fit rounded-full border px-2 py-1 text-[10px] ${durumRenk(is.durum)}`}>{durumEtiket(is.durum)}</span>
+                </div>
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <p className="text-xs text-slate-500">{paraGoster(Number(is.satisFiyati || 0))}</p>
@@ -639,6 +642,10 @@ export default function IslerPage() {
                       </span>
                     )
                   })()}
+                  <button onClick={e => { e.stopPropagation(); isSil(is.id); }}
+                    className="hidden group-hover:flex items-center gap-1 rounded-lg bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/25 transition">
+                    🗑 Sil
+                  </button>
                 </div>
               </div>
             </div>

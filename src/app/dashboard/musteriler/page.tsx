@@ -671,7 +671,7 @@ export default function MusterilerPage() {
                   return (
                     <SwipeToDelete key={m.id} onDelete={() => musteriSil(m.id)}>
                     <button onClick={() => { setAktif(m); setMobilDetayAcik(true) }}
-                      className={`w-full rounded-2xl border p-3 text-left transition ${secili ? 'border-emerald-300/70 bg-gradient-to-br from-emerald-400/20 via-emerald-300/10 to-cyan-400/10 shadow-[0_0_32px_rgba(16,185,129,0.22)] ring-1 ring-emerald-300/30' : 'border-white/10 bg-white/[0.035] hover:bg-white/[0.07]'}`}>
+                      className={`group relative w-full rounded-2xl border p-3 text-left transition ${secili ? 'border-emerald-300/70 bg-gradient-to-br from-emerald-400/20 via-emerald-300/10 to-cyan-400/10 shadow-[0_0_32px_rgba(16,185,129,0.22)] ring-1 ring-emerald-300/30' : 'border-white/10 bg-white/[0.035] hover:bg-white/[0.07]'}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">{musteriAdi(m)}</p>
@@ -687,7 +687,13 @@ export default function MusterilerPage() {
                       </div>
                       <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
                         <span>{ma.teklifSayisi} teklif · {pct(ma.onayOrani)} onay</span>
-                        <span className="text-emerald-300/70">{tl(ma.onayliCiro)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-emerald-300/70">{tl(ma.onayliCiro)}</span>
+                          <span onClick={e => { e.stopPropagation(); musteriSil(m.id); }}
+                            className="hidden group-hover:flex items-center gap-1 rounded-lg bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/25 transition cursor-pointer">
+                            🗑 Sil
+                          </span>
+                        </div>
                       </div>
                     </button>
                     </SwipeToDelete>

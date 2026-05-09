@@ -11,7 +11,7 @@ export default function SwipeToDelete({ onDelete, children, disabled }: Props) {
   const startX = useRef<number | null>(null)
   const [offset, setOffset] = useState(0)
   const [sildim, setSildim] = useState(false)
-  const THRESHOLD = 80
+  const THRESHOLD = 72
 
   function onTouchStart(e: React.TouchEvent) {
     if (disabled) return
@@ -21,16 +21,13 @@ export default function SwipeToDelete({ onDelete, children, disabled }: Props) {
   function onTouchMove(e: React.TouchEvent) {
     if (startX.current === null || disabled) return
     const dx = startX.current - e.touches[0].clientX
-    if (dx > 0) setOffset(Math.min(dx, 100))
+    if (dx > 0) setOffset(Math.min(dx, 88))
     else setOffset(0)
   }
 
   function onTouchEnd() {
-    if (offset >= THRESHOLD) {
-      setOffset(100)
-    } else {
-      setOffset(0)
-    }
+    if (offset >= THRESHOLD) setOffset(88)
+    else setOffset(0)
     startX.current = null
   }
 
@@ -43,29 +40,32 @@ export default function SwipeToDelete({ onDelete, children, disabled }: Props) {
 
   return (
     <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '16px' }}>
-      {/* Arka plan — sil butonu */}
-      <div style={{
-        position: 'absolute', inset: 0, background: '#ef4444',
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-        paddingRight: '20px', borderRadius: '16px',
-      }}>
-        <button
-          onClick={handleDelete}
-          style={{ color: '#fff', fontSize: '13px', fontWeight: 800, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
-        >
-          <span style={{ fontSize: '18px' }}>🗑</span>
-          Sil
-        </button>
-      </div>
+      {/* Sil butonu — sadece offset > 0 olunca görünür */}
+      {offset > 0 && (
+        <div style={{
+          position: 'absolute', top: 0, right: 0, bottom: 0, width: '88px',
+          background: '#ef4444', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', borderRadius: '0 16px 16px 0',
+        }}>
+          <button onClick={handleDelete} style={{
+            color: '#fff', fontSize: '12px', fontWeight: 800,
+            background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px'
+          }}>
+            <span style={{ fontSize: '20px' }}>🗑</span>
+            Sil
+          </button>
+        </div>
+      )}
 
-      {/* İçerik — sola kayan kısım */}
+      {/* İçerik */}
       <div
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         style={{
           transform: `translateX(-${offset}px)`,
-          transition: offset === 0 || offset === 100 ? 'transform .25s ease' : 'none',
+          transition: startX.current === null ? 'transform .2s ease' : 'none',
           position: 'relative', zIndex: 1,
         }}
       >

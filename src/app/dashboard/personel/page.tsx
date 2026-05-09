@@ -299,7 +299,7 @@ export default function PersonelSayfasi() {
               <button
                 onClick={() => { setAktif(p); setMobileView('detail') }}
                 className={cls(
-                  'w-full rounded-2xl border p-3 text-left transition',
+                  'group relative w-full rounded-2xl border p-3 text-left transition',
                   aktif?.id === p.id ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-800 bg-[#111827] hover:bg-slate-800'
                 )}
               >
@@ -308,10 +308,15 @@ export default function PersonelSayfasi() {
                     <p className="truncate text-sm font-semibold">{p.ad} {p.soyad}</p>
                     <p className="mt-1 text-xs text-slate-400">{p.gorevi} · {p.toplamGorev || 0} görev</p>
                   </div>
-
-                  <span className={cls('rounded-full border px-2 py-1 text-[10px]', performansTone(p.performansNotu))}>
-                    {p.performansNotu === null ? '-' : `%${p.performansNotu}`}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={cls('rounded-full border px-2 py-1 text-[10px]', performansTone(p.performansNotu))}>
+                      {p.performansNotu === null ? '-' : `%${p.performansNotu}`}
+                    </span>
+                    <span onClick={e => { e.stopPropagation(); personelSil(p.id); }}
+                      className="hidden group-hover:flex items-center gap-1 rounded-lg bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/25 transition cursor-pointer">
+                      🗑 Sil
+                    </span>
+                  </div>
                 </div>
               </button>
               </SwipeToDelete>
