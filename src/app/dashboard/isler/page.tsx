@@ -1,4 +1,5 @@
 'use client'
+import SwipeToDelete from '@/components/ui/SwipeToDelete'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
@@ -20,6 +21,7 @@ export default function IslerPage() {
   const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
   const [isArama, setIsArama] = useState("")
+  const [silinenIsId, setSilinenIsId] = useState<string|null>(null)
   const [durumFiltre, setDurumFiltre] = useState<string>("tumu")
   const [zamanFiltre, setZamanFiltre] = useState<string>("tumu")
   const [durumDegistirAcik, setDurumDegistirAcik] = useState(false)
@@ -251,6 +253,13 @@ export default function IslerPage() {
     return durum || 'Belirsiz'
   }
 
+  async function isSil(id: string) {
+    if (!confirm('Bu işi silmek istediğinize emin misiniz?')) return
+    await fetch(`/api/isler?id=${id}`, { method: 'DELETE' })
+    setIsler(prev => prev.filter(x => x.id !== id))
+    if (aktifIs?.id === id) setAktifIs(null)
+  }
+
   const filtreliIsler = useMemo(() => {
     const q = isArama.trim().toLowerCase()
     let liste = isler
@@ -364,7 +373,8 @@ export default function IslerPage() {
                 </div>
               )}
               {filtreliIsler.map((is: any) => (
-                <button key={is.id} onClick={() => { setAktifIs(is); setMobileView('detail') }}
+                <SwipeToDelete key={is.id} onDelete={() => isSil(is.id)}>
+                <button onClick={() => { setAktifIs(is); setMobileView('detail') }}
                   className="block w-full border-b border-slate-800 p-4 text-left active:bg-[#111827]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -414,6 +424,7 @@ export default function IslerPage() {
                     </span>
                   </div>
                 </button>
+                </SwipeToDelete>
               ))}
             </div>
           </div>

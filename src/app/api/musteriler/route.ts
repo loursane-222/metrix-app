@@ -124,3 +124,15 @@ export async function PUT(req: NextRequest) {
 
   return NextResponse.json({ musteri })
 }
+
+export async function DELETE(req: NextRequest) {
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
+  const id = req.nextUrl.searchParams.get('id')
+  if (!id) return NextResponse.json({ hata: 'id gerekli.' }, { status: 400 })
+  const musteri = await prisma.musteri.findFirst({ where: { id, atolyeId } })
+  if (!musteri) return NextResponse.json({ hata: 'Müşteri bulunamadı.' }, { status: 404 })
+  await prisma.musteri.delete({ where: { id } })
+  return NextResponse.json({ ok: true })
+}

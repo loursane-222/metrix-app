@@ -1,4 +1,5 @@
 'use client'
+import SwipeToDelete from '@/components/ui/SwipeToDelete'
 import { useEffect, useMemo, useState } from 'react'
 
 type Personel = {
@@ -199,6 +200,13 @@ export default function PersonelSayfasi() {
     }
   }
 
+  async function personelSil(id: string) {
+    if (!confirm('Bu personeli silmek istediğinize emin misiniz?')) return
+    await fetch(`/api/personel?id=${id}`, { method: 'DELETE' })
+    setPersoneller(prev => prev.filter(x => x.id !== id))
+    if (aktif?.id === id) setAktif(null)
+  }
+
   const filtreli = useMemo(() => {
     const q = arama.trim().toLocaleLowerCase('tr-TR')
 
@@ -287,8 +295,8 @@ export default function PersonelSayfasi() {
 
           <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
             {filtreli.map((p) => (
+              <SwipeToDelete key={p.id} onDelete={() => personelSil(p.id)}>
               <button
-                key={p.id}
                 onClick={() => { setAktif(p); setMobileView('detail') }}
                 className={cls(
                   'w-full rounded-2xl border p-3 text-left transition',
@@ -306,6 +314,7 @@ export default function PersonelSayfasi() {
                   </span>
                 </div>
               </button>
+              </SwipeToDelete>
             ))}
           </div>
         </aside>

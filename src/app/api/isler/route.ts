@@ -281,3 +281,15 @@ export async function POST(req: NextRequest) {
     musteriId: bagliMusteriId || null
   })
 }
+
+export async function DELETE(req: NextRequest) {
+  const auth = await getAtolyeAuth()
+  if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
+  const id = req.nextUrl.searchParams.get('id')
+  if (!id) return NextResponse.json({ hata: 'id gerekli.' }, { status: 400 })
+  const is = await prisma.is.findFirst({ where: { id, atolyeId } })
+  if (!is) return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
+  await prisma.is.delete({ where: { id } })
+  return NextResponse.json({ ok: true })
+}

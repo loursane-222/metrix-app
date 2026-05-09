@@ -1,4 +1,5 @@
 'use client'
+import SwipeToDelete from '@/components/ui/SwipeToDelete'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -192,6 +193,13 @@ export default function MusterilerPage() {
       if(d?.atolye) setAtolyelogo({ ad: d.atolye.atolyeAdi||'Duru Mermer', logoUrl: d.atolye.logoUrl||'' })
     }).catch(()=>{})
   }, [])
+
+  async function musteriSil(id: string) {
+    if (!confirm('Bu müşteriyi silmek istediğinize emin misiniz?')) return
+    await fetch(`/api/musteriler?id=${id}`, { method: 'DELETE' })
+    setMusteriler(prev => prev.filter(x => x.id !== id))
+    if (aktif?.id === id) setAktif(null)
+  }
 
   const filtreli = useMemo(() => {
     const q = arama.trim().toLowerCase()
@@ -661,7 +669,8 @@ export default function MusterilerPage() {
                   const ma = analiz(m)
                   const secili = aktif?.id === m.id
                   return (
-                    <button key={m.id} onClick={() => { setAktif(m); setMobilDetayAcik(true) }}
+                    <SwipeToDelete key={m.id} onDelete={() => musteriSil(m.id)}>
+                    <button onClick={() => { setAktif(m); setMobilDetayAcik(true) }}
                       className={`w-full rounded-2xl border p-3 text-left transition ${secili ? 'border-emerald-300/70 bg-gradient-to-br from-emerald-400/20 via-emerald-300/10 to-cyan-400/10 shadow-[0_0_32px_rgba(16,185,129,0.22)] ring-1 ring-emerald-300/30' : 'border-white/10 bg-white/[0.035] hover:bg-white/[0.07]'}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
@@ -681,6 +690,7 @@ export default function MusterilerPage() {
                         <span className="text-emerald-300/70">{tl(ma.onayliCiro)}</span>
                       </div>
                     </button>
+                    </SwipeToDelete>
                   )
                 })}
               </div>
