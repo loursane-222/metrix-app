@@ -412,7 +412,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
           <div className="text-sm text-slate-400">{selectedDayTasks.length} iş</div>
         </div>
 
-        <div className="space-y-3 pb-36">
+        <div className="space-y-3 pb-[120px]">
           {selectedDayTasks.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-slate-500">
               Bu güne planlanmış iş yok.
@@ -512,20 +512,20 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
         </div>
       </div>
 
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-6">
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4"><div className="text-xs text-slate-400">Toplam İş</div><div className="mt-1 text-3xl font-black">{stats.total}</div></div>
-        <div className="rounded-3xl border border-blue-500/20 bg-blue-500/10 p-4"><div className="text-xs text-blue-300">Ölçü</div><div className="mt-1 text-3xl font-black text-blue-300">{stats.olcu}</div></div>
-        <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="text-xs text-amber-300">İmalat</div><div className="mt-1 text-3xl font-black text-amber-300">{stats.imalat}</div></div>
-        <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4"><div className="text-xs text-emerald-300">Montaj</div><div className="mt-1 text-3xl font-black text-emerald-300">{stats.montaj}</div></div>
-        <div className="rounded-3xl border border-red-500/20 bg-red-500/10 p-4"><div className="text-xs text-red-300">Geciken</div><div className="mt-1 text-3xl font-black text-red-300">{stats.delayed}</div></div>
-        <div className="rounded-3xl border border-purple-500/20 bg-purple-500/10 p-4"><div className="text-xs text-purple-300">Tamamlanan</div><div className="mt-1 text-3xl font-black text-purple-300">{stats.completed}</div></div>
+      <div className="mb-5 grid grid-cols-3 gap-2 md:grid-cols-6">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-2 md:p-4"><div className="text-[10px] md:text-xs text-slate-400">Toplam</div><div className="mt-1 text-xl md:text-3xl font-black">{stats.total}</div></div>
+        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-2 md:p-4"><div className="text-[10px] md:text-xs text-blue-300">Ölçü</div><div className="mt-1 text-xl md:text-3xl font-black text-blue-300">{stats.olcu}</div></div>
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-2 md:p-4"><div className="text-[10px] md:text-xs text-amber-300">İmalat</div><div className="mt-1 text-xl md:text-3xl font-black text-amber-300">{stats.imalat}</div></div>
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-2 md:p-4"><div className="text-[10px] md:text-xs text-emerald-300">Montaj</div><div className="mt-1 text-xl md:text-3xl font-black text-emerald-300">{stats.montaj}</div></div>
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-2 md:p-4"><div className="text-[10px] md:text-xs text-red-300">Geciken</div><div className="mt-1 text-xl md:text-3xl font-black text-red-300">{stats.delayed}</div></div>
+        <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 p-2 md:p-4"><div className="text-[10px] md:text-xs text-purple-300">Tamam</div><div className="mt-1 text-xl md:text-3xl font-black text-purple-300">{stats.completed}</div></div>
       </div>
 
       {view === "week" && <><DesktopWeek /><MobileDayList /></>}
       {view === "day" && <MobileDayList />}
       {view === "month" && <MonthView />}
 
-      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="mt-5 hidden md:grid grid-cols-1 gap-3 md:grid-cols-4">
         <DensityCard title="Ölçü Yoğunluğu" value={density.olcu} tone="text-blue-300" helper={`${stats.olcu} iş / ${olcuKapasiteHafta} kapasite`} />
         <DensityCard title="İmalat Yoğunluğu" value={density.imalat} tone="text-amber-300" helper={`${stats.imalat} iş / ${imalatKapasiteHafta} kapasite`} />
         <DensityCard title="Montaj Yoğunluğu" value={density.montaj} tone="text-emerald-300" helper={`${stats.montaj} iş / ${montajKapasiteHafta} kapasite`} />
@@ -536,7 +536,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
 
       <button
         onClick={() => setShowCreate(true)}
-        className="fixed bottom-6 right-6 z-40 h-16 w-16 rounded-full bg-blue-600 text-4xl leading-none text-white shadow-2xl shadow-blue-900/50 md:hidden"
+        className="fixed bottom-[88px] right-5 z-40 h-14 w-14 rounded-full bg-blue-600 text-3xl leading-none text-white shadow-2xl shadow-blue-900/50 md:hidden"
       >
         +
       </button>

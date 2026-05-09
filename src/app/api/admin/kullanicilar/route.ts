@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 
 
-const ADMIN_EMAIL = 'admin@metrix.com'
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@metrix.com'
 
 async function adminKontrol() {
   const cookieStore = await cookies()

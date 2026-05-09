@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DailyPlanPopup from "@/components/dashboard/DailyPlanPopup";
 import PushPermission from "@/components/push/PushPermission";
+import InAppToast, { showToast } from "@/components/push/InAppToast";
 
 export default function DashboardLayout({
   children,
@@ -14,6 +15,34 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [aktif, setAktif] = useState<boolean | null>(null);
+
+  // SSE — tüm sayfalarda anlık bildirim
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      es = new EventSource("/api/sse");
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === "activity" && data.message) {
+            showToast("Metrix — Yeni Hareket", data.message);
+          }
+        } catch {}
+      };
+      es.onerror = () => {
+        es?.close();
+        retryTimeout = setTimeout(connect, 3000);
+      };
+    }
+
+    connect();
+    return () => {
+      es?.close();
+      if (retryTimeout) clearTimeout(retryTimeout);
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/current-user", { credentials: "include" })
@@ -59,6 +88,7 @@ export default function DashboardLayout({
   }
   return (
     <div className="min-h-[100dvh] bg-[#0B1120] overflow-x-hidden">
+      <InAppToast />
       <Sidebar />
       <main className="min-h-[100dvh] md:ml-72 bg-[#0B1120] overflow-x-hidden" id="dashboard-main"
         style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}>

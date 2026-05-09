@@ -143,22 +143,32 @@ export default function DashboardPage() {
   const [sekme, setSekme] = useState<"yillik" | "aylik">("aylik");
 
   const lastAkisIdRef = useRef<string | null>(null);
+  const seenIdsRef = useRef<Set<string>>(new Set());
+
 
   useEffect(() => {
-    async function fetchDashboard(first) {
+    async function fetchDashboard(first: boolean) {
       try {
         const r = await fetch("/api/dashboard");
         const json = await r.json();
         if (json?.error) { setError(json.error); return; }
 
         if (!first && json?.anaAkis?.length > 0) {
-          const newest = json.anaAkis[0];
-          if (lastAkisIdRef.current && newest.id !== lastAkisIdRef.current) {
-            showToast("Metrix", newest.message);
-          }
+          // Daha önce görülmemiş tüm yeni aktiviteleri toast olarak göster
+          const yeniler = json.anaAkis.filter(
+            (a: any) => a.id && !seenIdsRef.current.has(a.id)
+          );
+          // En fazla 3 toast göster (fazlası rahatsız edici)
+          yeniler.slice(0, 3).forEach((a: any) => {
+            showToast("Metrix — Yeni Hareket", a.message);
+          });
         }
 
+        // Tüm görülen id'leri kaydet
         if (json?.anaAkis?.length > 0) {
+          json.anaAkis.forEach((a: any) => {
+            if (a.id) seenIdsRef.current.add(a.id);
+          });
           lastAkisIdRef.current = json.anaAkis[0].id;
         }
 
@@ -169,7 +179,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboard(true);
-    const interval = setInterval(() => fetchDashboard(false), 30000);
+    const interval = setInterval(() => fetchDashboard(false), 10000);
     return () => clearInterval(interval);
   }, []);
 

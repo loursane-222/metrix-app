@@ -25,7 +25,23 @@ async function authBilgisiAl(): Promise<{
     );
 
     const { payload } = await jwtVerify(token, secret);
+    const role = (payload as any).role || "admin";
 
+    // Personel girişi — token'da personelId ve atolyeId direkt var
+    if (role === "personel") {
+      const personelId = (payload as any).personelId || null;
+      const atolyeId = (payload as any).atolyeId || null;
+      const email = (payload as any).email || null;
+      return {
+        userId: (payload as any).id || null,
+        atolyeId,
+        email,
+        isOwner: false,
+        personelId,
+      };
+    }
+
+    // Admin girişi
     const user = await prisma.user.findUnique({
       where: { id: (payload as any).id },
       include: { atolye: true },
@@ -35,33 +51,12 @@ async function authBilgisiAl(): Promise<{
       return { userId: null, atolyeId: null, email: null, isOwner: false, personelId: null };
     }
 
-    if (user.atolye?.id) {
-      return {
-        userId: user.id,
-        atolyeId: user.atolye.id,
-        email: user.email,
-        isOwner: true,
-        personelId: null,
-      };
-    }
-
-    const personel = await prisma.personel.findFirst({
-      where: {
-        email: user.email,
-        aktif: true,
-      },
-      select: {
-        id: true,
-        atolyeId: true,
-      },
-    });
-
     return {
       userId: user.id,
-      atolyeId: personel?.atolyeId || null,
+      atolyeId: user.atolye?.id || null,
       email: user.email,
-      isOwner: false,
-      personelId: personel?.id || null,
+      isOwner: true,
+      personelId: null,
     };
   } catch {
     return { userId: null, atolyeId: null, email: null, isOwner: false, personelId: null };

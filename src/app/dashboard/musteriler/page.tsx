@@ -288,30 +288,110 @@ export default function MusterilerPage() {
 
   function pdfIndir() {
     if (!aktif || !a) return
-    const isHareketler = (aktif.isler || []).filter((i: any) => i.durum === 'onaylandi').slice(0, 8)
-      .map((i: any) => `<tr><td>${tarihFmt(i.onaylanmaTarihi)}</td><td><b>Onaylı İş</b></td><td>${i.teklifNo || ''} · ${i.urunAdi || ''}</td><td class="r"><b>${tl(i.satisFiyati)}</b></td><td class="r">—</td><td class="r"><b>${tl(i.satisFiyati)}</b></td></tr>`).join('')
-    const tahHareketler = (aktif.tahsilatlar || []).slice(0, 8)
-      .map((t: any) => `<tr><td>${tarihFmt(t.tarih)}</td><td><b>Tahsilat</b></td><td>Ödeme</td><td class="r">—</td><td class="r"><b>${tl(t.tutar)}</b></td><td class="r">—</td></tr>`).join('')
-    const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Ekstre</title><style>@page{size:A4;margin:10mm}body{font-family:Arial,sans-serif;color:#020617}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}th{background:#020617;color:white;padding:10px;text-align:left}td{padding:10px;border-top:1px solid #e5e7eb}.r{text-align:right}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.kpi{background:#f8fafc;border-radius:12px;padding:14px}.kpi .k{color:#64748b;font-size:12px}.kpi .v{font-size:18px;font-weight:900;margin-top:8px}h1{font-size:28px;margin:8px 0 0}h2{margin-top:24px}</style></head><body>
-    <div style="display:flex;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid #e5e7eb">
-    <div><div style="font-size:11px;color:#94a3b8;font-weight:800;letter-spacing:4px">DURU MERMER</div><h1>Müşteri Hesap Ekstresi</h1><div style="color:#64748b;margin-top:6px">${new Date().toLocaleDateString('tr-TR')}</div></div>
-    <div style="text-align:right;border:1px solid #e5e7eb;border-radius:16px;padding:16px 20px"><div style="font-size:11px;color:#94a3b8;font-weight:800">GÜNCEL BAKİYE</div><div style="font-size:26px;font-weight:900;color:#d97706;margin-top:8px">${tl(a.bakiye)}</div></div></div>
-    <div style="margin-top:18px;font-size:22px;font-weight:900">Sayın ${musteriAdi(aktif)}</div>
-    <div style="color:#64748b;margin-top:4px">${[aktif.telefon, aktif.email].filter(Boolean).join(' · ') || ''}</div>
-    <div class="kpis"><div class="kpi"><div class="k">Onaylı Ciro</div><div class="v">${tl(a.onayliCiro)}</div></div><div class="kpi"><div class="k">Tahsilat</div><div class="v">${tl(a.tahsilat)}</div></div><div class="kpi"><div class="k">Teklif</div><div class="v">${a.teklifSayisi}</div></div><div class="kpi"><div class="k">Onay Oranı</div><div class="v">${pct(a.onayOrani)}</div></div></div>
-    <h2>Hesap Hareketleri</h2>
-    <table><thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th class="r">Borç</th><th class="r">Alacak</th><th class="r">Bakiye</th></tr></thead><tbody>${isHareketler}${tahHareketler}${!isHareketler && !tahHareketler ? '<tr><td colspan="6" style="text-align:center;padding:20px;color:#64748b">Hareket yok.</td></tr>' : ''}</tbody></table>
+    const firmaAdiPdf = atolyeLogo?.ad?.trim() || 'Metrix'
+    const logoUrlPdf = atolyeLogo?.logoUrl?.trim() || ''
+    let bakiye = 0
+    const isHareketler = (aktif.isler || []).filter((i: any) => i.durum === 'onaylandi')
+      .sort((x: any, y: any) => new Date(x.onaylanmaTarihi || x.createdAt || 0).getTime() - new Date(y.onaylanmaTarihi || y.createdAt || 0).getTime())
+      .map((i: any) => {
+        bakiye += Number(i.satisFiyati || 0)
+        return `<tr><td>${tarihFmt(i.onaylanmaTarihi)}</td><td><b>Onaylı İş</b></td><td>${i.teklifNo || ''} · ${i.urunAdi || ''}</td><td class="r"><b>${tl(i.satisFiyati)}</b></td><td class="r">—</td><td class="r"><b>${tl(bakiye)}</b></td></tr>`
+      }).join('')
+    const tahHareketler = (aktif.tahsilatlar || [])
+      .sort((x: any, y: any) => new Date(x.tarih || x.createdAt || 0).getTime() - new Date(y.tarih || y.createdAt || 0).getTime())
+      .map((t: any) => {
+        bakiye -= Number(t.tutar || 0)
+        return `<tr style="background:#f0fdf4"><td>${tarihFmt(t.tarih)}</td><td style="color:#059669"><b>Tahsilat</b></td><td>Alınan ödeme</td><td class="r">—</td><td class="r" style="color:#059669"><b>${tl(t.tutar)}</b></td><td class="r"><b>${tl(bakiye)}</b></td></tr>`
+      }).join('')
+    const logoHtml = logoUrlPdf
+      ? `<img src="${logoUrlPdf}" style="width:56px;height:56px;border-radius:14px;object-fit:cover;border:1px solid #e2e8f0" crossorigin="anonymous"/>`
+      : `<div style="width:56px;height:56px;border-radius:14px;background:#020617;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:white">${firmaAdiPdf.charAt(0).toUpperCase()}</div>`
+    const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Ekstre - ${musteriAdi(aktif)}</title>
+    <style>
+      @page{size:A4;margin:12mm}
+      *{box-sizing:border-box}
+      body{font-family:'Helvetica Neue',Arial,sans-serif;color:#020617;margin:0;padding:0;font-size:13px}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:2px solid #020617;gap:16px}
+      .logo-row{display:flex;align-items:center;gap:14px}
+      .firma{font-size:10px;color:#94a3b8;font-weight:800;letter-spacing:4px;text-transform:uppercase}
+      h1{font-size:26px;font-weight:900;margin:6px 0 4px}
+      .tarih{color:#64748b;font-size:12px}
+      .bakiye-box{border:1px solid #e2e8f0;border-radius:16px;padding:14px 20px;text-align:right;min-width:160px}
+      .bakiye-label{font-size:10px;color:#94a3b8;font-weight:800;letter-spacing:3px}
+      .bakiye-val{font-size:24px;font-weight:900;color:#d97706;margin-top:6px}
+      .musteri-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:12px;margin-top:16px}
+      .card{border:1px solid #e2e8f0;border-radius:14px;padding:14px}
+      .card-label{font-size:10px;color:#94a3b8;font-weight:800;letter-spacing:3px}
+      .card-title{font-size:20px;font-weight:900;margin:8px 0 4px}
+      .card-sub{font-size:12px;color:#64748b}
+      .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+      .kpi{background:#f8fafc;border-radius:12px;padding:12px}
+      .kpi .k{color:#64748b;font-size:11px}
+      .kpi .v{font-size:17px;font-weight:900;margin-top:6px}
+      .section-title{font-size:18px;font-weight:900;margin:24px 0 10px;display:flex;justify-content:space-between;align-items:center}
+      .count{font-size:12px;color:#94a3b8;font-weight:500}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th{background:#020617;color:white;padding:10px 12px;text-align:left;font-weight:700}
+      td{padding:10px 12px;border-bottom:1px solid #f1f5f9}
+      .r{text-align:right}
+      .note{background:#f8fafc;border-radius:14px;padding:16px;margin-top:20px}
+      .note-label{font-size:10px;color:#94a3b8;font-weight:800;letter-spacing:3px}
+      .note-text{font-size:12px;color:#64748b;margin-top:8px;line-height:1.7}
+    </style></head><body>
+    <div class="header">
+      <div class="logo-row">
+        ${logoHtml}
+        <div>
+          <div class="firma">${firmaAdiPdf}</div>
+          <h1>Müşteri Hesap Ekstresi</h1>
+          <div class="tarih">Düzenleme tarihi: ${new Date().toLocaleDateString('tr-TR')}</div>
+        </div>
+      </div>
+      <div class="bakiye-box">
+        <div class="bakiye-label">GÜNCEL BAKİYE</div>
+        <div class="bakiye-val">${tl(a.bakiye)}</div>
+      </div>
+    </div>
+    <div class="musteri-grid">
+      <div class="card">
+        <div class="card-label">MÜŞTERİ</div>
+        <div class="card-title">Sayın ${musteriAdi(aktif)}</div>
+        <div class="card-sub">${[aktif.telefon, aktif.email].filter(Boolean).join(' · ') || 'İletişim bilgisi yok'}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">ÖDEME BİLGİLENDİRME NOTU</div>
+        <div style="font-size:12px;color:#475569;margin-top:8px;line-height:1.6">Sayın ${musteriAdi(aktif)}, hesabınızda <b>${tl(a.bakiye)}</b> güncel bakiye görünmektedir. Ödeme planınızı bizimle paylaşırsanız mutabakatı hızlıca tamamlayabiliriz.</div>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Onaylı Ciro</div><div class="v">${tl(a.onayliCiro)}</div></div>
+      <div class="kpi"><div class="k">Tahsilat</div><div class="v">${tl(a.tahsilat)}</div></div>
+      <div class="kpi"><div class="k">Teklif Sayısı</div><div class="v">${a.teklifSayisi}</div></div>
+      <div class="kpi"><div class="k">Onay Oranı</div><div class="v">${pct(a.onayOrani)}</div></div>
+    </div>
+    <div class="section-title">Hesap Hareketleri <span class="count">${(aktif.isler||[]).filter((i:any)=>i.durum==='onaylandi').length + (aktif.tahsilatlar||[]).length} hareket</span></div>
+    <table>
+      <thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th class="r">Borç</th><th class="r">Alacak</th><th class="r">Bakiye</th></tr></thead>
+      <tbody>
+        ${isHareketler}${tahHareketler}
+        ${!isHareketler && !tahHareketler ? '<tr><td colspan="6" style="text-align:center;padding:24px;color:#94a3b8">Henüz hesap hareketi yok.</td></tr>' : ''}
+      </tbody>
+    </table>
+    <div class="note">
+      <div class="note-label">NOT</div>
+      <div class="note-text">Bu ekstre, kayıtlı iş ve ödeme hareketlerine göre otomatik olarak hazırlanmıştır. Herhangi bir farklılık görmeniz halinde bizimle iletişime geçebilirsiniz.</div>
+    </div>
     </body></html>`
     const w = window.open('', '_blank', 'width=900,height=1200')
     if (!w) return
     w.document.open(); w.document.write(html); w.document.close(); w.focus()
-    setTimeout(() => { w.print(); w.close() }, 500)
+    setTimeout(() => { w.print(); w.close() }, 600)
   }
 
   function whatsappEkstreGonder() {
     if (!aktif || !a) return
     const phone = telefonTemizle(aktif.telefon || '')
-    const mesaj = `Merhaba ${musteriAdi(aktif)},\n\nCari ekstre özetiniz:\n\nOnaylı ciro: ${tl(a.onayliCiro)}\nTahsilat: ${tl(a.tahsilat)}\nBakiye: ${tl(a.bakiye)}\n\nDetaylar için bizimle iletişime geçebilirsiniz.`
+    const mesaj = `Merhaba ${musteriAdi(aktif)},\n\nGüncel hesap özeti aşağıdadır:\n\n• Onaylı Ciro: ${tl(a.onayliCiro)}\n• Tahsilat: ${tl(a.tahsilat)}\n• Güncel Bakiye: ${tl(a.bakiye)}\n\nDetaylı ekstre için PDF indirip paylaşabilirsiniz. İletişim için her zaman buradayız.`
     window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}` : `https://wa.me/?text=${encodeURIComponent(mesaj)}`, '_blank')
   }
 
@@ -697,21 +777,14 @@ export default function MusterilerPage() {
               <button onClick={() => setModal(false)} className="rounded-xl border border-white/10 px-3 py-2 text-sm">Kapat</button>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none" placeholder="Firma adı" value={form.firmaAdi} onChange={(e) => setForm({ ...form, firmaAdi: e.target.value })} />
-              <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none" placeholder="Telefon" value={form.telefon} onChange={(e) => setForm({ ...form, telefon: e.target.value })} />
-              <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none" placeholder="Ad" value={form.ad} onChange={(e) => setForm({ ...form, ad: e.target.value })} />
-              <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none" placeholder="Soyad" value={form.soyad} onChange={(e) => setForm({ ...form, soyad: e.target.value })} />
-              <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none sm:col-span-2" placeholder="E-posta" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none" placeholder="Açılış bakiyesi" value={form.acilisBakiyesi} onChange={(e) => setForm({ ...form, acilisBakiyesi: e.target.value })} />
-              <select className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none" value={form.bakiyeTipi} onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}>
-                <option value="borc">Müşteri borçlu</option><option value="alacak">Müşteri alacaklı</option>
-              </select>
-              <select className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none sm:col-span-2" value={form.musteriTipi} onChange={(e) => setForm({ ...form, musteriTipi: e.target.value })}>
-                <option value="son_kullanici">Son Kullanıcı</option>
-                <option value="bayi">Bayi</option>
-                <option value="mimar">Mimar</option>
-                <option value="muteahhit">Müteahhit</option>
-              </select>
+              <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Firma Adı</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Firma adı" value={form.firmaAdi} onChange={(e) => setForm({ ...form, firmaAdi: e.target.value })} /></div>
+              <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Telefon</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Telefon" value={form.telefon} onChange={(e) => setForm({ ...form, telefon: e.target.value })} /></div>
+              <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Ad</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Ad" value={form.ad} onChange={(e) => setForm({ ...form, ad: e.target.value })} /></div>
+              <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Soyad</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Soyad" value={form.soyad} onChange={(e) => setForm({ ...form, soyad: e.target.value })} /></div>
+              <div className="flex flex-col gap-1 sm:col-span-2"><label className="text-xs text-slate-400 font-semibold pl-1">E-posta</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="E-posta" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+              <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Açılış Bakiyesi</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Açılış bakiyesi" value={form.acilisBakiyesi} onChange={(e) => setForm({ ...form, acilisBakiyesi: e.target.value })} /></div>
+              <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Bakiye Tipi</label><select className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" value={form.bakiyeTipi} onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}><option value="borc">Müşteri borçlu</option><option value="alacak">Müşteri alacaklı</option></select></div>
+              <div className="flex flex-col gap-1 sm:col-span-2"><label className="text-xs text-slate-400 font-semibold pl-1">Müşteri Tipi</label><select className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white sm:col-span-2" value={form.musteriTipi} onChange={(e) => setForm({ ...form, musteriTipi: e.target.value })}><option value="son_kullanici">Son Kullanıcı</option><option value="bayi">Bayi</option><option value="mimar">Mimar</option><option value="muteahhit">Müteahhit</option></select></div>
             </div>
             <button onClick={kaydet} className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 font-bold text-slate-950">{duzenle ? 'Değişiklikleri Kaydet' : 'Müşteri Oluştur'}</button>
           </div>
@@ -761,21 +834,14 @@ export default function MusterilerPage() {
             <button onClick={() => setMobilYeniAcik(false)} className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 font-bold text-white">Kapat</button>
           </div>
           <div className="space-y-3">
-            <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Firma adı" value={form.firmaAdi || ''} onChange={(e) => setForm({ ...form, firmaAdi: e.target.value })} />
-            <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Ad" value={form.ad || ''} onChange={(e) => setForm({ ...form, ad: e.target.value })} />
-            <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Soyad" value={form.soyad || ''} onChange={(e) => setForm({ ...form, soyad: e.target.value })} />
-            <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Telefon" value={form.telefon || ''} onChange={(e) => setForm({ ...form, telefon: e.target.value })} />
-            <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="E-posta" value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Açılış bakiyesi" value={form.acilisBakiyesi || ''} onChange={(e) => setForm({ ...form, acilisBakiyesi: e.target.value })} />
-            <select className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none" value={form.bakiyeTipi || 'borc'} onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}>
-              <option value="borc">Borç</option><option value="alacak">Alacak</option>
-            </select>
-            <select className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none" value={form.musteriTipi || 'son_kullanici'} onChange={(e) => setForm({ ...form, musteriTipi: e.target.value })}>
-              <option value="son_kullanici">Son Kullanıcı</option>
-              <option value="bayi">Bayi</option>
-              <option value="mimar">Mimar</option>
-              <option value="muteahhit">Müteahhit</option>
-            </select>
+            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Firma Adı</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Firma adı" value={form.firmaAdi || ''} onChange={(e) => setForm({ ...form, firmaAdi: e.target.value })} /></div>
+            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Ad</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Ad" value={form.ad || ''} onChange={(e) => setForm({ ...form, ad: e.target.value })} /></div>
+            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Soyad</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Soyad" value={form.soyad || ''} onChange={(e) => setForm({ ...form, soyad: e.target.value })} /></div>
+            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Telefon</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Telefon" value={form.telefon || ''} onChange={(e) => setForm({ ...form, telefon: e.target.value })} /></div>
+            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">E-posta</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="E-posta" value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Açılış Bakiyesi</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Açılış bakiyesi" value={form.acilisBakiyesi || ''} onChange={(e) => setForm({ ...form, acilisBakiyesi: e.target.value })} /></div>
+            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Bakiye Tipi</label><select className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none" value={form.bakiyeTipi || 'borc'} onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}><option value="borc">Borç</option><option value="alacak">Alacak</option></select></div>
+            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Müşteri Tipi</label><select className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none" value={form.musteriTipi || 'son_kullanici'} onChange={(e) => setForm({ ...form, musteriTipi: e.target.value })}><option value="son_kullanici">Son Kullanıcı</option><option value="bayi">Bayi</option><option value="mimar">Mimar</option><option value="muteahhit">Müteahhit</option></select></div>
             <button onClick={async () => { await kaydet(); setMobilYeniAcik(false) }} className="mt-3 w-full rounded-2xl bg-emerald-500 px-4 py-4 font-black text-slate-950">Müşteri Oluştur</button>
           </div>
         </div>
@@ -896,8 +962,14 @@ export default function MusterilerPage() {
             </div>
             <div className="shrink-0 border-t border-white/10 p-3" style={{paddingBottom: "calc(80px + env(safe-area-inset-bottom, 12px))"}}>
               <div className="grid grid-cols-2 gap-3">
-                <button onClick={pdfIndir} className="rounded-2xl bg-blue-600 py-3 font-bold">PDF indir / yazdır</button>
-                <button onClick={whatsappEkstreGonder} className="rounded-2xl bg-emerald-600 py-3 font-bold">WhatsApp gönder</button>
+                <button onClick={pdfIndir} className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 py-3 font-black text-white shadow-lg shadow-blue-900/30 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  PDF İndir
+                </button>
+                <button onClick={whatsappEkstreGonder} className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 py-3 font-black text-white shadow-lg shadow-emerald-900/30 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                  WhatsApp
+                </button>
               </div>
               <button onClick={() => setEkstreAcik(false)} className="mt-3 w-full rounded-2xl border border-white/10 py-3">Kapat</button>
             </div>

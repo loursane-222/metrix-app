@@ -343,6 +343,7 @@ model PushToken {
 }
 
 model Notification {
+  atolyeId    String  @default("")
   id          String   @id @default(cuid())
   type        String
   title       String
@@ -452,4 +453,14 @@ model OdemeSablonu {
   updatedAt DateTime @updatedAt
 
   @@map("odeme_sablonlari")
+}
+
+model EmailVerification {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }

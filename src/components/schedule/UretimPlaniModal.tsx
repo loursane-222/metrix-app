@@ -171,9 +171,10 @@ export default function UretimPlaniModal({ is, onClose, onSuccess }: Props) {
   if (!is) return null
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-end md:items-center justify-center bg-black/80 px-0 md:px-4">
+    <div className="fixed inset-0 z-[300] flex items-end md:items-center justify-center bg-black/80 px-0 md:px-4" onClick={onClose}>
       <div
-        className="w-full md:max-w-2xl max-h-[92dvh] md:max-h-[90vh] overflow-y-auto bg-[#030712] border border-slate-800 rounded-t-2xl md:rounded-2xl flex flex-col"
+        className="w-full md:max-w-2xl flex flex-col bg-[#030712] border border-slate-800 rounded-t-2xl md:rounded-2xl"
+        style={{maxHeight: '88dvh'}}
         onClick={e => e.stopPropagation()}
       >
         {/* Başlık */}
@@ -191,7 +192,7 @@ export default function UretimPlaniModal({ is, onClose, onSuccess }: Props) {
           </button>
         </div>
 
-        <div className="flex-1 px-5 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
           {/* YÜKLENİYOR */}
           {adim === 'yukleniyor' && (
@@ -269,7 +270,7 @@ export default function UretimPlaniModal({ is, onClose, onSuccess }: Props) {
                           type="date"
                           value={plan[faz]}
                           onChange={e => setPlan(prev => ({ ...prev, [faz]: e.target.value }))}
-                          className="w-full rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-white text-sm outline-none focus:border-slate-500"
+                          className="w-full rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-4 text-white text-base outline-none focus:border-slate-500"
                         />
                       ) : (
                         <p className="text-sm text-slate-300 font-semibold">
@@ -303,7 +304,7 @@ export default function UretimPlaniModal({ is, onClose, onSuccess }: Props) {
                         {personeller.length === 0 && (
                           <p className="text-xs text-slate-600">Personel bulunamadı</p>
                         )}
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           {personeller.map(p => {
                             const isSecili = secili.includes(p.id)
                             return (
@@ -341,7 +342,7 @@ export default function UretimPlaniModal({ is, onClose, onSuccess }: Props) {
 
         {/* Alt Butonlar */}
         {(adim === 'plan' || adim === 'personel') && (
-          <div className="sticky bottom-0 bg-[#030712] border-t border-slate-800 px-5 py-4 flex gap-3">
+          <div className="shrink-0 bg-[#030712] border-t border-slate-800 px-5 py-4 flex gap-3" style={{paddingBottom: "max(16px, env(safe-area-inset-bottom, 16px))"}}>
             {adim === 'plan' ? (
               <>
                 <button
