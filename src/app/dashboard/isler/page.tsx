@@ -296,7 +296,7 @@ export default function IslerPage() {
         {mobileView === 'list' && (
           <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 border-b border-slate-800 bg-[#030712] px-4 pb-4" style={{paddingTop:"max(16px, env(safe-area-inset-top, 16px))"}}>
-              <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Metrix</p>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">İş Takibi</p>
               <div className="mt-1 flex items-center justify-between gap-3">
                 <h1 className="text-2xl font-black">İşler</h1>
                 <button onClick={() => router.push('/dashboard/yeni-is-v3?fresh=1')} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold">+ Yeni</button>
@@ -520,7 +520,7 @@ export default function IslerPage() {
       {/* MASAÜSTÜ SOL — LİSTE */}
       <div className="hidden md:flex md:w-[25%] border-r border-slate-800 flex-col">
         <div className="p-5 border-b border-slate-800">
-          <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Metrix</p>
+          <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">İş Takibi</p>
           <h1 className="text-xl mt-2">İşler</h1>
           <div className="grid grid-cols-4 gap-2 mt-4">
             <div className="bg-[#111827] rounded-lg p-2 text-center"><p className="text-[10px] text-slate-500">Toplam</p><p className="text-sm">{ozet.toplam}</p></div>

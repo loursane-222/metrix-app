@@ -623,7 +623,7 @@ export default function MusterilerPage() {
       <div className="mx-auto max-w-none px-3 py-3 lg:h-screen lg:overflow-hidden">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-emerald-300/80">Metrix CRM</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-emerald-300/80">Müşteri Yönetimi</p>
             <h1 className="mt-1 text-2xl lg:text-4xl font-semibold">Müşteriler</h1>
             <p className="mt-1 text-sm text-slate-400">Müşteri, teklif, ciro, tahsilat ve cari performans merkezi.</p>
           </div>

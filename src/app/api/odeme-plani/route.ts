@@ -37,13 +37,38 @@ function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: 
   }))
 }
 
-// GET: İşe ait ödeme planını getir
+// GET: İşe ait ödeme planını getir veya ?vadeler=1 ile yaklaşan taksitler
 export async function GET(req: NextRequest) {
   const auth = await getAtolyeAuth()
   if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
   const atolyeId = auth.atolyeId
 
   const { searchParams } = new URL(req.url)
+
+  // Sidebar için: vadesi geçmiş veya 7 gün içinde olan ödenmemiş taksitler
+  if (searchParams.get('vadeler') === '1') {
+    const simdi = new Date()
+    const yediGunSonra = new Date(simdi.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const taksitler = await prisma.odemeTaksiti.findMany({
+      where: {
+        odendiMi: false,
+        vadeTarihi: { lte: yediGunSonra },
+        plan: { is: { atolyeId } }
+      },
+      include: {
+        plan: {
+          include: {
+            is: { select: { urunAdi: true, teklifNo: true } },
+            musteri: { select: { ad: true, firmaAdi: true } }
+          }
+        }
+      },
+      orderBy: { vadeTarihi: 'asc' },
+      take: 5
+    })
+    return NextResponse.json({ taksitler })
+  }
+
   const isId = searchParams.get('isId')
   if (!isId) return NextResponse.json({ hata: 'isId gerekli.' }, { status: 400 })
 
@@ -134,3 +159,7 @@ export async function PUT(req: NextRequest) {
 
   return NextResponse.json({ taksit: guncellenmis })
 }
+
+// GET ?vadeler=1 — vadesi geçmiş veya yaklaşan taksitler (sidebar için)
+// Mevcut GET fonksiyonuna ek olarak ayrı bir export değil,
+// mevcut GET içinde handle edilecek — aşağıya bakın

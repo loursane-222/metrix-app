@@ -107,6 +107,9 @@ export default function TahsilatlarPage() {
   const [sablonDuzenle, setSablonDuzenle]   = useState<any | null>(null);
   const [sablonSil, setSablonSil]           = useState<string | null>(null);
   const [aktifTip, setAktifTip]             = useState("bayi");
+  const [taksitOnay, setTaksitOnay]         = useState<{id: string, tutar: number, aciklama: string} | null>(null);
+  const [taksitOnayTutar, setTaksitOnayTutar] = useState("");
+  const [taksitOnayYukleniyor, setTaksitOnayYukleniyor] = useState(false);
 
   useEffect(() => {
     fetch("/api/musteriler-lite?borclu=1").then(r => r.json()).then(v => setMusteriler(v.musteriler || []));
@@ -172,9 +175,8 @@ export default function TahsilatlarPage() {
       if (hedefId) {
         const is = islerData.find(x => x.id === hedefId);
         if (is) { await isSec(is, m); setAktifSekme("plan"); }
-      } else if (islerData.length > 0) {
-        await isSec(islerData[0], m);
-        setAktifSekme("plan");
+      } else {
+        setAktifSekme("musteri");
       }
     } finally { setYukleniyor(false); }
   }, [isIdParam]);
@@ -252,17 +254,71 @@ export default function TahsilatlarPage() {
     } finally { setPlanKaydediliyor(false); }
   }
 
-  async function taksitOdendi(taksitId: string, odendiMi: boolean) {
-    const res = await fetch("/api/odeme-plani", {
+  function taksitCheckboxTiklandi(taksit: Taksit) {
+    if (taksit.odendiMi) {
+      // İşareti kaldır — tahsilat kaydını da sil
+      taksitIsaretKaldir(taksit.id);
+    } else {
+      // Onay popup'ı aç
+      setTaksitOnay({ id: taksit.id, tutar: Number(taksit.tutar), aciklama: taksit.aciklama });
+      setTaksitOnayTutar(String(Number(taksit.tutar).toFixed(2)));
+    }
+  }
+
+  async function taksitIsaretKaldir(taksitId: string) {
+    // Taksiti ödenmedi yap
+    await fetch("/api/odeme-plani", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taksitId, odendiMi }),
+      body: JSON.stringify({ taksitId, odendiMi: false }),
     }).then(r => r.json());
-    if (res.taksit) {
-      setOdemePlani(prev => prev ? {
-        ...prev,
-        taksitler: prev.taksitler.map(t => t.id === taksitId
-          ? { ...t, odendiMi, odenmeTarihi: res.taksit.odenmeTarihi } : t)
-      } : null);
+    // Bağlı tahsilat kaydını sil
+    const bagli = tahsilatlar.find(t => (t as any).taksitId === taksitId);
+    if (bagli) {
+      await fetch(`/api/tahsilatlar?id=${bagli.id}`, { method: "DELETE" });
+      setTahsilatlar(prev => prev.filter(t => t.id !== bagli.id));
+    }
+    setOdemePlani(prev => prev ? {
+      ...prev,
+      taksitler: prev.taksitler.map(t => t.id === taksitId
+        ? { ...t, odendiMi: false, odenmeTarihi: undefined } : t)
+    } : null);
+  }
+
+  async function taksitOnayKaydet() {
+    if (!taksitOnay || !seciliMusteri || !aktifIs) return;
+    setTaksitOnayYukleniyor(true);
+    try {
+      const tutar = parseFloat(taksitOnayTutar.replace(",", "."));
+      if (!tutar || tutar <= 0) return;
+      // 1. Taksiti ödendi işaretle
+      const planRes = await fetch("/api/odeme-plani", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taksitId: taksitOnay.id, odendiMi: true }),
+      }).then(r => r.json());
+      // 2. Tahsilat kaydı oluştur
+      const tahRes = await fetch("/api/tahsilatlar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          musteriId: seciliMusteri.id,
+          isId: aktifIs.id,
+          tutar,
+          tarih: new Date().toISOString(),
+          taksitId: taksitOnay.id,
+        }),
+      }).then(r => r.json());
+      if (planRes.taksit) {
+        setOdemePlani(prev => prev ? {
+          ...prev,
+          taksitler: prev.taksitler.map(t => t.id === taksitOnay.id
+            ? { ...t, odendiMi: true, odenmeTarihi: planRes.taksit.odenmeTarihi } : t)
+        } : null);
+      }
+      if (tahRes.tahsilat) {
+        setTahsilatlar(prev => [tahRes.tahsilat, ...prev]);
+      }
+      setTaksitOnay(null);
+    } finally {
+      setTaksitOnayYukleniyor(false);
     }
   }
 
@@ -533,7 +589,7 @@ export default function TahsilatlarPage() {
 
             return (
               <div key={taksit.id||idx} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"12px 14px", borderRadius:"13px", border:`1px solid ${gecti?"rgba(239,68,68,0.4)":bugun?"rgba(251,191,36,0.4)":taksit.odendiMi?"rgba(16,185,129,0.25)":"#1f2937"}`, background:"#0d1117", marginBottom:"8px" }}>
-                <button onClick={() => taksit.id && taksitOdendi(taksit.id, !taksit.odendiMi)}
+                <button onClick={() => taksit.id && taksitCheckboxTiklandi(taksit)}
                   style={{ width:"28px", height:"28px", borderRadius:"8px", flexShrink:0, border:"none", cursor:"pointer", background:taksit.odendiMi?"#10b981":"#1f2937", color:"#fff", fontSize:"14px" }}>
                   {taksit.odendiMi?"✓":""}
                 </button>
@@ -694,6 +750,34 @@ export default function TahsilatlarPage() {
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
+    <>
+    {/* Taksit Onay Popup */}
+    {taksitOnay && (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" }}>
+        <div style={{ background:"#0d1117", border:"1px solid #1f2937", borderRadius:"18px", padding:"24px", width:"100%", maxWidth:"360px" }}>
+          <p style={{ fontSize:"11px", color:"#10b981", fontWeight:700, letterSpacing:".15em", textTransform:"uppercase", margin:"0 0 6px" }}>Tahsilat Onayla</p>
+          <h2 style={{ fontSize:"17px", fontWeight:900, margin:"0 0 4px" }}>{taksitOnay.aciklama}</h2>
+          <p style={{ fontSize:"12px", color:"#6b7280", margin:"0 0 18px" }}>{aktifIs?.urunAdi}</p>
+          <label style={{ fontSize:"11px", color:"#9ca3af", display:"block", marginBottom:"6px" }}>Tahsil Edilen Tutar (₺)</label>
+          <input
+            type="number"
+            value={taksitOnayTutar}
+            onChange={e => setTaksitOnayTutar(e.target.value)}
+            style={{ width:"100%", background:"#111827", border:"1px solid #374151", borderRadius:"10px", padding:"10px 14px", color:"#fff", fontSize:"16px", fontWeight:900, boxSizing:"border-box", marginBottom:"16px" }}
+          />
+          <div style={{ display:"flex", gap:"10px" }}>
+            <button onClick={() => setTaksitOnay(null)}
+              style={{ flex:1, padding:"12px", background:"#1f2937", border:"1px solid #374151", borderRadius:"12px", color:"#9ca3af", fontSize:"14px", fontWeight:700, cursor:"pointer" }}>
+              İptal
+            </button>
+            <button onClick={taksitOnayKaydet} disabled={taksitOnayYukleniyor}
+              style={{ flex:2, padding:"12px", background:"#10b981", border:"none", borderRadius:"12px", color:"#fff", fontSize:"14px", fontWeight:900, cursor:"pointer" }}>
+              {taksitOnayYukleniyor ? "Kaydediliyor..." : "✓ Tahsil Edildi"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div style={{ height:"100dvh", background:"#030712", color:"#f9fafb", display:"flex", flexDirection:"column", overflow:"hidden" }}>
       <style>{`
         .kart{background:#0a0f1a;border:1px solid #1f2937;border-radius:18px;padding:16px;}
@@ -716,7 +800,7 @@ export default function TahsilatlarPage() {
             ← Geri
           </button>
           <div>
-            <p style={{ fontSize:"10px", color:"#4b5563", letterSpacing:".2em", textTransform:"uppercase", margin:0 }}>Metrix</p>
+            <p style={{ fontSize:"10px", color:"#4b5563", letterSpacing:".2em", textTransform:"uppercase", margin:0 }}>Finans & Cari</p>
             <h1 style={{ fontSize:"17px", fontWeight:900, margin:0 }}>Tahsilat & Cari</h1>
           </div>
         </div>
@@ -747,7 +831,7 @@ export default function TahsilatlarPage() {
         </div>
 
         {/* Mobil alt sekme çubuğu */}
-        <div className="mobile-tabs" style={{ flexShrink:0, borderTop:"1px solid #1f2937", background:"rgba(3,7,18,0.97)", backdropFilter:"blur(16px)", display:"flex", paddingBottom:"env(safe-area-inset-bottom)" }}>
+        <div className="mobile-tabs" style={{ position:"fixed", bottom:"72px", left:0, right:0, zIndex:85, borderTop:"1px solid #1f2937", borderBottom:"1px solid #1f2937", background:"rgba(3,7,18,0.97)", backdropFilter:"blur(16px)", display:"flex" }}>
           {([
             { id:"musteri" as Sekme, icon:"👤", label:"Müşteri", badge: seciliMusteri ? isler.length : 0 },
             { id:"tahsilat" as Sekme, icon:"💳", label:"Tahsilat", badge: tahsilatlar.length },
@@ -785,5 +869,6 @@ export default function TahsilatlarPage() {
         }
       `}</style>
     </div>
+    </>
   );
 }

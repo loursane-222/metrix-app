@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import { logActivity } from '@/lib/activityLogger'
 
 
 export async function GET(req: NextRequest) {
@@ -49,6 +50,17 @@ export async function POST(req: NextRequest) {
     data: { musteriId, tutar, tarih, isId },
     include: { is: { select: { id: true, teklifNo: true, urunAdi: true, satisFiyati: true } } }
   })
+
+  // Canlı akış ve bildirim
+  const musteriAdi = musteri.firmaAdi?.trim() || [musteri.ad, musteri.soyad].filter(Boolean).join(' ') || 'Müşteri'
+  const isAdi = tahsilat.is?.urunAdi || tahsilat.is?.teklifNo || ''
+  await logActivity({
+    atolyeId,
+    type: 'tahsilat',
+    message: `💰 ${musteriAdi} — ${tutar.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺ tahsilat alındı${isAdi ? ` (${isAdi})` : ''}`,
+    refId: tahsilat.id,
+  })
+
   return NextResponse.json({ tahsilat })
 }
 
