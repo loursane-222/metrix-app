@@ -59,6 +59,7 @@ export default function AiYeniIsPanel({ onApply, onManual }: Props) {
   const [hata, setHata] = useState("");
   const [plakaGorsel, setPlakaGorsel] = useState<string | null>(null);
   const [aktifKontrol, setAktifKontrol] = useState<any>(null);
+  const [sonucModalAcik, setSonucModalAcik] = useState(false);
   const [plakaEn, setPlakaEn] = useState("320");
   const [plakaBoy, setPlakaBoy] = useState("160");
   const [urunAdiDraft, setUrunAdiDraft] = useState("");
@@ -192,16 +193,8 @@ export default function AiYeniIsPanel({ onApply, onManual }: Props) {
       setKurDraft(String(data?.sonuc?.malzeme?.kur || "53"));
 
       setSonuc(data);
-      const layoutSonuc = await layoutHesapla(data, { enCm: Number(en), boyCm: Number(boy) });
-
-      // Direkt forma aktar — sonuç ekranı gösterme
-      const plakaSayisiFix =
-        layoutSonuc?.plakaSayisi || layoutSonuc?.summary?.plakaSayisi || 0;
-      onApply({
-        ...data,
-        plakaLayoutJson: { ...(layoutSonuc || {}), plakaSayisi: plakaSayisiFix },
-        plakaImageUrl: ""
-      });
+      await layoutHesapla(data, { enCm: Number(en), boyCm: Number(boy) });
+      setSonucModalAcik(true);
     } catch (e: any) {
       setHata(e?.message || "Bir hata oluştu.");
     } finally {
@@ -291,6 +284,16 @@ placeholder:text-slate-500"
         <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-200">
           {hata}
         </div>
+      )}
+
+      {sonuc && !sonucModalAcik && (
+        <button
+          type="button"
+          onClick={() => setSonucModalAcik(true)}
+          style={{marginTop:"12px",width:"100%",padding:"14px",background:"linear-gradient(135deg,#10b981,#059669)",border:"none",borderRadius:"16px",color:"#fff",fontSize:"15px",fontWeight:900,cursor:"pointer",boxShadow:"0 6px 20px rgba(16,185,129,0.35)"}}
+        >
+          ✨ Sonucu Gör & Onayla →
+        </button>
       )}
 
       {aktifKontrol && (
@@ -495,8 +498,19 @@ hover:border-white/40 transition shadow-inner shadow-black/30" />
         </div>
       )}
 
-      {parsed && (
-        <div className="mt-7 space-y-5">
+      {/* Sonuç Modalı */}
+      {sonucModalAcik && parsed && (
+        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(8px)",display:"flex",flexDirection:"column",overflowY:"auto"}} onClick={() => setSonucModalAcik(false)}>
+          <div style={{width:"100%",maxWidth:"720px",margin:"auto",padding:"20px 16px 40px",boxSizing:"border-box"}} onClick={e => e.stopPropagation()}>
+            {/* Modal başlık */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div>
+                <div style={{fontSize:"11px",fontWeight:900,letterSpacing:"0.2em",color:"#6ee7b7",textTransform:"uppercase",marginBottom:"4px"}}>AI Sonucu</div>
+                <h2 style={{fontSize:"22px",fontWeight:900,color:"#fff",margin:0}}>Planı incele ve onayla</h2>
+              </div>
+              <button onClick={() => setSonucModalAcik(false)} style={{padding:"8px 16px",background:"#1f2937",border:"1px solid #374151",borderRadius:"12px",color:"#9ca3af",fontSize:"13px",cursor:"pointer"}}>✕ Kapat</button>
+            </div>
+        <div className="space-y-5">
           <div className="grid gap-3 md:grid-cols-4">
             <InfoCard title="Müşteri" value={val(parsed?.musteri?.ad || parsed?.isBilgisi?.musteriAdi)} sub={parsed?.musteri?.tip === "yeni" ? "Yeni müşteri · onay bekler" : val(parsed?.musteri?.tip)} />
             <InfoCard title="Ürün" value={val(parsed?.malzeme?.urunAdi)} sub={val(parsed?.isBilgisi?.isAdi)} />
@@ -604,21 +618,23 @@ hover:border-white/40 transition shadow-inner shadow-black/30" />
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginTop:"8px"}}>
             <button
               type="button"
-              onClick={uygula}
-              className="rounded-2xl bg-gradient-to-br from-emerald-400 to-blue-500 px-6 py-4 text-sm font-black text-white shadow-[0_18px_45px_rgba(16,185,129,0.25)] transition hover:scale-[1.01]"
+              onClick={() => { uygula(); setSonucModalAcik(false); }}
+              style={{padding:"16px",background:"linear-gradient(135deg,#10b981,#059669)",border:"none",borderRadius:"16px",color:"#fff",fontSize:"15px",fontWeight:900,cursor:"pointer",boxShadow:"0 8px 24px rgba(16,185,129,0.35)"}}
             >
-              Bu planı kullan
+              ✓ Bu planı kullan
             </button>
             <button
               type="button"
-              onClick={onManual}
-              className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-black text-white transition hover:bg-white/10"
+              onClick={() => { setSonucModalAcik(false); onManual && onManual(); }}
+              style={{padding:"16px",background:"#111827",border:"1px solid #374151",borderRadius:"16px",color:"#d1d5db",fontSize:"15px",fontWeight:700,cursor:"pointer"}}
             >
               Manuel devam et
             </button>
+          </div>
+        </div>
           </div>
         </div>
       )}

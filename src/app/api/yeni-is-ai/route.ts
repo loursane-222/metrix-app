@@ -6,210 +6,164 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "OPENAI_API_KEY eksik" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "OPENAI_API_KEY eksik" }, { status: 500 });
     }
-
     const body = await req.json();
     const metin = String(body?.metin || "").trim();
-
     if (!metin) {
-      return NextResponse.json(
-        { error: "İş açıklaması boş olamaz." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "İş açıklaması boş olamaz." }, { status: 400 });
     }
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const systemPrompt = `Sen Türkiye'deki bir mermer/porselen/granit tezgah atölyesinin iş emri parser motorusun.
+Kullanıcı serbest konuşma veya dikte ile iş bilgilerini anlatır — sen bu bilgileri yapısal JSON'a çevirirsin.
+
+SEKTÖR SÖZLÜĞÜ:
+Parça tipleri:
+- tezgah: Mutfak/banyo üst yüzeyi. "ana tezgah", "üst", "ana parça" da olabilir.
+- tezgah_arasi: Ocak ile dolap arası dikey panel. "arası", "panel", "duvar" da olabilir.
+- on_alin: Tezgah ön kenar bandı. "alın", "ön bant" da olabilir. En genellikle 4-6cm.
+- ada_tezgah: Mutfak adası üst yüzeyi.
+- ada_ayak: Ada yan yüzeyi.
+- basamak: Merdiven basamağı.
+- supurgelik: Süpürgelik profili.
+
+Ölçü formatları (hepsi cm):
+- "285'e 65" veya "285x65" = boyCm:285 enCm:65
+- "üç metre on" = boyCm:310
+- "iki seksen beşe altmış beş" = boyCm:285 enCm:65
+- Tek sayı verilirse genellikle boy (uzunluk).
+- "iki parça", "çift", "aynısından" = adet:2
+- boyCm = uzun kenar, enCm = kısa kenar (genişlik)
+
+Operasyonlar:
+- pahlama: Kenar profil. "profil", "yuvarlatma". Mtül cinsinden.
+- kesim_45: 45 derece köşe kesimi. "L birleşim", "köşe". Mtül cinsinden.
+- eviye_kesim: Eviye/lavabo deliği. Adet cinsinden.
+- ocak_kesim: Ocak deliği. Adet cinsinden.
+- delik: Priz/musluk/vana deliği. Adet cinsinden.
+- yapistirma: Yapıştırma. Mtül cinsinden.
+
+Plaka:
+- Standart: 320x160, 324x162, 300x150, 280x140 cm
+- "büyük plaka" = genellikle 320x160
+- Fiyat euro cinsinden. Kur söylenmezse 53 varsay.
+- enCm = kısa kenar (160), boyCm = uzun kenar (320)
+
+Taş durumu:
+- stokta: "bizde var", "stoktan", "elimizde"
+- alinacak: "alınacak", "sipariş", "temin"
+- musteriye_ait: "müşteri getiriyor", "kendi taşı"
+
+Müşteri tipi:
+- son_kullanici: Bireysel ev sahibi
+- mimar: Mimar/tasarımcı
+- bayi: Bayi/toptancı
+- muteahhit: Müteahhit
+- imalatci: Üretici firma
+
+KURALLAR:
+1. Metinde açıkça söylenmeyen hiçbir şeyi uydurma.
+2. parcalar dizisinde on_alin tipi OLUŞTURMA. Bunun yerine ilgili tezgah parçasına onAlin:true ekle.
+3. Aynı ölçüde birden fazla parça → adet kullan.
+4. Müşteri adı varsa mutlaka doldur, hem musteri.ad hem isBilgisi.musteriAdi aynı olsun.
+5. Eksik kritik bilgileri eksikSorular'a yaz.
+6. guvenSkoru: 80+ tüm bilgiler var, 50-79 bazı eksikler, 50 altı çok eksik.
+7. Sadece geçerli JSON döndür.`;
+
+    const userPrompt = `Aşağıdaki iş emri metnini parse et:
+
+"${metin}"
+
+JSON yapısı:
+{
+  "guvenSkoru": 85,
+  "musteri": {
+    "ad": "Ahmet Yılmaz",
+    "tip": "mevcut | yeni | belirsiz",
+    "musteriTipi": "son_kullanici | mimar | bayi | muteahhit | imalatci",
+    "telefon": "",
+    "not": ""
+  },
+  "isBilgisi": {
+    "musteriAdi": "Ahmet Yılmaz",
+    "isAdi": "Mutfak Tezgahı",
+    "isTuru": "perakende | proje | fason | belirsiz"
+  },
+  "malzeme": {
+    "marka": "Laminam",
+    "seri": "Fokos",
+    "renk": "Roccia",
+    "urunAdi": "Laminam Fokos Roccia",
+    "plakaFiyatiEuro": 220,
+    "kur": 53,
+    "kdvDahil": null,
+    "tasDurumu": "stokta | alinacak | musteriye_ait | belirsiz",
+    "plakaOlcusu": { "enCm": 160, "boyCm": 320 }
+  },
+  "parcalar": [
+    {
+      "etiket": "Ana tezgah",
+      "standartTip": "tezgah",
+      "boyCm": 285,
+      "enCm": 65,
+      "adet": 1,
+      "onAlin": false,
+      "damarTakibi": false,
+      "not": ""
+    }
+  ],
+  "operasyonlar": [
+    {
+      "tip": "pahlama | kesim_45 | eviye_kesim | ocak_kesim | delik | yapistirma",
+      "etiket": "Pahlama",
+      "adet": 0,
+      "mtul": 2.85
+    }
+  ],
+  "eksikSorular": [],
+  "uyarilar": []
+}`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.15,
+      model: "gpt-4o",
+      temperature: 0.1,
       response_format: { type: "json_object" },
       messages: [
-        {
-          role: "system",
-          content: `
-Sen Metrix2 için çalışan güvenli bir yeni iş parser motorusun.
-Görevin kullanıcının Türkçe konuşma/dikte metnini standart JSON'a çevirmektir.
-
-ASLA hesaplama sonucu uydurma.
-ASLA eksik bilgiyi tahmin etme.
-Metinde açıkça söylenmeyen stok, taş alınacak, müşteri taşı, plaka ölçüsü, damar takibi gibi alanları tahmin etme.
-Eksik bilgi varsa boş bırak, belirsiz yap veya eksikSorular içine yaz.
-guvenSkoru mutlaka sayı olmalı.
-urunAdi varsa marka + seri + renk birleşimi olarak doldurulmalı.
-"ocak var", "ocak yeri", "ocak açılacak" ifadeleri mutlaka ocak_kesim olmalı.
-"eviye", "evye" ifadeleri eviye_kesim veya eviye_alttan_yapistirma olarak sınıflandırılmalı.
-tasDurumu sadece kullanıcı açıkça stokta / alınacak / müşteriye ait dediğinde doldurulmalı; aksi halde belirsiz olmalı.
-Sadece geçerli JSON döndür.
-
-Önemli:
-- AI karar vermez, sadece veriyi ayrıştırır.
-- Plaka yerleşimi yapmaz.
-- Maliyet hesaplamaz.
-- Teklif kaydetmez.
-- Kullanıcının söylediği kelimeleri "etiket" alanında koru.
-- Sistemsel sınıflandırmayı "standartTip" alanında ver.
-
-standartTip önerileri:
-tezgah, tezgah_arasi, on_alin, dusey_donus, ada_tezgah, ada_ayak,
-basamak, riht, kaplama, supurgelik, davlumbaz, panel, diger
-
-operasyon tipleri:
-ocak_kesim, eviye_kesim, eviye_alttan_yapistirma, kesim_45,
-pahlama, yapistirma, stres_alma, fason_ebatlama, delik, diger
-
-isTuru:
-perakende, proje, fason, belirsiz
-
-tasDurumu:
-stokta, alinacak, musteriye_ait, belirsiz
-
-"yeni müşteri", "ilk defa", "sistemde yok", "kayıtlı değil" gibi ifadeler varsa musteri.tip = "yeni" olmalı.
-Müşteri adı söylendi ama yeni/mevcut açık değilse musteri.tip = "belirsiz" olmalı.
-musteri.ad ile isBilgisi.musteriAdi aynı olmalı.
-Kur söylenirse malzeme.kur alanına sayı olarak yaz.
-Her ölçü cm cinsinden dönmeli.
-Örnek: "310x65" => boyCm: 310, enCm: 65.
-Metraj gerekiyorsa mtul alanını ayrıca çıkarabilirsin ama ölçüyü silme.
-Operasyonlarda 45 kesim, pahlama, yapıştırma, stres alma, fason ebatlama için uzunluk cm cinsinden söylenirse mtul = cm / 100 olarak yaz.
-Örnek: "45 kesim 285 cm" => operasyonlar tip: "kesim_45", mtul: 2.85.
-Örnek: "pahlama 285" => tip: "pahlama", mtul: 2.85.
-Örnek: "yapıştırma 285" => tip: "yapistirma", mtul: 2.85.
-"45 kesim" için tip her zaman "kesim_45" olmalı.
-          `.trim(),
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            gorev: "Yeni iş dikte metnini güvenli şekilde parse et.",
-            metin,
-            beklenen_json: {
-              guvenSkoru: "0-100 arası sayı",
-              musteri: {
-                ad: "",
-                tip: "mevcut | yeni | belirsiz",
-                telefon: "",
-                not: ""
-              },
-              isBilgisi: {
-                musteriAdi: "",
-                isAdi: "",
-                isTuru: "perakende | proje | fason | belirsiz",
-              },
-              malzeme: {
-                marka: "",
-                seri: "",
-                renk: "",
-                urunAdi: "",
-                plakaFiyatiEuro: 0,
-                kur: 0,
-                kdvDahil: null,
-                tasDurumu: "stokta | alinacak | musteriye_ait | belirsiz",
-                plakaOlcusu: {
-                  enCm: 0,
-                  boyCm: 0,
-                },
-              },
-              parcalar: [
-                {
-                  etiket: "",
-                  standartTip: "",
-                  boyCm: 0,
-                  enCm: 0,
-                  adet: 1,
-                  mtul: 0,
-                  damarTakibi: false,
-                  teklifteGorunsun: true,
-                  not: "",
-                },
-              ],
-              operasyonlar: [
-                {
-                  tip: "",
-                  etiket: "",
-                  detay: "",
-                  makine: "",
-                  adet: 0,
-                  mtul: 0,
-                },
-              ],
-              eksikSorular: [
-                "Eksik veya çelişkili bilgi varsa kullanıcıya sorulacak net soru",
-              ],
-              uyarilar: [
-                "KDV dahil fiyat, fason iş, damar takibi gibi dikkat gerektiren notlar",
-              ],
-            },
-          }),
-        },
+        { role: "system", content: systemPrompt },
+        { role: "user",   content: userPrompt },
       ],
     });
 
     const raw = completion.choices[0]?.message?.content || "{}";
-    const json = JSON.parse(raw);
+    let json: any = {};
+    try { json = JSON.parse(raw); } catch { json = {}; }
 
-    const eksikler: string[] = [];
-
+    // Senkronize: musteri.ad ↔ isBilgisi.musteriAdi
     if (!json?.musteri?.ad && json?.isBilgisi?.musteriAdi) {
-      json.musteri = {
-        ...(json.musteri || {}),
-        ad: json.isBilgisi.musteriAdi,
-        tip: "belirsiz",
-      };
+      json.musteri = { ...(json.musteri || {}), ad: json.isBilgisi.musteriAdi };
     }
-
     if (!json?.isBilgisi?.musteriAdi && json?.musteri?.ad) {
-      json.isBilgisi = {
-        ...(json.isBilgisi || {}),
-        musteriAdi: json.musteri.ad,
-      };
+      json.isBilgisi = { ...(json.isBilgisi || {}), musteriAdi: json.musteri.ad };
     }
 
-    if (!json?.isBilgisi?.musteriAdi && !json?.musteri?.ad) {
-      eksikler.push("Müşteri adı eksik.");
-    }
-
-    if (!json?.malzeme?.urunAdi) {
-      eksikler.push("Taş / ürün adı eksik.");
-    }
-
-    if (!json?.malzeme?.plakaFiyatiEuro || Number(json.malzeme.plakaFiyatiEuro) <= 0) {
-      eksikler.push("Plaka fiyatı eksik.");
-    }
-
-    if (!json?.malzeme?.tasDurumu || json.malzeme.tasDurumu === "belirsiz") {
-      eksikler.push("Taş stokta mı, alınacak mı, yoksa müşteriye mi ait?");
-    }
-
-    if (
-      !json?.malzeme?.plakaOlcusu?.enCm ||
-      !json?.malzeme?.plakaOlcusu?.boyCm
-    ) {
-      eksikler.push("Plaka ölçüsü eksik.");
-    }
-
-    if (!Array.isArray(json?.parcalar) || json.parcalar.length === 0) {
-      eksikler.push("Kesilecek parça ölçüleri eksik.");
-    }
+    // Eksik kontrol
+    const eksikler: string[] = [];
+    if (!json?.musteri?.ad) eksikler.push("Müşteri adı");
+    if (!json?.malzeme?.urunAdi) eksikler.push("Taş / ürün adı");
+    if (!json?.malzeme?.plakaFiyatiEuro || Number(json.malzeme.plakaFiyatiEuro) <= 0) eksikler.push("Plaka fiyatı (Euro)");
+    if (!json?.malzeme?.kur || Number(json.malzeme.kur) <= 0) eksikler.push("Döviz kuru");
+    if (!json?.malzeme?.tasDurumu || json.malzeme.tasDurumu === "belirsiz") eksikler.push("Taş durumu");
+    if (!json?.malzeme?.plakaOlcusu?.enCm || !json?.malzeme?.plakaOlcusu?.boyCm) eksikler.push("Plaka ölçüsü");
+    if (!Array.isArray(json?.parcalar) || json.parcalar.length === 0) eksikler.push("Kesim parçaları");
 
     return NextResponse.json({
       ok: true,
       sonuc: json,
-      sistemKontrol: {
-        eksikler,
-        hesaplamayaHazir: eksikler.length === 0,
-      },
+      sistemKontrol: { eksikler, hesaplamayaHazir: eksikler.length === 0 },
     });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: "AI parser hata", detail: String(e?.message || e) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "AI parser hata", detail: String(e?.message || e) }, { status: 500 });
   }
 }

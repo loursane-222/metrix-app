@@ -667,7 +667,60 @@ export default function YeniIsV3Page() {
             <h1 style={{ fontSize: "28px", fontWeight: 900, margin: "0 0 8px" }}>Yeni İşi Anlat</h1>
             <p style={{ color: "#6b7280", fontSize: "14px" }}>Ölçüleri yaz veya konuş, AI formu doldursun</p>
           </div>
-          <AiYeniIsPanel onApply={() => setAiMode(false)} onManual={() => setAiMode(false)} />
+          <AiYeniIsPanel
+            onApply={(data: any) => {
+              const s = data?.sonuc || data || {};
+
+              // Parçalar: enCm=genişlik(en), boyCm=uzunluk(boy) — ön alınları filtrele
+              const parcalar = (s?.parcalar || [])
+                .filter((p: any) => Number(p.boyCm) > 0 && Number(p.enCm) > 0 && !(p.standartTip || "").includes("on_alin"))
+                .map((p: any) => ({
+                  id: Math.random().toString(36).slice(2, 8),
+                  ad: p.etiket || p.standartTip || "Parça",
+                  en: String(p.enCm || ""),   // en = cm cinsinden genişlik
+                  boy: String(p.boyCm || ""), // boy = cm cinsinden uzunluk
+                  adet: String(p.adet || "1"),
+                  onAlin: false,
+                  tip: "ozel" as const,
+                }));
+
+              // Ön alın varsa ilk tezgaha onAlin=true set et
+              const onAlinVar = (s?.parcalar || []).some((p: any) => (p.standartTip || "").includes("on_alin"));
+              if (onAlinVar && parcalar.length > 0) parcalar[0].onAlin = true;
+
+              // Plaka ölçüsü: AI'dan gelen enCm/boyCm — büyük olan en (genişlik), küçük olan boy (yükseklik)
+              const aiPlakaEn  = Number(s?.malzeme?.plakaOlcusu?.enCm  || 0);
+              const aiPlakaBoy = Number(s?.malzeme?.plakaOlcusu?.boyCm || 0);
+              // Normalize: en >= boy olsun (plaka genellikle yatay)
+              const plakaEn  = String(Math.max(aiPlakaEn, aiPlakaBoy) || 320);
+              const plakaBoy = String(Math.min(aiPlakaEn, aiPlakaBoy) || 160);
+
+              const plakaFiyatiEuro = String(s?.malzeme?.plakaFiyatiEuro || "");
+              const kullanilanKur   = String(s?.malzeme?.kur || "53");
+              const musteriAdi      = s?.musteri?.ad || s?.isBilgisi?.musteriAdi || "";
+              const urunAdi         = s?.malzeme?.urunAdi || "";
+              const musteriTipi     = s?.musteri?.tip === "yeni" ? "Ev sahibi" : (s?.musteri?.musteriTipi || "Ev sahibi");
+
+              setForm((prev) => ({
+                ...prev,
+                musteriAdi:      musteriAdi || prev.musteriAdi,
+                musteriId:       "",  // yeni müşteri olarak işaretle
+                musteriTipi:     musteriTipi,
+                urunAdi:         urunAdi || prev.urunAdi,
+                plakaFiyatiEuro: plakaFiyatiEuro || prev.plakaFiyatiEuro,
+                plakaFiyati:     "",  // euro girince TL'yi sıfırla
+                kullanilanKur:   kullanilanKur,
+                plakaEn,
+                plakaBoy,
+                parcalar:        parcalar.length > 0 ? parcalar : prev.parcalar,
+                plakaLayoutJson: data?.plakaLayoutJson || prev.plakaLayoutJson,
+                plakaImageUrl:   data?.plakaImageUrl   || prev.plakaImageUrl,
+              }));
+              setAktifAdim("musteri"); // müşteri adımına dön, kullanıcı kontrol etsin
+              setAiMode(false);
+            }}
+            onManual={() => setAiMode(false)}
+          />
           <button onClick={() => setAiMode(false)} style={{ marginTop: "12px", width: "100%", padding: "13px", background: "transparent", border: "1px solid #374151", borderRadius: "14px", color: "#9ca3af", fontSize: "14px", cursor: "pointer" }}>
             Manuel giriş →
           </button>
@@ -943,32 +996,42 @@ export default function YeniIsV3Page() {
                   </div>
                 </div>
 
-                {/* Header */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 50px 50px 24px", gap: "6px", padding: "0 4px 6px", borderBottom: "1px solid #1f2937", marginBottom: "18px", marginTop: "8px" }}>
-                  {["Parça Adı","En (cm)","Boy (cm)","Adet","Ön Alın",""].map((h) => (
-                    <span key={h} style={{ fontSize: "10px", color: "#4b5563", fontWeight: 700 }}>{h}</span>
-                  ))}
-                </div>
+
 
                 {form.parcalar.map((p) => (
-                  <div key={p.id} className="parca-row" style={{ gridTemplateColumns: "1fr 80px 80px 50px 50px 24px" }}>
-                    <div className="parca-ad-col">
-                      <input className="yi-inp" style={{ fontSize: "13px", padding: "8px 10px" }} value={p.ad} onChange={(e) => parcaGuncelle(p.id, "ad", e.target.value)} placeholder="Parça adı" />
+                  <div key={p.id} style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: "14px", padding: "12px", marginBottom: "8px" }}>
+                    {/* Parça adı + sil */}
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "10px" }}>
+                      <input className="yi-inp" style={{ fontSize: "14px", padding: "9px 12px", flex: 1, fontWeight: 700 }} value={p.ad} onChange={(e) => parcaGuncelle(p.id, "ad", e.target.value)} placeholder="Parça adı" />
+                      <button onClick={() => parcaSil(p.id)} style={{ width: "36px", height: "36px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "10px", color: "#ef4444", cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
                     </div>
-                    <input className="yi-inp" style={{ fontSize: "13px", padding: "8px 10px" }} type="text" inputMode="decimal" placeholder="0" value={p.en} onChange={(e) => parcaGuncelleVeHesapla(p.id, "en", e.target.value)} />
-                    <div style={{ position: "relative" }}>
-                      <input className="yi-inp" style={{ fontSize: "13px", padding: "8px 10px" }} type="text" inputMode="decimal" placeholder="0" value={p.boy} onChange={(e) => parcaGuncelleVeHesapla(p.id, "boy", e.target.value)} />
+                    {/* En / Boy / Adet */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: "8px", marginBottom: "8px" }}>
+                      <div>
+                        <div style={{ fontSize: "10px", color: "#6b7280", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>En (cm)</div>
+                        <input className="yi-inp" style={{ fontSize: "15px", padding: "9px 12px", fontWeight: 700 }} type="text" inputMode="decimal" placeholder="65" value={p.en} onChange={(e) => parcaGuncelleVeHesapla(p.id, "en", e.target.value)} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "10px", color: "#6b7280", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Boy (cm)</div>
+                        <input className="yi-inp" style={{ fontSize: "15px", padding: "9px 12px", fontWeight: 700 }} type="text" inputMode="decimal" placeholder="285" value={p.boy} onChange={(e) => parcaGuncelleVeHesapla(p.id, "boy", e.target.value)} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "10px", color: "#6b7280", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Adet</div>
+                        <input className="yi-inp" style={{ fontSize: "15px", padding: "9px 12px", fontWeight: 700 }} type="text" inputMode="decimal" placeholder="1" value={p.adet} onChange={(e) => parcaGuncelleVeHesapla(p.id, "adet", e.target.value)} />
+                      </div>
+                    </div>
+                    {/* Ön alın toggle */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
+                      <button onClick={() => parcaGuncelleVeHesapla(p.id, "onAlin", !p.onAlin)} style={{ flex: 1, padding: "8px 12px", borderRadius: "10px", border: p.onAlin ? "1.5px solid #10b981" : "1.5px solid #1f2937", background: p.onAlin ? "rgba(16,185,129,0.1)" : "transparent", color: p.onAlin ? "#10b981" : "#6b7280", cursor: "pointer", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ width: "18px", height: "18px", borderRadius: "4px", background: p.onAlin ? "#10b981" : "#1f2937", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", flexShrink: 0 }}>{p.onAlin ? "✓" : ""}</span>
+                        Ön alın var
+                      </button>
                       {n(p.boy) > 0 && n(p.adet) > 0 && (
-                        <div style={{ position: "absolute", top: "-18px", right: "2px", fontSize: "10px", color: "#10b981", fontWeight: 700, whiteSpace: "nowrap" }}>
+                        <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "10px", padding: "8px 12px", fontSize: "12px", color: "#10b981", fontWeight: 900, whiteSpace: "nowrap", flexShrink: 0 }}>
                           {((n(p.boy) / 100) * (n(p.adet) || 1)).toFixed(2)} mtül
                         </div>
                       )}
                     </div>
-                    <input className="yi-inp" style={{ fontSize: "13px", padding: "8px 10px" }} type="text" inputMode="decimal" placeholder="1" value={p.adet} onChange={(e) => parcaGuncelleVeHesapla(p.id, "adet", e.target.value)} />
-                    <button onClick={() => parcaGuncelleVeHesapla(p.id, "onAlin", !p.onAlin)} style={{ width: "36px", height: "36px", borderRadius: "8px", border: "none", background: p.onAlin ? "#10b981" : "#1f2937", color: "#fff", cursor: "pointer", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {p.onAlin ? "✓" : ""}
-                    </button>
-                    <button onClick={() => parcaSil(p.id)} style={{ width: "24px", height: "36px", background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                   </div>
                 ))}
 
@@ -1449,6 +1512,36 @@ export default function YeniIsV3Page() {
           )}
         </div>
       </main>
+
+      {/* ✨ Floating AI Bubble — mobil ve masaüstü */}
+      {!aiMode && !basariEkrani && (
+        <button
+          onClick={() => setAiMode(true)}
+          style={{
+            position: "fixed",
+            bottom: "calc(env(safe-area-inset-bottom) + 80px)",
+            right: "16px",
+            zIndex: 1300,
+            width: "52px",
+            height: "52px",
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #10b981, #059669)",
+            border: "none",
+            boxShadow: "0 6px 24px rgba(16,185,129,0.45)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "22px",
+            transition: "transform .15s",
+          }}
+          onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.1)")}
+          onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
+          title="AI ile doldur"
+        >
+          ✨
+        </button>
+      )}
 
       {/* Plaka modal */}
       {plakaAcik && (
