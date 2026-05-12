@@ -3,10 +3,10 @@ import { useMemo, useRef, useState, useCallback } from "react";
 
 // ─── Renk haritası ────────────────────────────────────────────────────────────
 const KIND_COLOR: Record<string, { bg: string; border: string; text: string }> = {
-  on_alin:      { bg: "rgba(239,68,68,0.30)",   border: "#dc2626", text: "#7f1d1d" },
-  tezgah:       { bg: "rgba(59,130,246,0.30)",  border: "#2563eb", text: "#1e3a8a" },
-  tezgah_arasi: { bg: "rgba(16,185,129,0.30)",  border: "#059669", text: "#064e3b" },
-  default:      { bg: "rgba(124,58,237,0.25)",  border: "#7c3aed", text: "#2e1065" },
+  on_alin:      { bg: "rgba(239,68,68,0.30)",   border: "#dc2626", text: "#fef2f2" },
+  tezgah:       { bg: "rgba(59,130,246,0.30)",  border: "#2563eb", text: "#eff6ff" },
+  tezgah_arasi: { bg: "rgba(16,185,129,0.30)",  border: "#059669", text: "#ecfdf5" },
+  default:      { bg: "rgba(124,58,237,0.25)",  border: "#7c3aed", text: "#f5f3ff" },
 };
 
 function kindColor(parcaTuru?: string) {

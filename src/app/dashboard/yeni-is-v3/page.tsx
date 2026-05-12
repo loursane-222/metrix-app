@@ -658,9 +658,9 @@ export default function YeniIsV3Page() {
   // ─── AI MODU ──────────────────────────────────────────────────────────────
   if (aiMode) {
     return (
-      <div style={{ minHeight: "100vh", background: "#030712", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
-        <div style={{ width: "100%", maxWidth: "680px" }}>
-          <div style={{ textAlign: "center", marginBottom: "28px" }}>
+      <div style={{ height: "100dvh", overflowY: "auto", background: "#030712", color: "#fff", padding: "12px 12px calc(112px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
+        <div style={{ width: "100%", maxWidth: "680px", margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "14px" }}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "100px", padding: "6px 18px", marginBottom: "16px" }}>
               <span>✨</span><span style={{ fontSize: "12px", color: "#6ee7b7", fontWeight: 700, letterSpacing: "0.1em" }}>AI MODU</span>
             </div>
@@ -1232,10 +1232,10 @@ export default function YeniIsV3Page() {
 
                       {/* Renk açıklaması */}
                       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px" }}>
-                        {[["#fbbf24","Ön Alın"],["#10b981","Tezgah"],["#60a5fa","Tezgah Arası"],["#a78bfa","Ada"]].map(([renk,ad]) => (
-                          <div key={ad} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        {[["#fbbf24","Ön Alın"],["#10b981","Tezgah"],["#60a5fa","Tezgah Arası"],["#a78bfa","Diğer"]].map(([renk,ad]) => (
+                          <div key={ad} style={{ display: "flex", alignItems: "center", gap: "5px", border: "1px solid rgba(255,255,255,0.10)", background: "rgba(15,23,42,0.72)", borderRadius: "999px", padding: "4px 8px" }}>
                             <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: renk }}/>
-                            <span style={{ fontSize: "10px", color: "#9ca3af" }}>{ad}</span>
+                            <span style={{ fontSize: "10px", color: "#f8fafc", fontWeight: 800 }}>{ad}</span>
                           </div>
                         ))}
                       </div>
@@ -1522,9 +1522,9 @@ export default function YeniIsV3Page() {
             bottom: "calc(env(safe-area-inset-bottom) + 80px)",
             right: "16px",
             zIndex: 1300,
-            width: "52px",
+            minWidth: "142px",
             height: "52px",
-            borderRadius: "50%",
+            borderRadius: "18px",
             background: "linear-gradient(135deg, #10b981, #059669)",
             border: "none",
             boxShadow: "0 6px 24px rgba(16,185,129,0.45)",
@@ -1532,14 +1532,19 @@ export default function YeniIsV3Page() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: "22px",
+            gap: "8px",
+            padding: "0 16px",
+            color: "#fff",
+            fontSize: "13px",
+            fontWeight: 900,
             transition: "transform .15s",
           }}
           onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.1)")}
           onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
-          title="AI ile doldur"
+          title="AI ile doldur veya plan yükle"
         >
-          ✨
+          <span style={{ fontSize: "19px", lineHeight: 1 }}>✨</span>
+          <span style={{ whiteSpace: "nowrap" }}>AI / Plan Yükle</span>
         </button>
       )}
 
@@ -1548,7 +1553,7 @@ export default function YeniIsV3Page() {
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setPlakaAcik(false)}>
           {/* Sabit kapat butonu — her zaman görünür */}
           <button onClick={() => setPlakaAcik(false)} style={{ position: "fixed", top: "16px", right: "16px", zIndex: 9999, padding: "10px 20px", background: "#ef4444", border: "none", borderRadius: "12px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer", boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}>✕ Kapat</button>
-          <div className="plaka-v2-fix" style={{ height: "100dvh", width: "100%", overflowY: "auto", background: "#030712", padding: "16px", paddingTop: "60px", boxSizing: "border-box" }} onClick={(e) => e.stopPropagation()}>
+          <div className="plaka-v2-fix" style={{ height: "100dvh", width: "100%", overflowY: "auto", background: "#030712", padding: "16px", paddingTop: "60px", paddingBottom: "calc(120px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ position: "sticky", top: 0, zIndex: 30, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1f2937", paddingBottom: "12px", marginBottom: "16px", background: "rgba(3,7,18,0.97)", backdropFilter: "blur(20px)", paddingTop: "8px" }}>
               <div>
                 <h2 style={{ fontSize: "19px", fontWeight: 900, color: "#fff" }}>Plaka Planlayıcı</h2>

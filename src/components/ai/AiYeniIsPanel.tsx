@@ -8,6 +8,14 @@ type Props = {
   onManual?: () => void;
 };
 
+type UploadedPlanFile = {
+  url: string;
+  publicId: string;
+  mimeType: string;
+  size: number;
+  originalName: string;
+};
+
 function val(v: any) {
   if (v === undefined || v === null || v === "" || Number.isNaN(v)) return "-";
   return String(v);
@@ -16,6 +24,12 @@ function val(v: any) {
 function money(v: any) {
   const n = Number(v || 0);
   return n > 0 ? `€${n.toFixed(2)}` : "-";
+}
+
+function fileSize(v: number) {
+  if (!Number.isFinite(v) || v <= 0) return "-";
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
+  return `${(v / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function normalizeText(v: string) {
@@ -67,9 +81,12 @@ export default function AiYeniIsPanel({ onApply, onManual }: Props) {
   const [musteriAdiDraft, setMusteriAdiDraft] = useState("");
   const [plakaFiyatiDraft, setPlakaFiyatiDraft] = useState("");
   const [kurDraft, setKurDraft] = useState("53");
+  const [planUpload, setPlanUpload] = useState<UploadedPlanFile | null>(null);
+  const [uploadYukleniyor, setUploadYukleniyor] = useState(false);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const planInputRef = useRef<HTMLInputElement | null>(null);
 
   const parsed = sonuc ? normalizeParsedOfferResult(sonuc) : null;
   const kontrol = sonuc?.sistemKontrol;
@@ -163,6 +180,33 @@ export default function AiYeniIsPanel({ onApply, onManual }: Props) {
     }
   }
 
+  async function planDosyasiYukle(file?: File | null) {
+    if (!file) return;
+
+    setHata("");
+    setUploadYukleniyor(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch("/api/uploads/plan", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok || !data?.file) {
+        throw new Error(data?.hata || data?.error || "Dosya yüklenemedi.");
+      }
+
+      setPlanUpload(data.file as UploadedPlanFile);
+    } catch (e: any) {
+      setPlanUpload(null);
+      setHata(e?.message || "Dosya yüklenemedi.");
+    } finally {
+      setUploadYukleniyor(false);
+      if (planInputRef.current) planInputRef.current.value = "";
+    }
+  }
+
   async function calistir() {
     if (!metin.trim()) {
       setHata("Önce işi anlatan bir metin gir.");
@@ -224,18 +268,18 @@ onApply({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.20),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.55)] md:p-7">
+    <div className="relative w-full overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.20),transparent_34%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-4 shadow-[0_30px_90px_rgba(0,0,0,0.55)] md:rounded-[34px] md:p-7">
       <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
 
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div className="mb-4 flex flex-col gap-3 md:mb-6 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="inline-flex rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-blue-200">
             Metrix AI Yeni İş
           </div>
-          <h2 className="mt-4 text-2xl font-black tracking-tight text-white md:text-3xl">
+          <h2 className="mt-3 text-xl font-black tracking-tight text-white md:mt-4 md:text-3xl">
             İşi konuş, sistem ölçüden maliyete hazırlasın
           </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-400 md:text-sm md:leading-6">
             Müşteri, ürün, plaka fiyatı, kur ve ölçüleri tek konuşmada alır. AI yorumlar, plaka yerleşimini hesaplar, sen onaylarsın.
           </p>
         </div>
@@ -243,7 +287,7 @@ onApply({
         <button
           type="button"
           onClick={dikteBaslat}
-          className={`shrink-0 rounded-2xl px-5 py-3 text-sm font-black shadow-2xl transition ${
+          className={`w-full shrink-0 rounded-2xl px-5 py-3 text-sm font-black shadow-2xl transition md:w-auto ${
             dinliyor ? "bg-red-500 text-white shadow-red-500/30" : "border border-white/10 bg-white/10 text-white hover:bg-white/15"
           }`}
         >
@@ -255,13 +299,13 @@ onApply({
         value={metin}
         onChange={(e) => setMetin(e.target.value)}
         placeholder="Örn: Yeni müşteri Mehmet Kaya için Calacatta porselen mutfak tezgahı, plaka 220 euro, kur 53, tezgah 285'e 65, tezgah arası 285'e 55, ön alın 4 cm..."
-        className="min-h-[170px] w-full resize-none rounded-3xl border border-white/20 bg-black/65 p-5 text-base leading-7 text-white outline-none
+        className="min-h-[132px] w-full resize-none rounded-2xl border border-white/20 bg-black/65 p-4 text-sm leading-6 text-white outline-none md:min-h-[170px] md:rounded-3xl md:p-5 md:text-base md:leading-7
 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/40
 hover:border-white/40 transition shadow-inner shadow-black/30
 placeholder:text-slate-500"
       />
 
-      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+      <div className="mt-4 grid grid-cols-1 gap-3 md:mt-5 md:grid-cols-[1fr_auto]">
         <button
           type="button"
           onClick={calistir}
@@ -278,6 +322,56 @@ placeholder:text-slate-500"
         >
           Manuel devam et
         </button>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:rounded-3xl">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+              Plan Dosyası
+            </div>
+            <div className="mt-1 text-sm font-bold text-white">PDF/Görsel Yükle</div>
+            <div className="mt-1 text-xs leading-5 text-slate-400">
+              PDF, JPG veya PNG dosyasını güvenli şekilde yükler. Ölçü çözme bir sonraki adımda bağlanacak.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => planInputRef.current?.click()}
+            disabled={uploadYukleniyor}
+            className="w-full rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-5 py-3 text-sm font-black text-emerald-100 transition hover:border-emerald-300/40 hover:bg-emerald-400/15 disabled:opacity-60 md:w-auto"
+          >
+            {uploadYukleniyor ? "Yükleniyor..." : "PDF/Görsel Yükle"}
+          </button>
+        </div>
+
+        <input
+          ref={planInputRef}
+          type="file"
+          accept="application/pdf,image/*"
+          className="hidden"
+          onChange={(e) => planDosyasiYukle(e.target.files?.[0])}
+        />
+
+        {planUpload && (
+          <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <div className="text-xs font-black text-emerald-200">Yükleme başarılı</div>
+                <div className="mt-1 truncate text-sm font-black text-white">
+                  {planUpload.originalName || "Plan dosyası"}
+                </div>
+                <div className="mt-1 text-xs text-slate-400">
+                  {planUpload.mimeType || "-"} · {fileSize(Number(planUpload.size || 0))}
+                </div>
+              </div>
+              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-black text-emerald-100">
+                Hazır
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {hata && (
