@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest) {
     const phaseId = String(body.phaseId || "");
     const plannedDate = String(body.plannedDate || "");
     const notes = typeof body.notes === "string" ? body.notes : undefined;
-    const personelIds = Array.isArray(body.personelIds)
+    const personelIds: string[] | null = Array.isArray(body.personelIds)
       ? Array.from(new Set(body.personelIds.map((x: any) => String(x)).filter(Boolean)))
       : null;
 

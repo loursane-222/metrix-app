@@ -564,7 +564,7 @@ export default function PersonelSayfasi() {
   )
 }
 
-function Input({ label, value, onChange }: any) {
+function Input({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
 
 
@@ -648,7 +648,7 @@ function Bar({ label, value }: any) {
   )
 }
 
-function Toggle({ label, value, onChange }: any) {
+function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
   return (
 
 

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
 const MENUS = [
   { key: "dashboard", label: "Dashboard" },
@@ -10,7 +10,8 @@ const MENUS = [
   { key: "ayarlar", label: "Ayarlar" },
 ];
 
-export default function YetkiPage({ params }: { params: { id: string } }) {
+export default function YetkiPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [permissions, setPermissions] = useState<any[]>([]);
 
   useEffect(() => {

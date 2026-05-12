@@ -4,7 +4,7 @@ import { useState, useEffect, use } from "react";
 type Taksit = { taksitNo: number; aciklama: string; yuzde: number; gunSonra: number };
 type Sablon = { id: string; ad: string; aciklama: string; sira: number; taksitler: Taksit[] };
 
-export default function Page({ params }: any) {
+export default function Page({ params }: { params: Promise<{ teklifNo: string }> }) {
   const { teklifNo } = use(params);
   const [sablonlar, setSablonlar] = useState<Sablon[]>([]);
   const [toplamTutar, setToplamTutar] = useState(0);

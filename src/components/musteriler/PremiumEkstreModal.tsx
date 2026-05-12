@@ -25,15 +25,6 @@ export default function PremiumEkstreModal({ aktif, analiz, onClose, tl, pct, mu
   const firmaAdi = atolye?.atolyeAdi?.trim() || "Metrix Tezgah";
   const logoUrl = atolye?.logoUrl?.trim() || "";
 
-  function formatAdSoyad(ad) {
-    if (!ad) return "";
-    return ad
-      .toLowerCase()
-      .split(" ")
-      .map(k => k.charAt(0).toUpperCase() + k.slice(1))
-      .join(" ");
-  }
-
   function formatAdSoyad(ad: string) {
     if (!ad) return "";
     return ad

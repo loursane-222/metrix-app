@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
   } = veri
 
   let bagliMusteriId: string | null = null
+  let yeniMusteriOlusturuldu = false
 
   if (musteriId) {
     const mevcutMusteri = await prisma.musteri.findFirst({
@@ -100,7 +101,6 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    let yeniMusteriOlusturuldu = false
     if (!mevcutMusteri) {
       mevcutMusteri = await prisma.musteri.create({
         data: {

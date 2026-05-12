@@ -15,6 +15,7 @@ async function atolyeAl(userId: string) {
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getAtolyeAuth()
   if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
   const atolye = await atolyeAl(auth.userId)
   if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı' }, { status: 404 })
   const { id } = await params
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getAtolyeAuth()
   if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+  const atolyeId = auth.atolyeId
   const atolye = await atolyeAl(auth.userId)
   if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı' }, { status: 404 })
   const { id } = await params

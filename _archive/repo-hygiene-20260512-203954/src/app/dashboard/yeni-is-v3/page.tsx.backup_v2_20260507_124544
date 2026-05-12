@@ -1,0 +1,1135 @@
+"use client";
+
+import { normalizeMtulDisplay } from "@/lib/normalizeMtul";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { PlakaPlanlayiciV2 } from "@/components/plaka-planlayici/PlakaPlanlayiciV2";
+import AiYeniIsPanel from "@/components/ai/AiYeniIsPanel";
+
+// ─── Yardımcı fonksiyonlar ────────────────────────────────────────────────────
+function n(v: string | number) {
+  const x = Number(String(v || "0").replace(",", "."));
+  return Number.isFinite(x) ? x : 0;
+}
+function para(v: number) {
+  return v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
+}
+
+const TASLAK_KEY = "metrix_yeni_is_taslak";
+
+// ─── Tip tanımları ────────────────────────────────────────────────────────────
+type Adim = "musteri" | "olcuiscilik" | "ozet";
+
+// ─── Sabit veriler ────────────────────────────────────────────────────────────
+const IS_KONULARI = [
+  { id: "tezgah",        label: "Tezgah",        ikon: "🏠" },
+  { id: "banyo",         label: "Banyo",          ikon: "🚿" },
+  { id: "merdiven",      label: "Merdiven",       ikon: "🪜" },
+  { id: "duvar_kaplama", label: "Duvar Kaplama",  ikon: "🧱" },
+  { id: "zemin",         label: "Zemin",          ikon: "⬛" },
+  { id: "ada",           label: "Ada Tezgahı",    ikon: "🍳" },
+  { id: "lavabo",        label: "Lavabo",         ikon: "🪣" },
+  { id: "diger",         label: "Diğer",          ikon: "📦" },
+];
+
+const MALZEME_TIPLERI = [
+  { id: "Porselen",   label: "Porselen",   ikon: "🔲" },
+  { id: "Kuvars",     label: "Kuvars",     ikon: "💎" },
+  { id: "Doğaltaş",  label: "Doğaltaş",  ikon: "🪨" },
+  { id: "Granit",     label: "Granit",     ikon: "⬜" },
+  { id: "Mermer",     label: "Mermer",     ikon: "🏛️" },
+  { id: "Kompakt",    label: "Kompakt",    ikon: "📐" },
+];
+
+const MUSTERI_TIPLERI = [
+  { id: "Ev sahibi",  label: "Ev Sahibi",   ikon: "🏡" },
+  { id: "Bayi",       label: "Bayi",        ikon: "🏪" },
+  { id: "Mimar",      label: "Mimar",       ikon: "📏" },
+  { id: "Müteahhit",  label: "Müteahhit",   ikon: "🦺" },
+  { id: "İmalatçı",   label: "İmalatçı",    ikon: "🏭" },
+  { id: "Diğer",      label: "Diğer",       ikon: "👤" },
+];
+
+const OPERASYON_SATIRLARI = [
+  { label: "Tezgah",              mtulKey: "metrajMtul",       dakikaKey: "birMtulDakika",      makineKey: "tezgahMakineId"        },
+  { label: "Tezgah Arası",        mtulKey: "tezgahArasiMtul",  dakikaKey: "tezgahArasiDakika",  makineKey: "tezgahArasiMakineId"   },
+  { label: "Ada",                 mtulKey: "adaTezgahMtul",    dakikaKey: "adaTezgahDakika",    makineKey: "adaMakineId"            },
+  { label: "Stres Alma",          mtulKey: "ozelIscilik1Mtul", dakikaKey: "ozelIscilik1Dakika", makineKey: "stresAlmaMakineId"     },
+  { label: "Fason Ebatlama",      mtulKey: "ozelIscilik2Mtul", dakikaKey: "ozelIscilik2Dakika", makineKey: "fasonEbatlamaMakineId" },
+  { label: "45° Kesim",           mtulKey: "kesim45Mtul",      dakikaKey: "kesim45Dakika",      makineKey: "kesim45MakineId"       },
+  { label: "Pahlama",             mtulKey: "pahlamaMtul",      dakikaKey: "pahlamaDakika",      makineKey: "pahlamaMakineId"       },
+  { label: "Yapıştırma/Toplama",  mtulKey: "yapistirmaMtul",   dakikaKey: "yapistirmaDakika",   makineKey: "yapistirmaMakineId"    },
+];
+
+// ─── Ana bileşen ──────────────────────────────────────────────────────────────
+export default function YeniIsV3Page() {
+  const router = useRouter();
+  const mainRef = useRef<HTMLDivElement>(null);
+  const taslakTimer = useRef<any>(null);
+
+  const [aktifAdim, setAktifAdim] = useState<Adim>("musteri");
+  const [musteriler, setMusteriler] = useState<any[]>([]);
+  const [makineler, setMakineler] = useState<any[]>([]);
+  const [musteriArama, setMusteriArama] = useState("");
+  const [musteriListeAcik, setMusteriListeAcik] = useState(false);
+  const [plakaAcik, setPlakaAcik] = useState(false);
+  const [plakaInitialRows, setPlakaInitialRows] = useState<any[]>([]);
+  const [aiMode, setAiMode] = useState(true);
+  const [kaydediliyor, setKaydediliyor] = useState(false);
+  const [basariEkrani, setBasariEkrani] = useState(false);
+  const [sonKayitTeklifNo, setSonKayitTeklifNo] = useState("");
+  const [sonKayitIsId, setSonKayitIsId] = useState("");
+  const [yeniMusteriOlusturuldu, setYeniMusteriOlusturuldu] = useState(false);
+  const [taslakKaydedildi, setTaslakKaydedildi] = useState(false);
+  const [fiyatPanelAcik, setFiyatPanelAcik] = useState(false);
+  const [fiyatOverride, setFiyatOverride] = useState<any>({});
+  const [gelismisAcik, setGelismisAcik] = useState(false);
+
+  const [form, setForm] = useState({
+    musteriId: "", musteriAdi: "", urunAdi: "", malzemeTipi: "Porselen",
+    musteriTipi: "Ev sahibi", isKonusu: "tezgah",
+    isTarihi: new Date().toISOString().slice(0, 10),
+    kullanilanKur: "53", karYuzdesi: "30",
+    plakaFiyatiEuro: "", plakaGenislikCm: "", plakaUzunlukCm: "",
+    manuelPlakaSayisi: "", plakaLayoutJson: null as any, plakaImageUrl: "",
+    plakadanAlinanMtul: "5", metrajMtul: "", birMtulDakika: "25",
+    tezgahArasiMtul: "", tezgahArasiDakika: "18",
+    adaTezgahMtul: "", adaTezgahDakika: "30",
+    ozelIscilik1Mtul: "", ozelIscilik1Dakika: "",
+    ozelIscilik2Mtul: "", ozelIscilik2Dakika: "",
+    ozelIscilik3Mtul: "", ozelIscilik3Dakika: "",
+    tezgahMakineId: "", tezgahArasiMakineId: "", adaMakineId: "",
+    stresAlmaMakineId: "", fasonEbatlamaMakineId: "",
+    kesim45Mtul: "", kesim45Dakika: "4", kesim45MakineId: "",
+    pahlamaMtul: "", pahlamaDakika: "1", pahlamaMakineId: "",
+    yapistirmaMtul: "", yapistirmaDakika: "8", yapistirmaMakineId: "",
+    notlar: "", tasDurumu: "",
+  });
+
+  // Layout scroll override
+  useEffect(() => {
+    const main  = document.getElementById("dashboard-main");
+    const inner = document.getElementById("dashboard-inner");
+    const origMainStyle  = main?.getAttribute("style")  || "";
+    const origInnerStyle = inner?.getAttribute("style") || "";
+    if (main)  { main.style.overflow = "hidden"; main.style.height = "100dvh"; main.style.minHeight = "unset"; main.style.paddingBottom = "0"; }
+    if (inner) { inner.style.overflow = "hidden"; inner.style.height = "100dvh"; inner.style.minHeight = "unset"; }
+    return () => {
+      if (main)  main.setAttribute("style", origMainStyle);
+      if (inner) inner.setAttribute("style", origInnerStyle);
+    };
+  }, []);
+
+  // Taslak yükle
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("fresh") === "1") { localStorage.removeItem(TASLAK_KEY); return; }
+      const ham = localStorage.getItem(TASLAK_KEY);
+      if (ham) {
+        const t = JSON.parse(ham);
+        if (t?.musteriAdi || t?.urunAdi) { setForm((p) => ({ ...p, ...t })); setAiMode(false); }
+      }
+    } catch {}
+  }, []);
+
+  // Taslak kaydet
+  useEffect(() => {
+    clearTimeout(taslakTimer.current);
+    taslakTimer.current = setTimeout(() => {
+      try {
+        localStorage.setItem(TASLAK_KEY, JSON.stringify(form));
+        setTaslakKaydedildi(true);
+        setTimeout(() => setTaslakKaydedildi(false), 1500);
+      } catch {}
+    }, 1200);
+    return () => clearTimeout(taslakTimer.current);
+  }, [form]);
+
+  // Adım değişince scroll sıfırla
+  useEffect(() => { mainRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }, [aktifAdim]);
+
+  // API'lardan veri çek
+  useEffect(() => {
+    fetch("/api/musteriler-lite").then((r) => r.json()).then((v) => setMusteriler(v.musteriler || []));
+    fetch("/api/makineler-lite").then((r) => r.json()).then((v) => {
+      const liste = v.makineler || [];
+      setMakineler(liste);
+      if (liste.length > 0) {
+        setForm((p) => ({
+          ...p,
+          tezgahMakineId:        p.tezgahMakineId        || liste[0].id,
+          tezgahArasiMakineId:   p.tezgahArasiMakineId   || liste[0].id,
+          adaMakineId:           p.adaMakineId            || liste[0].id,
+          stresAlmaMakineId:     p.stresAlmaMakineId      || liste[0].id,
+          fasonEbatlamaMakineId: p.fasonEbatlamaMakineId  || liste[0].id,
+          kesim45MakineId:       p.kesim45MakineId        || liste[0].id,
+          pahlamaMakineId:       p.pahlamaMakineId        || liste[0].id,
+          yapistirmaMakineId:    p.yapistirmaMakineId     || liste[0].id,
+        }));
+      }
+    });
+  }, []);
+
+  function setAlan(key: string, value: string) { setForm((p) => ({ ...p, [key]: value })); }
+
+  function musteriSec(m: any) {
+    const tipMap: Record<string, string> = { bayi: "Bayi", mimar: "Mimar", son_kullanici: "Ev sahibi", muteahhit: "Müteahhit" };
+    const ad = [m.firmaAdi, m.ad, m.soyad].filter(Boolean).join(" ") || m.ad || "";
+    const yeniTip = m.musteriTipi ? (tipMap[m.musteriTipi] || "Ev sahibi") : undefined;
+    setForm((p) => ({ ...p, musteriId: m.id, musteriAdi: ad, ...(yeniTip ? { musteriTipi: yeniTip } : {}) }));
+    setMusteriArama("");
+    setMusteriListeAcik(false);
+  }
+
+  function makineMaliyet(id: string) {
+    const m = makineler.find((x) => x.id === id);
+    if (!m) return 0;
+    return Number(m.dakikalikMaliyet ?? m.dkMaliyet ?? m.dakikaMaliyet ?? m.hesaplananDakikaMaliyeti ?? m.minuteCost ?? m.costPerMinute ?? 0) || 0;
+  }
+
+  const hesap = useMemo(() => {
+    const plakaSayisi =
+      form.plakaLayoutJson?.plakaSayisi > 0 ? Number(form.plakaLayoutJson.plakaSayisi)
+      : n(form.manuelPlakaSayisi) > 0       ? n(form.manuelPlakaSayisi)
+      : n(form.plakadanAlinanMtul) > 0 && (n(form.metrajMtul) + n(form.tezgahArasiMtul) + n(form.adaTezgahMtul)) > 0
+        ? Math.ceil((n(form.metrajMtul) + n(form.tezgahArasiMtul) + n(form.adaTezgahMtul)) / n(form.plakadanAlinanMtul))
+      : 0;
+    const malzeme = plakaSayisi * n(form.plakaFiyatiEuro) * n(form.kullanilanKur);
+    const fb = (id: string) => makineMaliyet(id) || 106.16;
+    const tezgahDk      = n(form.metrajMtul)       * n(form.birMtulDakika);
+    const arasiDk       = n(form.tezgahArasiMtul)  * n(form.tezgahArasiDakika);
+    const adaDk         = n(form.adaTezgahMtul)    * n(form.adaTezgahDakika);
+    const stresDk       = n(form.ozelIscilik1Mtul) * n(form.ozelIscilik1Dakika);
+    const fasonDk       = n(form.ozelIscilik2Mtul) * n(form.ozelIscilik2Dakika);
+    const k45Dk         = n(form.kesim45Mtul)      * n(form.kesim45Dakika);
+    const pahDk         = n(form.pahlamaMtul)      * n(form.pahlamaDakika);
+    const yapDk         = n(form.yapistirmaMtul)   * n(form.yapistirmaDakika);
+    const toplamDakika  = tezgahDk + arasiDk + adaDk + stresDk + fasonDk + k45Dk + pahDk + yapDk;
+    const iscilik = tezgahDk * fb(form.tezgahMakineId)
+      + arasiDk * fb(form.tezgahArasiMakineId)
+      + adaDk   * fb(form.adaMakineId)
+      + stresDk * fb(form.stresAlmaMakineId)
+      + fasonDk * fb(form.fasonEbatlamaMakineId)
+      + k45Dk   * fb(form.kesim45MakineId);
+    const maliyet = malzeme + iscilik;
+    const satis   = maliyet * (1 + n(form.karYuzdesi) / 100);
+    const kar     = satis - maliyet;
+    return { plakaSayisi, malzeme, iscilik, maliyet, satis, kar, toplamDakika };
+  }, [form, makineler]);
+
+  function fiyatSatirlari() {
+    const tezgah = n(form.metrajMtul);
+    const arasi  = n(form.tezgahArasiMtul);
+    const ada    = n(form.adaTezgahMtul);
+    const weighted = tezgah * 1 + arasi * 0.75 + ada * 1.5;
+    const baz = weighted > 0 ? hesap.satis / weighted : 0;
+    return [
+      tezgah > 0 ? { ad: "Tezgah",       mtul: tezgah, katsayi: 1,    birim: baz        } : null,
+      arasi  > 0 ? { ad: "Tezgah Arası", mtul: arasi,  katsayi: 0.75, birim: baz * 0.75 } : null,
+      ada    > 0 ? { ad: "Ada Tezgah",   mtul: ada,    katsayi: 1.5,  birim: baz * 1.5  } : null,
+    ].filter(Boolean) as any[];
+  }
+
+  function fiyatPanelToplam() {
+    return fiyatSatirlari().reduce((acc, r) => acc + Number(fiyatOverride[r.ad] ?? r.birim) * r.mtul, 0);
+  }
+  function fiyatPanelKar()      { return fiyatPanelToplam() - hesap.maliyet; }
+  function fiyatPanelKarYuzde() { return hesap.maliyet > 0 ? (fiyatPanelKar() / hesap.maliyet) * 100 : 0; }
+
+  function fiyatKarari() {
+    const kar = n(form.karYuzdesi);
+    if (kar >= 60) return { baslik: "Premium fiyat",  metin: "Kâr güçlü. Değer anlatımı ile savunulmalı.",            renk: "#6ee7b7" };
+    if (kar >= 35) return { baslik: "Sağlıklı fiyat", metin: "Fiyat dengeli. Pazarlık payı kontrollü bırakılabilir.", renk: "#93c5fd" };
+    if (kar >= 20) return { baslik: "Dikkatli fiyat", metin: "Marj daralıyor. Ek işçilik ve fire riski korunmalı.",   renk: "#fcd34d" };
+    return               { baslik: "Riskli fiyat",    metin: "Bu fiyat hata affetmez. Mümkünse yukarı çek.",         renk: "#f87171" };
+  }
+
+  async function manuelFiyatlariKaydet() {
+    if (!sonKayitIsId) { alert("Önce teklif kaydedilmeli."); return; }
+    const s = fiyatSatirlari();
+    const payload = {
+      tezgahBirimFiyatOverride:      Number(fiyatOverride["Tezgah"]       ?? s.find((x) => x.ad === "Tezgah")?.birim       ?? 0),
+      tezgahArasiBirimFiyatOverride: Number(fiyatOverride["Tezgah Arası"] ?? s.find((x) => x.ad === "Tezgah Arası")?.birim ?? 0),
+      adaBirimFiyatOverride:         Number(fiyatOverride["Ada Tezgah"]   ?? s.find((x) => x.ad === "Ada Tezgah")?.birim   ?? 0),
+    };
+    const res = await fetch(`/api/isler/${sonKayitIsId}/fiyat`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    if (!res.ok) { alert("Fiyat kaydedilemedi."); return; }
+    alert("Manuel fiyatlar kaydedildi.");
+  }
+
+  function onlineTeklifLinki() { return sonKayitTeklifNo ? `${window.location.origin}/teklif/${sonKayitTeklifNo}` : ""; }
+
+  function whatsappGonder() {
+    const link = onlineTeklifLinki();
+    if (!link) { alert("Kaydetme tamamlandıktan sonra tekrar dene."); return; }
+    window.open(`https://wa.me/?text=${encodeURIComponent(`Merhaba, teklifinizi aşağıdaki linkten inceleyip onaylayabilirsiniz:\n\n${link}`)}`, "_blank");
+  }
+
+  async function teklifLinkiKopyala() {
+    const link = onlineTeklifLinki();
+    if (!link) return;
+    await navigator.clipboard.writeText(link);
+    alert("Teklif linki kopyalandı.");
+  }
+
+  function pdfAc() {
+    if (!sonKayitIsId) { alert("PDF için kayıt henüz oluşmadı."); return; }
+    window.open(`/api/isler/${sonKayitIsId}/pdf`, "_blank");
+  }
+
+  function tahsilatAc() {
+    if (!sonKayitIsId) { alert("Kayıt henüz oluşmadı."); return; }
+    router.push(`/dashboard/tahsilat?isId=${sonKayitIsId}`);
+  }
+
+  async function kaydet() {
+    if (!form.musteriAdi.trim()) { alert("Müşteri adı gerekli."); return; }
+    if (!form.urunAdi.trim())    { alert("Ürün / taş adı gerekli."); return; }
+    const operasyonlar = [
+      { tip: "tezgah",             mtul: n(form.metrajMtul),       dakika: n(form.birMtulDakika),      makineId: form.tezgahMakineId        },
+      { tip: "tezgah_arasi",       mtul: n(form.tezgahArasiMtul),  dakika: n(form.tezgahArasiDakika),  makineId: form.tezgahArasiMakineId   },
+      { tip: "ada",                mtul: n(form.adaTezgahMtul),    dakika: n(form.adaTezgahDakika),    makineId: form.adaMakineId            },
+      { tip: "stres_alma",         mtul: n(form.ozelIscilik1Mtul), dakika: n(form.ozelIscilik1Dakika), makineId: form.stresAlmaMakineId     },
+      { tip: "fason_ebatlama",     mtul: n(form.ozelIscilik2Mtul), dakika: n(form.ozelIscilik2Dakika), makineId: form.fasonEbatlamaMakineId },
+      { tip: "45_kesim",           mtul: n(form.kesim45Mtul),      dakika: n(form.kesim45Dakika),      makineId: form.kesim45MakineId       },
+      { tip: "pahlama",            mtul: n(form.pahlamaMtul),      dakika: n(form.pahlamaDakika),      makineId: form.pahlamaMakineId       },
+      { tip: "yapistirma_toplama", mtul: n(form.yapistirmaMtul),   dakika: n(form.yapistirmaDakika),   makineId: form.yapistirmaMakineId    },
+    ].filter((x) => x.mtul > 0 && x.dakika > 0).map((x) => ({
+      operasyonTipi: x.tip, makineId: x.makineId || null,
+      adet: 1, birimDakika: x.dakika, toplamDakika: x.mtul * x.dakika,
+    }));
+    setKaydediliyor(true);
+    try {
+      const res = await fetch("/api/isler", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, musteriId: form.musteriId || null, operasyonlar, plakaLayoutJson: form.plakaLayoutJson || null, plakaImageUrl: form.plakaImageUrl || "" }),
+      });
+      const raw = await res.text();
+      let veri: any = {};
+      try { veri = raw ? JSON.parse(raw) : {}; } catch { veri = { hata: raw || "Geçersiz cevap." }; }
+      if (!res.ok) { alert(veri?.hata || "İş kaydedilemedi."); return; }
+      const teklifNo = veri?.teklifNo || veri?.is?.teklifNo || veri?.data?.teklifNo || "";
+      const isId     = veri?.id       || veri?.isId         || veri?.is?.id         || veri?.data?.id || "";
+      setSonKayitTeklifNo(String(teklifNo));
+      setSonKayitIsId(String(isId));
+      setYeniMusteriOlusturuldu(veri?.yeniMusteriOlusturuldu === true);
+      try { localStorage.removeItem(TASLAK_KEY); } catch {}
+      setBasariEkrani(true);
+    } catch (e: any) {
+      alert(e?.message || "Kaydetme sırasında hata oluştu.");
+    } finally {
+      setKaydediliyor(false);
+    }
+  }
+
+  function aiAktar(sonuc: any) {
+    const isPlakaAktar = sonuc?.plakaLayoutJson != null && sonuc?.tezgahMtul != null;
+    const data = isPlakaAktar ? {} : (sonuc?.sonuc || sonuc || {});
+    const malzeme = data?.malzeme || {};
+    const musteriAi = data?.musteri || {};
+    const parcalar = Array.isArray(data?.parcalar) ? data.parcalar : [];
+    const operasyonlar = Array.isArray(data?.operasyonlar) ? data.operasyonlar : [];
+
+    const sumMtul = (tipler: string[]) =>
+      parcalar.filter((p: any) => tipler.includes(String(p?.standartTip || ""))).reduce((acc: number, p: any) => {
+        const mtul = Number(p?.mtul || 0);
+        const boydan = Number(p?.boyCm || 0) > 0 ? Number(p.boyCm) / 100 : 0;
+        const adet = Number(p?.adet || 1) || 1;
+        return acc + (mtul > 0 ? mtul : boydan * adet);
+      }, 0);
+
+    const normalizeOpTip = (v: any) => {
+      const t = String(v || "").toLocaleLowerCase("tr-TR").trim()
+        .replace(/ı/g,"i").replace(/ş/g,"s").replace(/ğ/g,"g")
+        .replace(/ü/g,"u").replace(/ö/g,"o").replace(/ç/g,"c").replace(/\s+/g,"_");
+      if (t.includes("45") || t.includes("kesim_45")) return "kesim_45";
+      if (t.includes("pahlama")) return "pahlama";
+      if (t.includes("yapistirma") || t.includes("toplama")) return "yapistirma";
+      if (t.includes("stres")) return "stres_alma";
+      if (t.includes("fason")) return "fason_ebatlama";
+      return t;
+    };
+
+    const opMtul = (o: any) => {
+      const direct = Number(o?.mtul || 0);
+      if (direct > 0) return direct;
+      const kaynak = `${o?.etiket || ""} ${o?.detay || ""}`;
+      const match = kaynak.match(/(\d+(?:[\.,]\d+)?)/);
+      if (!match) return 0;
+      const nv = Number(String(match[1]).replace(",", "."));
+      if (!Number.isFinite(nv) || nv <= 0) return 0;
+      return nv > 20 ? nv / 100 : nv;
+    };
+
+    const sumOpMtul = (tipler: string[]) =>
+      operasyonlar.filter((o: any) => tipler.includes(normalizeOpTip(o?.tip || o?.etiket))).reduce((acc: number, o: any) => acc + opMtul(o), 0);
+
+    const musteriAdi = musteriAi?.ad || data?.isBilgisi?.musteriAdi || "";
+    const eslesenMusteri = musteriler.find((m) =>
+      String(m.ad || "").trim().toLocaleLowerCase("tr-TR") === String(musteriAdi || "").trim().toLocaleLowerCase("tr-TR")
+    );
+
+    setForm((p) => ({
+      ...p,
+      musteriId:         eslesenMusteri?.id || "",
+      musteriAdi:        musteriAdi || p.musteriAdi,
+      urunAdi:           malzeme?.urunAdi || [malzeme?.marka, malzeme?.seri, malzeme?.renk].filter(Boolean).join(" ") || p.urunAdi,
+      kullanilanKur:     malzeme?.kur ? String(malzeme.kur) : p.kullanilanKur,
+      plakaFiyatiEuro:   isPlakaAktar && (sonuc.ortalamaPlakaFiyati || 0) > 0 ? String(Number(sonuc.ortalamaPlakaFiyati).toFixed(2)) : malzeme?.plakaFiyatiEuro ? String(malzeme.plakaFiyatiEuro) : p.plakaFiyatiEuro,
+      plakaGenislikCm:   malzeme?.plakaOlcusu?.enCm ? String(Math.max(Number(malzeme.plakaOlcusu.enCm || 0), Number(malzeme.plakaOlcusu.boyCm || 0))) : p.plakaGenislikCm,
+      plakaUzunlukCm:    malzeme?.plakaOlcusu?.boyCm ? String(Math.min(Number(malzeme.plakaOlcusu.enCm || 0), Number(malzeme.plakaOlcusu.boyCm || 0))) : p.plakaUzunlukCm,
+      manuelPlakaSayisi: sonuc?.plakaLayoutJson?.plakaSayisi ? String(sonuc.plakaLayoutJson.plakaSayisi) : p.manuelPlakaSayisi,
+      plakaLayoutJson:   sonuc?.plakaLayoutJson  || p.plakaLayoutJson  || null,
+      plakaImageUrl:     sonuc?.plakaImageUrl    || p.plakaImageUrl    || "",
+      metrajMtul:        isPlakaAktar && (sonuc.tezgahMtul || 0) > 0 ? String(Number(sonuc.tezgahMtul).toFixed(2)) : sumMtul(["tezgah"]) > 0 ? String(sumMtul(["tezgah"]).toFixed(2)) : p.metrajMtul,
+      tezgahArasiMtul:   isPlakaAktar && (sonuc.tezgahArasiMtul || 0) > 0 ? String(Number(sonuc.tezgahArasiMtul).toFixed(2)) : sumMtul(["tezgah_arasi"]) > 0 ? String(sumMtul(["tezgah_arasi"]).toFixed(2)) : p.tezgahArasiMtul,
+      adaTezgahMtul:     isPlakaAktar && (sonuc.adaTezgahMtul || 0) > 0 ? String(Number(sonuc.adaTezgahMtul).toFixed(2)) : sumMtul(["ada_tezgah", "ada_ayak"]) > 0 ? String(sumMtul(["ada_tezgah", "ada_ayak"]).toFixed(2)) : p.adaTezgahMtul,
+      ozelIscilik1Mtul:  isPlakaAktar && (sonuc.stresAlmaMtul || 0) > 0 ? String(Number(sonuc.stresAlmaMtul).toFixed(2)) : p.ozelIscilik1Mtul,
+      ozelIscilik2Mtul:  isPlakaAktar && (sonuc.fasonEbatlamaMtul || 0) > 0 ? String(Number(sonuc.fasonEbatlamaMtul).toFixed(2)) : p.ozelIscilik2Mtul,
+      kesim45Mtul:       sumOpMtul(["kesim_45", "45_kesim"]) > 0 ? String(sumOpMtul(["kesim_45", "45_kesim"]).toFixed(2)) : p.kesim45Mtul,
+      pahlamaMtul:       sumOpMtul(["pahlama"]) > 0 ? String(sumOpMtul(["pahlama"]).toFixed(2)) : p.pahlamaMtul,
+      yapistirmaMtul:    sumOpMtul(["yapistirma"]) > 0 ? String(sumOpMtul(["yapistirma"]).toFixed(2)) : p.yapistirmaMtul,
+      notlar: [p.notlar, musteriAi?.tip === "yeni" ? `AI: "${musteriAdi}" yeni müşteri olarak belirtildi.` : "", data?.uyarilar?.length ? `AI uyarıları: ${data.uyarilar.join(" | ")}` : ""].filter(Boolean).join("\n"),
+    }));
+    setPlakaAcik(false);
+    setAiMode(false);
+    setAktifAdim(isPlakaAktar ? "olcuiscilik" : "olcuiscilik");
+  }
+
+  const adimlar: { id: Adim; label: string; kisaLabel: string }[] = [
+    { id: "musteri",     label: "Müşteri & Konu",  kisaLabel: "Müşteri"  },
+    { id: "olcuiscilik", label: "Ölçü & İşçilik",  kisaLabel: "Ölçüler"  },
+    { id: "ozet",        label: "Özet & Fiyat",    kisaLabel: "Özet"     },
+  ];
+  const aktifIndex  = adimlar.findIndex((a) => a.id === aktifAdim);
+  const oncekiAdim  = aktifIndex > 0                  ? adimlar[aktifIndex - 1].id : null;
+  const sonrakiAdim = aktifIndex < adimlar.length - 1 ? adimlar[aktifIndex + 1].id : null;
+
+  const filtreliMusteriler = musteriler.filter((m) =>
+    String(m.ad || "").toLocaleLowerCase("tr-TR").includes(musteriArama.toLocaleLowerCase("tr-TR"))
+  );
+
+  function yeniIsBaslat() {
+    setBasariEkrani(false);
+    setAiMode(true);
+    setAktifAdim("musteri");
+    setForm({
+      musteriId: "", musteriAdi: "", urunAdi: "", malzemeTipi: "Porselen",
+      musteriTipi: "Ev sahibi", isKonusu: "tezgah",
+      isTarihi: new Date().toISOString().slice(0, 10),
+      kullanilanKur: "53", karYuzdesi: "30",
+      plakaFiyatiEuro: "", plakaGenislikCm: "", plakaUzunlukCm: "",
+      manuelPlakaSayisi: "", plakaLayoutJson: null, plakaImageUrl: "",
+      plakadanAlinanMtul: "5", metrajMtul: "", birMtulDakika: "25",
+      tezgahArasiMtul: "", tezgahArasiDakika: "18",
+      adaTezgahMtul: "", adaTezgahDakika: "30",
+      ozelIscilik1Mtul: "", ozelIscilik1Dakika: "",
+      ozelIscilik2Mtul: "", ozelIscilik2Dakika: "",
+      ozelIscilik3Mtul: "", ozelIscilik3Dakika: "",
+      tezgahMakineId: "", tezgahArasiMakineId: "", adaMakineId: "",
+      stresAlmaMakineId: "", fasonEbatlamaMakineId: "",
+      kesim45Mtul: "", kesim45Dakika: "4", kesim45MakineId: "",
+      pahlamaMtul: "", pahlamaDakika: "1", pahlamaMakineId: "",
+      yapistirmaMtul: "", yapistirmaDakika: "8", yapistirmaMakineId: "",
+      notlar: "", tasDurumu: "",
+    });
+  }
+
+  // ─── AI MODU ─────────────────────────────────────────────────────────────────
+  if (aiMode) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#030712", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+        <div style={{ width: "100%", maxWidth: "680px" }}>
+          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "10px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: "100px", padding: "8px 20px", marginBottom: "20px" }}>
+              <span style={{ fontSize: "18px" }}>✨</span>
+              <span style={{ fontSize: "13px", color: "#6ee7b7", fontWeight: 700, letterSpacing: "0.1em" }}>AI MODU</span>
+            </div>
+            <h1 style={{ fontSize: "clamp(24px,5vw,36px)", fontWeight: 900, margin: "0 0 12px" }}>Yeni İşi Anlat</h1>
+            <p style={{ color: "#6b7280", fontSize: "15px" }}>Ölçüleri yaz veya konuş, AI senin yerine formu doldursun</p>
+          </div>
+          <AiYeniIsPanel
+            onApply={(sonuc: any) => {
+              const data = sonuc?.sonuc || sonuc || {};
+              const malzeme = data?.malzeme || {};
+              const musteriAi = data?.musteri || {};
+              const musteriAdi = musteriAi?.ad || data?.isBilgisi?.musteriAdi || "";
+              const eslesenMusteri = musteriler.find((m) =>
+                String(m.ad || "").trim().toLocaleLowerCase("tr-TR") === String(musteriAdi || "").trim().toLocaleLowerCase("tr-TR")
+              );
+              const parcalar = Array.isArray(data?.parcalar) ? data.parcalar : [];
+              const SURE_MAP: Record<string, number> = {
+                "stres alma": 6, "fason ebatlama": 10, "tezgah": 25, "tezgah arası": 18,
+                "l dönüş tezgah": 30, "l tezgah arası": 20, "ön alın": 8, "l ön alın": 10,
+                "ada tezgah": 30, "ada ayak": 18, "ada iç dönüş": 18, "ada dış dönüş": 18,
+                "davlumbaz": 15, "tezgah ayak": 18, "süpürgelik": 5,
+              };
+              const PART_MAP: Record<string, string> = {
+                "tezgah": "tezgah", "tezgah_arasi": "tezgah arası", "tezgah arası": "tezgah arası",
+                "ada_tezgah": "ada tezgah", "ada tezgah": "ada tezgah", "ada_ayak": "ada ayak",
+                "on_alin": "ön alın", "ön alın": "ön alın", "stres_alma": "stres alma",
+                "stres alma": "stres alma", "fason_ebatlama": "fason ebatlama", "fason ebatlama": "fason ebatlama",
+              };
+              const rows = parcalar
+                .filter((p: any) => Number(p?.boyCm || 0) > 0 && Number(p?.enCm || 0) > 0)
+                .map((p: any) => {
+                  const raw = String(p?.standartTip || p?.etiket || "tezgah").toLowerCase().trim();
+                  const parcaTuru = PART_MAP[raw] || "tezgah";
+                  return { parcaTuru, uzunluk: String(Number(p?.boyCm || 0)), genislik: String(Number(p?.enCm || 0)), sureDakika: String(SURE_MAP[parcaTuru.toLowerCase()] || 10) };
+                });
+              setPlakaInitialRows(rows);
+              setForm((p) => ({
+                ...p,
+                musteriId: eslesenMusteri?.id || "",
+                musteriAdi: musteriAdi || p.musteriAdi,
+                urunAdi: malzeme?.urunAdi || [malzeme?.marka, malzeme?.seri, malzeme?.renk].filter(Boolean).join(" ") || p.urunAdi,
+                kullanilanKur: malzeme?.kur ? String(malzeme.kur) : p.kullanilanKur,
+                plakaFiyatiEuro: malzeme?.plakaFiyatiEuro ? String(malzeme.plakaFiyatiEuro) : p.plakaFiyatiEuro,
+                plakaGenislikCm: malzeme?.plakaOlcusu?.enCm ? String(Math.max(Number(malzeme.plakaOlcusu.enCm || 0), Number(malzeme.plakaOlcusu.boyCm || 0))) : p.plakaGenislikCm,
+                plakaUzunlukCm: malzeme?.plakaOlcusu?.boyCm ? String(Math.min(Number(malzeme.plakaOlcusu.enCm || 0), Number(malzeme.plakaOlcusu.boyCm || 0))) : p.plakaUzunlukCm,
+              }));
+              setAiMode(false);
+              setTimeout(() => setPlakaAcik(true), 50);
+            }}
+            onManual={() => setAiMode(false)}
+          />
+          <button
+            onClick={() => setAiMode(false)}
+            style={{ marginTop: "16px", width: "100%", padding: "14px", background: "transparent", border: "1px solid #374151", borderRadius: "16px", color: "#9ca3af", fontSize: "14px", cursor: "pointer" }}
+          >
+            Manuel giriş yap →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── BAŞARI EKRANI ────────────────────────────────────────────────────────────
+  if (basariEkrani) {
+    const karar = fiyatKarari();
+    return (
+      <div style={{ minHeight: "100vh", background: "#030712", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+        <div style={{ width: "100%", maxWidth: "420px" }}>
+          {/* Başlık */}
+          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+            <div style={{ width: "72px", height: "72px", borderRadius: "50%", background: "rgba(16,185,129,0.15)", border: "2px solid #10b981", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", margin: "0 auto 16px" }}>✓</div>
+            <p style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.25em", color: "#10b981", textTransform: "uppercase", marginBottom: "8px" }}>İş Kaydedildi</p>
+            <h1 style={{ fontSize: "28px", fontWeight: 900, margin: "0 0 8px" }}>Teklif Hazır!</h1>
+            {sonKayitTeklifNo && <p style={{ color: "#6b7280", fontSize: "14px" }}>Teklif No: <span style={{ color: "#fff", fontWeight: 700 }}>{sonKayitTeklifNo}</span></p>}
+            {yeniMusteriOlusturuldu && (
+              <div style={{ marginTop: "12px", background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "12px", padding: "10px 16px", fontSize: "13px", color: "#93c5fd" }}>
+                👤 <strong>{form.musteriAdi}</strong> müşteri listesine eklendi.
+              </div>
+            )}
+          </div>
+
+          {/* Rakamlar */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "24px" }}>
+            {[
+              { label: "Teklif Tutarı", value: para(hesap.satis),  color: "#10b981" },
+              { label: "Kâr",           value: para(hesap.kar),    color: "#fbbf24" },
+              { label: "Plaka",         value: `${hesap.plakaSayisi} adet`, color: "#fff" },
+              { label: "Üretim Süresi", value: `${hesap.toplamDakika.toFixed(0)} dk`, color: "#fff" },
+            ].map((k) => (
+              <div key={k.label} style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: "16px", padding: "16px" }}>
+                <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>{k.label}</p>
+                <p style={{ fontSize: "20px", fontWeight: 900, color: k.color }}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Fiyat tavsiyesi */}
+          <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: "16px", padding: "16px", marginBottom: "20px" }}>
+            <p style={{ fontSize: "15px", fontWeight: 700, color: karar.renk, marginBottom: "4px" }}>{karar.baslik}</p>
+            <p style={{ fontSize: "13px", color: "#9ca3af" }}>{karar.metin}</p>
+          </div>
+
+          {/* Aksiyon butonları */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <button onClick={whatsappGonder} style={{ width: "100%", padding: "16px", background: "#16a34a", border: "none", borderRadius: "16px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>
+              📲 WhatsApp ile Gönder
+            </button>
+            <button onClick={pdfAc} style={{ width: "100%", padding: "16px", background: "#1d4ed8", border: "none", borderRadius: "16px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>
+              📄 PDF Aç
+            </button>
+            <button onClick={tahsilatAc} style={{ width: "100%", padding: "16px", background: "#7c3aed", border: "none", borderRadius: "16px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>
+              💳 Tahsilat Oluştur
+            </button>
+            <button onClick={() => setFiyatPanelAcik(true)} style={{ width: "100%", padding: "14px", background: "#1f2937", border: "1px solid #374151", borderRadius: "16px", color: "#d1d5db", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+              💰 Fiyat Kontrol Paneli
+            </button>
+            <button onClick={teklifLinkiKopyala} style={{ width: "100%", padding: "14px", background: "#1f2937", border: "1px solid #374151", borderRadius: "16px", color: "#d1d5db", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+              🔗 Teklif Linkini Kopyala
+            </button>
+            <button onClick={() => router.push("/dashboard/isler")} style={{ width: "100%", padding: "14px", background: "transparent", border: "1px solid #374151", borderRadius: "16px", color: "#9ca3af", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
+              İşlere Dön
+            </button>
+            <button onClick={yeniIsBaslat} style={{ width: "100%", padding: "14px", background: "transparent", border: "1px dashed #374151", borderRadius: "16px", color: "#6b7280", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
+              + Yeni İş Ekle
+            </button>
+          </div>
+        </div>
+
+        {/* Fiyat paneli modal */}
+        {fiyatPanelAcik && (
+          <FiyatPanelModal
+            satirlar={fiyatSatirlari()} fiyatOverride={fiyatOverride} setFiyatOverride={setFiyatOverride}
+            toplam={fiyatPanelToplam()} kar={fiyatPanelKar()} karYuzde={fiyatPanelKarYuzde()}
+            maliyet={hesap.maliyet} karar={fiyatKarari()} kaydet={manuelFiyatlariKaydet} kapat={() => setFiyatPanelAcik(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ─── WIZARD ──────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ height: "100dvh", background: "#030712", color: "#fff", display: "flex", overflow: "hidden" }}>
+      <style>{`
+        .plaka-v2-fix input,.plaka-v2-fix select,.plaka-v2-fix textarea{color:#0f172a!important;background:#ffffff!important;opacity:1!important;-webkit-text-fill-color:#0f172a!important;}
+        .plaka-v2-fix option{color:#0f172a!important;background:#ffffff!important;}
+        .yis-input{width:100%;background:#111827;border:1.5px solid #1f2937;border-radius:12px;padding:11px 14px;color:#f9fafb;font-size:15px;outline:none;transition:border-color .15s;}
+        .yis-input:focus{border-color:#10b981;}
+        .yis-select{width:100%;background:#111827;border:1.5px solid #1f2937;border-radius:12px;padding:11px 14px;color:#f9fafb;font-size:15px;outline:none;}
+        .yis-select:focus{border-color:#10b981;}
+        .ikon-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;border-radius:16px;border:1.5px solid #1f2937;background:#111827;color:#9ca3af;cursor:pointer;transition:all .15s;text-align:center;}
+        .ikon-btn:hover{border-color:#374151;background:#1f2937;}
+        .ikon-btn.secili{border-color:#10b981;background:rgba(16,185,129,0.12);color:#10b981;}
+        .op-row{display:grid;grid-template-columns:110px 1fr 80px 90px;gap:8px;align-items:end;padding:10px 12px;border-radius:14px;border:1px solid #1f2937;background:#0a0f1a;}
+        @media(max-width:640px){.op-row{grid-template-columns:1fr 1fr;}.op-row .makine-col{grid-column:1/-1;}}
+        .ozet-kart{background:#0d1117;border:1px solid #1f2937;border-radius:16px;padding:16px;}
+      `}</style>
+
+      {/* Sol sidebar — masaüstü */}
+      <aside style={{ width: "220px", borderRight: "1px solid #1f2937", display: "flex", flexDirection: "column", flexShrink: 0 }} className="hidden md:flex">
+        <div style={{ padding: "24px 20px", borderBottom: "1px solid #1f2937" }}>
+          <p style={{ fontSize: "10px", letterSpacing: "0.25em", color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>Metrix</p>
+          <h1 style={{ fontSize: "20px", fontWeight: 900 }}>Yeni İş</h1>
+        </div>
+        <nav style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+          {adimlar.map((adim, index) => {
+            const tamamlandi = index < aktifIndex;
+            const aktif = adim.id === aktifAdim;
+            return (
+              <button key={adim.id} onClick={() => setAktifAdim(adim.id)} style={{
+                width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: "14px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", transition: "all .15s", fontSize: "14px", fontWeight: 600,
+                background: aktif ? "#10b981" : tamamlandi ? "rgba(16,185,129,0.1)" : "#0d1117",
+                border: aktif ? "1px solid #10b981" : tamamlandi ? "1px solid rgba(16,185,129,0.3)" : "1px solid #1f2937",
+                color: aktif ? "#fff" : tamamlandi ? "#6ee7b7" : "#9ca3af",
+              }}>
+                <span style={{ width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 900, flexShrink: 0, background: aktif ? "rgba(255,255,255,0.2)" : tamamlandi ? "#10b981" : "#1f2937", color: aktif ? "#fff" : tamamlandi ? "#fff" : "#6b7280" }}>
+                  {tamamlandi ? "✓" : index + 1}
+                </span>
+                {adim.label}
+              </button>
+            );
+          })}
+          <button onClick={() => setAiMode(true)} style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: "14px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", background: "rgba(16,185,129,0.05)", border: "1px solid rgba(16,185,129,0.2)", color: "#6ee7b7", fontSize: "14px", fontWeight: 600 }}>
+            <span style={{ fontSize: "16px" }}>✨</span> AI Moduna Dön
+          </button>
+        </nav>
+        {taslakKaydedildi && <p style={{ textAlign: "center", fontSize: "11px", color: "#4b5563", padding: "0 16px" }}>Taslak kaydedildi ✓</p>}
+        <div style={{ marginTop: "auto", padding: "16px", borderTop: "1px solid #1f2937" }}>
+          <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.2em", color: "#4b5563", marginBottom: "10px" }}>Canlı Özet</p>
+          {[
+            { label: "Teklif",  value: para(hesap.satis),  color: "#10b981" },
+            { label: "Maliyet", value: para(hesap.maliyet), color: "#f9fafb" },
+            { label: "Kâr",    value: para(hesap.kar),    color: "#fbbf24" },
+            { label: "Plaka",  value: `${hesap.plakaSayisi} adet`, color: "#f9fafb" },
+          ].map((s) => (
+            <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+              <span style={{ fontSize: "12px", color: "#6b7280" }}>{s.label}</span>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: s.color }}>{s.value}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: "12px 16px", borderTop: "1px solid #1f2937" }}>
+          <button onClick={() => router.push("/dashboard/isler")} style={{ width: "100%", padding: "10px", background: "#0d1117", border: "1px solid #1f2937", borderRadius: "12px", color: "#9ca3af", fontSize: "13px", cursor: "pointer" }}>
+            ← İşlere Dön
+          </button>
+        </div>
+      </aside>
+
+      {/* Ana içerik */}
+      <main ref={mainRef} style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", minHeight: 0 }}>
+
+        {/* Sticky header */}
+        <div style={{ position: "sticky", top: 0, zIndex: 1100, background: "rgba(3,7,18,0.95)", backdropFilter: "blur(16px)", borderBottom: "1px solid #1f2937" }}>
+          <div style={{ padding: "12px 16px 0" }} className="md:hidden">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+              <h1 style={{ fontSize: "17px", fontWeight: 900 }}>{adimlar[aktifIndex].label}</h1>
+              <span style={{ fontSize: "12px", color: "#6b7280" }}>{aktifIndex + 1} / {adimlar.length}</span>
+            </div>
+          </div>
+          <div style={{ padding: "0 16px 12px" }}>
+            <div style={{ display: "flex", gap: "6px" }}>
+              {adimlar.map((adim, index) => {
+                const tamamlandi = index < aktifIndex;
+                const aktif = adim.id === aktifAdim;
+                return (
+                  <button key={adim.id} onClick={() => setAktifAdim(adim.id)} style={{
+                    flex: 1, padding: "8px 4px", borderRadius: "12px", fontSize: "11px", fontWeight: 700, cursor: "pointer", transition: "all .15s",
+                    background: aktif ? "#10b981" : tamamlandi ? "rgba(16,185,129,0.1)" : "#0d1117",
+                    border: aktif ? "1px solid #10b981" : tamamlandi ? "1px solid rgba(16,185,129,0.3)" : "1px solid #1f2937",
+                    color: aktif ? "#fff" : tamamlandi ? "#6ee7b7" : "#6b7280",
+                  }}>
+                    <div>{tamamlandi ? "✓" : index + 1}</div>
+                    <div style={{ marginTop: "2px" }}>{adim.kisaLabel}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: "8px", height: "3px", borderRadius: "999px", background: "#1f2937" }}>
+              <div style={{ height: "3px", borderRadius: "999px", background: "#10b981", width: `${((aktifIndex + 1) / adimlar.length) * 100}%`, transition: "width .4s" }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Form içeriği */}
+        <div style={{ flex: 1, padding: "24px 16px 120px", maxWidth: "720px", width: "100%", margin: "0 auto" }}>
+
+          {/* ── ADIM 1: Müşteri & Konu ── */}
+          {aktifAdim === "musteri" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+              {/* Müşteri seçimi */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", padding: "20px" }}>
+                <h2 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "16px", color: "#f9fafb" }}>👤 Müşteri</h2>
+                <div style={{ position: "relative" }}>
+                  <input
+                    className="yis-input"
+                    placeholder="Müşteri adı ara veya yaz..."
+                    value={form.musteriId ? form.musteriAdi : musteriArama}
+                    onFocus={() => setMusteriListeAcik(true)}
+                    onChange={(e) => { setMusteriArama(e.target.value); setAlan("musteriId", ""); setAlan("musteriAdi", e.target.value); setMusteriListeAcik(true); }}
+                  />
+                  {form.musteriId && (
+                    <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "10px", background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: "12px", padding: "10px 14px" }}>
+                      <span style={{ color: "#10b981", fontSize: "16px" }}>✓</span>
+                      <span style={{ fontSize: "14px", fontWeight: 600, color: "#6ee7b7" }}>{form.musteriAdi}</span>
+                      <button onClick={() => { setAlan("musteriId", ""); setAlan("musteriAdi", ""); setMusteriArama(""); }} style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "16px" }}>×</button>
+                    </div>
+                  )}
+                  {musteriListeAcik && !form.musteriId && filtreliMusteriler.length > 0 && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "6px", background: "#111827", border: "1px solid #374151", borderRadius: "16px", overflow: "hidden", zIndex: 50, maxHeight: "220px", overflowY: "auto", boxShadow: "0 20px 40px rgba(0,0,0,0.5)" }}>
+                      {filtreliMusteriler.slice(0, 8).map((m) => (
+                        <button key={m.id} onClick={() => musteriSec(m)} style={{ width: "100%", padding: "12px 16px", textAlign: "left", background: "transparent", border: "none", borderBottom: "1px solid #1f2937", cursor: "pointer", color: "#f9fafb" }}
+                          onMouseOver={(e) => (e.currentTarget.style.background = "#1f2937")}
+                          onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}>
+                          <div style={{ fontSize: "14px", fontWeight: 600 }}>{m.ad}</div>
+                          {(m.telefon || m.email) && <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "2px" }}>{m.telefon || m.email}</div>}
+                        </button>
+                      ))}
+                      {form.musteriAdi.trim() && (
+                        <button onClick={() => { setMusteriListeAcik(false); }} style={{ width: "100%", padding: "12px 16px", textAlign: "left", background: "transparent", border: "none", cursor: "pointer", color: "#10b981", fontSize: "14px" }}>
+                          + "{form.musteriAdi}" yeni müşteri olarak kullan
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* İş tarihi + Ürün adı */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", padding: "20px" }}>
+                <h2 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "16px", color: "#f9fafb" }}>📋 İş Bilgisi</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "6px" }}>Ürün / Taş Adı *</p>
+                    <input className="yis-input" placeholder="örn: Calacatta Gold" value={form.urunAdi} onChange={(e) => setAlan("urunAdi", e.target.value)} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "6px" }}>İş Tarihi</p>
+                    <input type="date" className="yis-input" value={form.isTarihi} onChange={(e) => setAlan("isTarihi", e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
+              {/* İş konusu */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", padding: "20px" }}>
+                <h2 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "14px", color: "#f9fafb" }}>🔨 İş Konusu</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+                  {IS_KONULARI.map((k) => (
+                    <button key={k.id} onClick={() => setAlan("isKonusu", k.id)} className={`ikon-btn${form.isKonusu === k.id ? " secili" : ""}`}>
+                      <span style={{ fontSize: "22px" }}>{k.ikon}</span>
+                      <span style={{ fontSize: "11px", lineHeight: "1.3" }}>{k.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Malzeme tipi */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", padding: "20px" }}>
+                <h2 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "14px", color: "#f9fafb" }}>🪨 Malzeme</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", marginBottom: "14px" }}>
+                  {MALZEME_TIPLERI.map((m) => (
+                    <button key={m.id} onClick={() => setAlan("malzemeTipi", m.id)} className={`ikon-btn${form.malzemeTipi === m.id ? " secili" : ""}`}>
+                      <span style={{ fontSize: "22px" }}>{m.ikon}</span>
+                      <span style={{ fontSize: "11px" }}>{m.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Müşteri tipi */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", padding: "20px" }}>
+                <h2 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "14px", color: "#f9fafb" }}>👔 Müşteri Tipi</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                  {MUSTERI_TIPLERI.map((t) => (
+                    <button key={t.id} onClick={() => setAlan("musteriTipi", t.id)} className={`ikon-btn${form.musteriTipi === t.id ? " secili" : ""}`}>
+                      <span style={{ fontSize: "22px" }}>{t.ikon}</span>
+                      <span style={{ fontSize: "11px" }}>{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* İleri butonu (masaüstü) */}
+              <div style={{ display: "flex", justifyContent: "flex-end" }} className="hidden md:flex">
+                <button onClick={() => sonrakiAdim && setAktifAdim(sonrakiAdim)} style={{ padding: "14px 36px", background: "#10b981", border: "none", borderRadius: "16px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>
+                  İleri →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── ADIM 2: Ölçü & İşçilik ── */}
+          {aktifAdim === "olcuiscilik" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+              {/* Plaka bilgisi */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", padding: "20px" }}>
+                <h2 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "16px", color: "#f9fafb" }}>🪨 Plaka Bilgisi</h2>
+                <button onClick={() => setPlakaAcik(true)} style={{ width: "100%", padding: "14px", background: "#1d4ed8", border: "none", borderRadius: "14px", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", marginBottom: "14px" }}>
+                  📐 Plaka Planlayıcı Aç
+                </button>
+                {form.plakaLayoutJson && (
+                  <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: "12px", padding: "10px 14px", display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", fontSize: "13px", color: "#6ee7b7" }}>
+                    <span>✓</span> Plaka planı aktarıldı — {hesap.plakaSayisi} plaka
+                  </div>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                  {[
+                    { label: "Plaka Fiyatı €",      key: "plakaFiyatiEuro"    },
+                    { label: "Kur (₺/€)",           key: "kullanilanKur"      },
+                    { label: "Plaka Sayısı",         key: "manuelPlakaSayisi" },
+                    { label: "Plaka Genişlik cm",    key: "plakaGenislikCm"   },
+                    { label: "Plaka Yükseklik cm",   key: "plakaUzunlukCm"    },
+                    { label: "Plakadan Alınan Mtül", key: "plakadanAlinanMtul" },
+                  ].map((f) => (
+                    <div key={f.key}>
+                      <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "5px" }}>{f.label}</p>
+                      <input className="yis-input" style={{ fontSize: "14px", padding: "9px 12px" }} value={(form as any)[f.key]} onChange={(e) => setAlan(f.key, e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+                {hesap.malzeme > 0 && (
+                  <div style={{ marginTop: "14px", background: "#0d1117", border: "1px solid #1f2937", borderRadius: "14px", padding: "14px" }}>
+                    <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Malzeme Maliyeti</p>
+                    <p style={{ fontSize: "22px", fontWeight: 900, color: "#10b981" }}>{para(hesap.malzeme)}</p>
+                    <p style={{ fontSize: "11px", color: "#4b5563", marginTop: "2px" }}>{hesap.plakaSayisi} plaka × {form.plakaFiyatiEuro}€ × {form.kullanilanKur}₺</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Operasyon satırları */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", padding: "20px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#f9fafb" }}>✂️ İşçilik Kalemleri</h2>
+                  <button onClick={() => setGelismisAcik(!gelismisAcik)} style={{ padding: "6px 14px", background: gelismisAcik ? "rgba(16,185,129,0.1)" : "#1f2937", border: gelismisAcik ? "1px solid rgba(16,185,129,0.4)" : "1px solid #374151", borderRadius: "100px", color: gelismisAcik ? "#10b981" : "#9ca3af", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+                    {gelismisAcik ? "▲ Gelişmiş" : "▼ Gelişmiş"}
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {OPERASYON_SATIRLARI.map((row) => (
+                    <OperasyonSatiri
+                      key={row.label}
+                      label={row.label}
+                      mtul={(form as any)[row.mtulKey]}
+                      setMtul={(v: string) => setAlan(row.mtulKey, v)}
+                      dakika={(form as any)[row.dakikaKey]}
+                      setDakika={(v: string) => setAlan(row.dakikaKey, v)}
+                      makineId={(form as any)[row.makineKey]}
+                      setMakineId={(v: string) => setAlan(row.makineKey, v)}
+                      makineler={makineler}
+                      gelismis={gelismisAcik}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Kâr yüzdesi */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", padding: "20px" }}>
+                <h2 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "14px", color: "#f9fafb" }}>📊 Kâr Hedefi</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "6px" }}>Kâr Yüzdesi (%)</p>
+                    <input className="yis-input" type="number" value={form.karYuzdesi} onChange={(e) => setAlan("karYuzdesi", e.target.value)} />
+                  </div>
+                  {hesap.satis > 0 && (
+                    <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "12px", padding: "12px 14px" }}>
+                      <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Beklenen Teklif</p>
+                      <p style={{ fontSize: "20px", fontWeight: 900, color: "#10b981" }}>{para(hesap.satis)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* İleri butonu (masaüstü) */}
+              <div style={{ display: "flex", justifyContent: "flex-end" }} className="hidden md:flex">
+                <button onClick={() => sonrakiAdim && setAktifAdim(sonrakiAdim)} style={{ padding: "14px 36px", background: "#10b981", border: "none", borderRadius: "16px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>
+                  İleri →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── ADIM 3: Özet & Fiyat ── */}
+          {aktifAdim === "ozet" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div>
+                <h2 style={{ fontSize: "20px", fontWeight: 900 }}>Özet & Kaydet</h2>
+                <p style={{ fontSize: "14px", color: "#6b7280", marginTop: "4px" }}>Son kontrol yap, kaydet</p>
+              </div>
+
+              {/* İş özeti */}
+              <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "24px", overflow: "hidden" }}>
+                {[
+                  { label: "Müşteri",      value: form.musteriAdi || "—" },
+                  { label: "Ürün / Taş",   value: form.urunAdi    || "—" },
+                  { label: "Malzeme",      value: form.malzemeTipi        },
+                  { label: "Müşteri Tipi", value: form.musteriTipi        },
+                  { label: "İş Tarihi",    value: form.isTarihi           },
+                ].map((s, i) => (
+                  <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", borderBottom: i < 4 ? "1px solid #1f2937" : "none" }}>
+                    <span style={{ fontSize: "13px", color: "#6b7280" }}>{s.label}</span>
+                    <span style={{ fontSize: "14px", fontWeight: 600, color: "#f9fafb" }}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ana rakam */}
+              <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: "20px", padding: "20px", textAlign: "center" }}>
+                <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "6px" }}>Teklif Tutarı</p>
+                <p style={{ fontSize: "36px", fontWeight: 900, color: "#10b981" }}>{para(hesap.satis)}</p>
+                <p style={{ fontSize: "13px", color: "#4b5563", marginTop: "4px" }}>%{form.karYuzdesi} kâr ile</p>
+              </div>
+
+              {/* Rakam kartları */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {[
+                  { label: "Toplam Maliyet", value: para(hesap.maliyet),  color: "#f9fafb" },
+                  { label: "Kâr",            value: para(hesap.kar),      color: "#fbbf24" },
+                  { label: "Malzeme",        value: para(hesap.malzeme),  color: "#f9fafb" },
+                  { label: "İşçilik",        value: para(hesap.iscilik),  color: "#f9fafb" },
+                  { label: "Plaka Sayısı",   value: `${hesap.plakaSayisi} adet`, color: "#f9fafb" },
+                  { label: "Üretim Süresi",  value: `${hesap.toplamDakika.toFixed(0)} dk`, color: "#f9fafb" },
+                ].map((k) => (
+                  <div key={k.label} className="ozet-kart">
+                    <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>{k.label}</p>
+                    <p style={{ fontSize: "18px", fontWeight: 900, color: k.color }}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Birim fiyatlar */}
+              {fiyatSatirlari().length > 0 && (
+                <div style={{ background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "20px", overflow: "hidden" }}>
+                  <div style={{ padding: "14px 18px", borderBottom: "1px solid #1f2937" }}>
+                    <p style={{ fontSize: "13px", fontWeight: 700, color: "#9ca3af" }}>Müşteriye Birim Fiyatlar</p>
+                  </div>
+                  {fiyatSatirlari().map((r: any) => (
+                    <div key={r.ad} style={{ display: "flex", justifyContent: "space-between", padding: "10px 18px", borderBottom: "1px solid #1f2937" }}>
+                      <span style={{ fontSize: "13px", color: "#6b7280" }}>{r.ad}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 700 }}>{para(r.birim)} / mtül</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Notlar */}
+              <div>
+                <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "6px" }}>Notlar</p>
+                <textarea className="yis-input" style={{ height: "100px", resize: "none" }} value={form.notlar} onChange={(e) => setAlan("notlar", e.target.value)} placeholder="Özel notlar..." />
+              </div>
+
+              {/* Kaydet butonu (masaüstü) */}
+              <div style={{ display: "flex", gap: "12px" }} className="hidden md:flex">
+                {oncekiAdim && (
+                  <button onClick={() => setAktifAdim(oncekiAdim)} style={{ padding: "14px 24px", background: "transparent", border: "1px solid #374151", borderRadius: "16px", color: "#9ca3af", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
+                    ← Geri
+                  </button>
+                )}
+                <button onClick={kaydet} disabled={kaydediliyor} style={{ flex: 1, padding: "16px 24px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "16px", color: "#fff", fontSize: "16px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer", boxShadow: kaydediliyor ? "none" : "0 8px 32px rgba(16,185,129,0.35)" }}>
+                  {kaydediliyor ? "Kaydediliyor..." : "✓ Hesapla & Kaydet"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Mobil alt buton çubuğu */}
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 1200, padding: "12px 16px", paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)", background: "rgba(3,7,18,0.95)", backdropFilter: "blur(16px)", borderTop: "1px solid #1f2937", display: "flex", gap: "10px" }} className="md:hidden">
+          <button onClick={() => oncekiAdim ? setAktifAdim(oncekiAdim) : router.push("/dashboard/isler")} style={{ padding: "14px 20px", background: "#0d1117", border: "1px solid #374151", borderRadius: "14px", color: "#d1d5db", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+            {oncekiAdim ? "← Geri" : "← Dön"}
+          </button>
+          {sonrakiAdim ? (
+            <button onClick={() => setAktifAdim(sonrakiAdim)} style={{ flex: 1, padding: "14px", background: "#10b981", border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>
+              İleri →
+            </button>
+          ) : (
+            <button onClick={kaydet} disabled={kaydediliyor} style={{ flex: 1, padding: "14px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer" }}>
+              {kaydediliyor ? "Kaydediliyor..." : "✓ Kaydet"}
+            </button>
+          )}
+        </div>
+      </main>
+
+      {/* Plaka Planlayıcı Modal */}
+      {plakaAcik && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: "0" }} onClick={() => setPlakaAcik(false)}>
+          <div className="plaka-v2-fix" style={{ height: "100dvh", width: "100%", overflowY: "auto", background: "#030712", padding: "16px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ position: "sticky", top: 0, zIndex: 30, marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1f2937", paddingBottom: "12px", background: "rgba(3,7,18,0.95)", backdropFilter: "blur(16px)" }}>
+              <div>
+                <h2 style={{ fontSize: "20px", fontWeight: 900, color: "#fff" }}>Plaka Planlayıcı</h2>
+                <p style={{ fontSize: "13px", color: "#6b7280" }}>Ölçüler forma aktarılacak</p>
+              </div>
+              <button onClick={() => setPlakaAcik(false)} style={{ padding: "8px 16px", background: "#1f2937", border: "1px solid #374151", borderRadius: "12px", color: "#d1d5db", fontSize: "14px", cursor: "pointer" }}>Kapat</button>
+            </div>
+            <PlakaPlanlayiciV2 embedded
+              initialProductName={form.urunAdi} initialPlakaGenislik={form.plakaGenislikCm}
+              initialPlakaYukseklik={form.plakaUzunlukCm} initialPlakaFiyati={form.plakaFiyatiEuro}
+              initialRows={plakaInitialRows} onApply={aiAktar} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Operasyon Satırı Bileşeni ────────────────────────────────────────────────
+function OperasyonSatiri({ label, mtul, setMtul, dakika, setDakika, makineId, setMakineId, makineler, gelismis }: any) {
+  const aktif = n(mtul) > 0;
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: gelismis ? "120px 90px 90px 1fr" : "1fr 90px",
+      gap: "8px", alignItems: "end",
+      padding: "10px 12px", borderRadius: "14px",
+      border: `1px solid ${aktif ? "rgba(16,185,129,0.25)" : "#1f2937"}`,
+      background: aktif ? "rgba(16,185,129,0.04)" : "#0a0f1a",
+      transition: "all .15s",
+    }}>
+      <div>
+        <p style={{ fontSize: "11px", color: aktif ? "#6ee7b7" : "#6b7280", marginBottom: "4px", fontWeight: aktif ? 600 : 400 }}>{label}</p>
+        <input
+          value={mtul}
+          onChange={(e) => setMtul(e.target.value)}
+          onBlur={(e) => setMtul(normalizeMtulDisplay(e.target.value))}
+          placeholder="0.00 mtül"
+          style={{ width: "100%", background: "#111827", border: `1.5px solid ${aktif ? "rgba(16,185,129,0.4)" : "#1f2937"}`, borderRadius: "10px", padding: "8px 10px", color: "#f9fafb", fontSize: "14px", outline: "none" }}
+        />
+      </div>
+      {gelismis && (
+        <>
+          <div>
+            <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>dk/mtül</p>
+            <input
+              value={dakika}
+              onChange={(e) => setDakika(e.target.value)}
+              placeholder="0"
+              style={{ width: "100%", background: "#111827", border: "1.5px solid #1f2937", borderRadius: "10px", padding: "8px 10px", color: "#f9fafb", fontSize: "14px", outline: "none" }}
+            />
+          </div>
+          <div>
+            <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>Makine</p>
+            <select
+              value={makineId}
+              onChange={(e) => setMakineId(e.target.value)}
+              style={{ width: "100%", background: "#111827", border: "1.5px solid #1f2937", borderRadius: "10px", padding: "8px 6px", color: "#f9fafb", fontSize: "12px", outline: "none" }}
+            >
+              {makineler.length === 0 && <option value="">Makine yok</option>}
+              {makineler.map((m: any) => (
+                <option key={m.id} value={m.id}>
+                  {m.makineAdi} · {Number(m.dakikalikMaliyet ?? m.dkMaliyet ?? m.dakikaMaliyet ?? m.hesaplananDakikaMaliyeti ?? 0).toFixed(1)}₺/dk
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+      {!gelismis && (
+        <div style={{ textAlign: "right" }}>
+          <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "4px" }}>dk/mtül</p>
+          <input
+            value={dakika}
+            onChange={(e) => setDakika(e.target.value)}
+            placeholder="0"
+            style={{ width: "100%", background: "#111827", border: "1.5px solid #1f2937", borderRadius: "10px", padding: "8px 10px", color: "#f9fafb", fontSize: "14px", outline: "none" }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Fiyat Kontrol Paneli Modal ───────────────────────────────────────────────
+function FiyatPanelModal({ satirlar, fiyatOverride, setFiyatOverride, toplam, kar, karYuzde, maliyet, karar, kaydet, kapat }: any) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+      <div style={{ width: "100%", maxWidth: "620px", background: "#0a0f1a", border: "1px solid #1f2937", borderRadius: "28px", padding: "24px", overflowY: "auto", maxHeight: "90vh", color: "#fff" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
+          <div>
+            <p style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.2em", color: "#a78bfa", textTransform: "uppercase", marginBottom: "6px" }}>Fiyat Kontrol</p>
+            <h2 style={{ fontSize: "22px", fontWeight: 900 }}>Fiyat Kontrol Paneli</h2>
+          </div>
+          <button onClick={kapat} style={{ padding: "8px 16px", background: "#1f2937", border: "1px solid #374151", borderRadius: "12px", color: "#d1d5db", fontSize: "13px", cursor: "pointer" }}>Kapat</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "20px" }}>
+          {[
+            { label: "Satış",   value: toplam, color: "#6ee7b7" },
+            { label: "Maliyet", value: maliyet, color: "#f9fafb" },
+            { label: `Kâr · %${Number(karYuzde).toFixed(1)}`, value: kar, color: "#fbbf24" },
+          ].map((k) => (
+            <div key={k.label} style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: "16px", padding: "14px" }}>
+              <p style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>{k.label}</p>
+              <p style={{ fontSize: "16px", fontWeight: 900, color: k.color }}>{Number(k.value).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ border: "1px solid #1f2937", borderRadius: "16px", overflow: "hidden", marginBottom: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 120px 100px", padding: "10px 14px", background: "#111827", fontSize: "11px", color: "#6b7280", fontWeight: 700 }}>
+            <span>Kalem</span><span style={{ textAlign: "right" }}>Mtül</span><span style={{ textAlign: "right" }}>Kts</span><span style={{ textAlign: "right" }}>Birim</span><span style={{ textAlign: "right" }}>Toplam</span>
+          </div>
+          {satirlar.map((r: any) => (
+            <div key={r.ad} style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 120px 100px", padding: "10px 14px", borderTop: "1px solid #1f2937", fontSize: "13px", alignItems: "center" }}>
+              <span style={{ fontWeight: 600 }}>{r.ad}</span>
+              <span style={{ textAlign: "right", color: "#9ca3af" }}>{r.mtul.toFixed(2)}</span>
+              <span style={{ textAlign: "right", color: "#9ca3af" }}>{r.katsayi}</span>
+              <div style={{ textAlign: "right" }}>
+                <input
+                  value={fiyatOverride[r.ad] ?? r.birim.toFixed(2)}
+                  onChange={(e) => setFiyatOverride({ ...fiyatOverride, [r.ad]: Number(e.target.value || 0) })}
+                  style={{ width: "80px", background: "#1f2937", border: "1px solid #374151", borderRadius: "8px", padding: "4px 8px", color: "#fff", textAlign: "right", fontSize: "13px", outline: "none" }}
+                />
+                <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "4px" }}>₺</span>
+              </div>
+              <span style={{ textAlign: "right", fontWeight: 700 }}>
+                {((fiyatOverride[r.ad] ?? r.birim) * r.mtul).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺
+              </span>
+            </div>
+          ))}
+        </div>
+        <button onClick={kaydet} style={{ width: "100%", padding: "14px", background: "#10b981", border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer", marginBottom: "14px" }}>
+          💾 Manuel Fiyatları Kaydet
+        </button>
+        <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: "16px", padding: "16px" }}>
+          <p style={{ fontSize: "16px", fontWeight: 700, color: karar.renk, marginBottom: "6px" }}>{karar.baslik}</p>
+          <p style={{ fontSize: "13px", color: "#9ca3af" }}>{karar.metin}</p>
+        </div>
+      </div>
+    </div>
+  );
+}

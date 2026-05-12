@@ -1,6 +1,7 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
+import { NextResponse } from "next/server";
 
 
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {

@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 
-if (process.env.NODE_ENV !== "production") type PhaseKey = "OLCU" | "IMALAT" | "MONTAJ";
+type PhaseKey = "OLCU" | "IMALAT" | "MONTAJ";
 
 async function ownerAtolyeIdAl() {
   const cookieStore = await cookies();

@@ -38,6 +38,10 @@ export async function GET(
       include: { atolye: true },
     })
 
+    if (!is) {
+      return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
+    }
+
     
     // 🔥 PDF açıldı event
     await prisma.teklifEvent.create({
@@ -46,10 +50,6 @@ export async function GET(
         event: "pdf_acildi",
       },
     });
-
-    if (!is) {
-      return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
-    }
 
     await prisma.teklifEvent.create({
       data: {

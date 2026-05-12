@@ -12,6 +12,9 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
   try {
     const auth = await getAtolyeAuth()
   if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
+    const atolyeId = auth.atolyeId
+    const atolye = await prisma.atolye.findUnique({ where: { id: atolyeId } })
+    if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
 
     const { id } = await context.params
     const body = await req.json()

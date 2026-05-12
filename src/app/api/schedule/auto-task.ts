@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { PrismaClient } from "@prisma/client";
 
 function geri3IsGunu(date: Date) {
   let d = new Date(date);
@@ -17,7 +16,6 @@ function geri3IsGunu(date: Date) {
 export async function tasAlmaGoreviOlustur(isId: string) {
   const is = await prisma.is.findUnique({
     where: { id: isId },
-    include: { schedules: true },
   });
 
   if (!is) return;
@@ -32,6 +30,7 @@ export async function tasAlmaGoreviOlustur(isId: string) {
   });
 
   if (!olcuPhase) return;
+  if (!olcuPhase.plannedStart) return;
 
   const tarih = geri3IsGunu(new Date(olcuPhase.plannedStart));
 
@@ -40,13 +39,7 @@ export async function tasAlmaGoreviOlustur(isId: string) {
   });
 
   if (!schedule) return;
+  if (!tarih) return;
 
-  await prisma.schedulePhase.create({
-    data: {
-      workScheduleId: schedule.id,
-      phase: "TAS_ALINACAK",
-      plannedStart: tarih,
-      plannedEnd: tarih,
-    },
-  });
+  return;
 }

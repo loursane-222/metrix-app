@@ -12,7 +12,7 @@ function Input({ label, value, onChange }: any) {
 }
 
 
-function ParaInput({ label, fieldKey, ort, value, onChange }: { label: string; fieldKey: string; ort?: number; value: string; onChange: (key: string, val: string) => void }) {
+function ParaInput({ label, fieldKey, ort, value, onChange }: { label: string; fieldKey: keyof FormState; ort?: number; value: string; onChange: (key: keyof FormState, val: string) => void }) {
   const display = tlInput(value)
   const hasOrt = ort && ort > 0 && String(Math.round(ort)) !== value.replace(/\./g, '')
   return (

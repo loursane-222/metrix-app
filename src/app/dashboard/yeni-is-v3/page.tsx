@@ -977,7 +977,7 @@ export default function YeniIsV3Page() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end" }} className="desktop-sidebar" style2="">
+              <div style={{ display: "flex", justifyContent: "flex-end" }} className="desktop-sidebar">
                 <button onClick={() => sonraki && setAktifAdim(sonraki)} style={{ padding: "13px 32px", background: "#10b981", border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>İleri →</button>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/activityLogger";
 import { NextRequest, NextResponse } from "next/server";
 
 
