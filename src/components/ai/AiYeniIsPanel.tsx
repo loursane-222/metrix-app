@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizeParsedOfferResult } from "@/lib/offer-ai-contract";
 import { useRef, useState } from "react";
 
 type Props = {
@@ -70,7 +71,7 @@ export default function AiYeniIsPanel({ onApply, onManual }: Props) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  const parsed = sonuc?.sonuc || sonuc;
+  const parsed = sonuc ? normalizeParsedOfferResult(sonuc) : null;
   const kontrol = sonuc?.sistemKontrol;
   const plakaFiyati = Number(parsed?.malzeme?.plakaFiyatiEuro || 0);
   const plakaSayisi = Number(layout?.plakaSayisi || 0);
@@ -204,7 +205,6 @@ export default function AiYeniIsPanel({ onApply, onManual }: Props) {
 
   function uygula() {
     if (!sonuc) return;
-    console.log("LAYOUT DEBUG:", layout);
 
 const plakaSayisiFix =
   layout?.plakaSayisi ||
