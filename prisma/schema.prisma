@@ -284,6 +284,9 @@ model SchedulePhase {
   overrideNote String?
   notes        String?
 
+  photoUrl        String?
+  photoUploadedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

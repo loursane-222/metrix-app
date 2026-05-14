@@ -244,6 +244,7 @@ export async function togglePhaseCompletion(data: {
   completedBy?: string;
   overrideNote?: string;
   kirilanTasPlaka?: number;
+  photoUrl?: string;
 }) {
   const auth = await authBilgisiAl();
   if (!auth.atolyeId || !auth.userId) throw new Error("Yetkisiz");
@@ -330,6 +331,10 @@ export async function togglePhaseCompletion(data: {
       completedBy: data.isCompleted ? userPersonel.id : null,
       isOverridden: !!data.overrideNote,
       overrideNote: data.overrideNote ?? null,
+      ...(data.photoUrl !== undefined && {
+        photoUrl: data.photoUrl || null,
+        photoUploadedAt: data.photoUrl ? new Date() : null,
+      }),
     },
   });
 

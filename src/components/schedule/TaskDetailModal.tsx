@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { togglePhaseCompletion } from "@/app/actions/schedule";
@@ -23,7 +23,6 @@ function delayDays(v: any, completed: boolean) {
   const today = dayjs().startOf("day");
   return today.isAfter(planned) ? today.diff(planned, "day") : 0;
 }
-
 
 function PlakaLayoutPreview({ job }: { job: any }) {
   const layout = job?.plakaLayoutJson;
@@ -90,6 +89,13 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
   const [notesDraft, setNotesDraft] = useState(schedule?.notes || job?.notlar || "");
   const [selectedPersonelIds, setSelectedPersonelIds] = useState<string[]>(initialIds);
 
+  // ── Ölçü fotoğraf state ────────────────────────────────────────────────────
+  const [olcuPhotoUrl, setOlcuPhotoUrl] = useState<string>(phaseRow?.photoUrl || "");
+  const [olcuPhotoUploading, setOlcuPhotoUploading] = useState(false);
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputChangeRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     fetch("/api/personel", { cache: "no-store" })
       .then((r) => r.json())
@@ -107,8 +113,29 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
   const saat = toplamDakika > 0 ? Math.floor(toplamDakika / 60) : 0;
   const dakika = toplamDakika > 0 ? Math.round(toplamDakika % 60) : 0;
 
+  // Mevcut kayıtlı fotoğraf (tamamlanmış ölçülerde)
+  const savedPhotoUrl = phaseRow?.photoUrl || "";
+  const displayPhotoUrl = olcuPhotoUrl || savedPhotoUrl;
+
   function togglePersonel(id: string) {
     setSelectedPersonelIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  // ── Cloudinary upload ──────────────────────────────────────────────────────
+  async function uploadOlcuPhoto(file: File) {
+    setOlcuPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/uploads/plan", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || !json.file?.url) throw new Error(json.hata || "Upload başarısız");
+      setOlcuPhotoUrl(json.file.url);
+    } catch (e: any) {
+      alert(e.message || "Fotoğraf yüklenemedi");
+    } finally {
+      setOlcuPhotoUploading(false);
+    }
   }
 
   async function saveFullEdit() {
@@ -140,7 +167,11 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
     if (!phaseRow?.id) return;
     setSaving(true);
     try {
-      await togglePhaseCompletion({ schedulePhaseId: phaseRow.id, isCompleted: true });
+      await togglePhaseCompletion({
+        schedulePhaseId: phaseRow.id,
+        isCompleted: true,
+        ...(phase === "OLCU" && olcuPhotoUrl ? { photoUrl: olcuPhotoUrl } : {}),
+      });
       onUpdated();
     } catch (e: any) {
       alert(e?.message || "Bu görevi tamamlandı yapma yetkiniz olmayabilir.");
@@ -150,168 +181,335 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 p-0 backdrop-blur-md md:items-center md:p-5">
-      <div className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[30px] border border-white/10 bg-[#08111f] text-white shadow-2xl md:max-h-[86dvh] md:rounded-[30px]">
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 p-5">
-          <div>
-            <div className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-1.5 text-sm font-black ${meta.bg} ${meta.text} ${meta.border}`}>
-              <span>{meta.icon}</span>
-              <span>{meta.label}</span>
+    <>
+      <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 p-0 backdrop-blur-md md:items-center md:p-5">
+        <div className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[30px] border border-white/10 bg-[#08111f] text-white shadow-2xl md:max-h-[86dvh] md:rounded-[30px]">
+
+          {/* Header */}
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 p-5">
+            <div>
+              <div className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-1.5 text-sm font-black ${meta.bg} ${meta.text} ${meta.border}`}>
+                <span>{meta.icon}</span>
+                <span>{meta.label}</span>
+              </div>
+              <h2 className="mt-3 text-2xl font-black tracking-tight">{job?.musteriAdi || task?.title || "İsimsiz iş"}</h2>
+              <p className="mt-1 text-sm text-slate-400">{job?.urunAdi || task?.subtitle || "Ürün bilgisi yok"}</p>
             </div>
-            <h2 className="mt-3 text-2xl font-black tracking-tight">{job?.musteriAdi || task?.title || "İsimsiz iş"}</h2>
-            <p className="mt-1 text-sm text-slate-400">{job?.urunAdi || task?.subtitle || "Ürün bilgisi yok"}</p>
+            <button onClick={onClose} className="rounded-2xl bg-white/10 px-4 py-2 text-sm font-bold hover:bg-white/15">
+              Kapat
+            </button>
           </div>
 
-          <button onClick={onClose} className="rounded-2xl bg-white/10 px-4 py-2 text-sm font-bold hover:bg-white/15">
-            Kapat
-          </button>
-        </div>
+          {/* Body */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="grid gap-4 md:grid-cols-[1fr_0.8fr]">
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <div className="grid gap-4 md:grid-cols-[1fr_0.8fr]">
-            <div className="space-y-4">
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Planlanan Tarih</div>
-                <div className="mt-2 text-xl font-black">{fmtDate(phaseRow?.plannedStart)}</div>
+              {/* Sol kolon */}
+              <div className="space-y-4">
+                <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Planlanan Tarih</div>
+                  <div className="mt-2 text-xl font-black">{fmtDate(phaseRow?.plannedStart)}</div>
+                  {gecikme > 0 && (
+                    <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-300">
+                      {gecikme} gün gecikti
+                    </div>
+                  )}
+                  {editMode && (
+                    <input
+                      type="date"
+                      value={plannedDate}
+                      onChange={(e) => setPlannedDate(e.target.value)}
+                      className="mt-4 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+                    />
+                  )}
+                </div>
 
-                {gecikme > 0 && (
-                  <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-300">
-                    {gecikme} gün gecikti
+                <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Personel</div>
+                  {!editMode ? (
+                    <>
+                      <div className="mt-2 text-lg font-black">{assignedText}</div>
+                      <p className="mt-2 text-sm text-slate-400">Tamamlama yetkisi atanmış personel kuralıyla çalışır.</p>
+                    </>
+                  ) : (
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      {personeller.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-slate-400">Personel bulunamadı.</div>
+                      ) : (
+                        personeller.map((p) => {
+                          const active = selectedPersonelIds.includes(p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => togglePersonel(p.id)}
+                              className={[
+                                "rounded-2xl border p-3 text-left transition",
+                                active ? "border-blue-500 bg-blue-500/15" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]",
+                              ].join(" ")}
+                            >
+                              <div className="font-black">{p.ad} {p.soyad}</div>
+                              <div className="mt-1 text-xs text-slate-400">{p.gorevi || "Görev yok"}</div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                    {phase === "OLCU" || phase === "MONTAJ" ? "Adres / Notlar" : "İş Notları"}
                   </div>
-                )}
-
-                {editMode && (
-                  <input
-                    type="date"
-                    value={plannedDate}
-                    onChange={(e) => setPlannedDate(e.target.value)}
-                    className="mt-4 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none"
-                  />
-                )}
+                  {!editMode ? (
+                    <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-300">
+                      {schedule?.notes || job?.notlar || "Not/adres bilgisi girilmemiş."}
+                    </div>
+                  ) : (
+                    <textarea
+                      value={notesDraft}
+                      onChange={(e) => setNotesDraft(e.target.value)}
+                      rows={5}
+                      placeholder="Adres, özel not, müşteri talebi..."
+                      className="mt-4 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                    />
+                  )}
+                </div>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Personel</div>
+              {/* Sağ kolon */}
+              <div className="space-y-4">
 
-                {!editMode ? (
-                  <>
-                    <div className="mt-2 text-lg font-black">{assignedText}</div>
-                    <p className="mt-2 text-sm text-slate-400">Tamamlama yetkisi atanmış personel kuralıyla çalışır.</p>
-                  </>
-                ) : (
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    {personeller.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-slate-400">Personel bulunamadı.</div>
-                    ) : (
-                      personeller.map((p) => {
-                        const active = selectedPersonelIds.includes(p.id);
-                        return (
+                {/* ── ÖLÇÜ: Fotoğraf Yükleme ─────────────────────────────── */}
+                {phase === "OLCU" && (
+                  <div className="rounded-3xl border border-blue-500/20 bg-blue-500/[0.04] p-5">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-300 mb-3">
+                      Ölçü Fotoğrafı
+                    </div>
+
+                    {/* Fotoğraf var → önizleme */}
+                    {displayPhotoUrl ? (
+                      <div className="relative">
+                        <button
+                          onClick={() => setPhotoPreviewOpen(true)}
+                          className="block w-full overflow-hidden rounded-2xl border border-blue-400/20 hover:border-blue-400/40 transition"
+                        >
+                          <img
+                            src={displayPhotoUrl}
+                            alt="Ölçü fotoğrafı"
+                            className="w-full object-cover"
+                            style={{ maxHeight: 180 }}
+                          />
+                        </button>
+
+                        {/* Küçüt + tam ekran hint */}
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-[11px] text-blue-300/70">
+                            {savedPhotoUrl && !olcuPhotoUrl ? "Kayıtlı fotoğraf" : "Yeni fotoğraf"}
+                          </span>
                           <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => togglePersonel(p.id)}
-                            className={[
-                              "rounded-2xl border p-3 text-left transition",
-                              active ? "border-blue-500 bg-blue-500/15" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]",
-                            ].join(" ")}
+                            onClick={() => setPhotoPreviewOpen(true)}
+                            className="rounded-lg bg-blue-500/10 px-2 py-1 text-[10px] font-bold text-blue-300 hover:bg-blue-500/20 transition"
                           >
-                            <div className="font-black">{p.ad} {p.soyad}</div>
-                            <div className="mt-1 text-xs text-slate-400">{p.gorevi || "Görev yok"}</div>
+                            Tam Ekran ↗
                           </button>
-                        );
-                      })
+                        </div>
+
+                        {/* Değiştir (tamamlanmamışsa) */}
+                        {!phaseRow?.isCompleted && (
+                          <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-white/5 px-4 py-2.5 text-xs font-bold text-blue-300 hover:bg-white/10 transition">
+                            {olcuPhotoUploading ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                                Yükleniyor...
+                              </>
+                            ) : (
+                              <>📷 Fotoğrafı Değiştir</>
+                            )}
+                            <input
+                              ref={fileInputChangeRef}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              disabled={olcuPhotoUploading}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) uploadOlcuPhoto(f);
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ) : (
+                      /* Fotoğraf yok → upload alanı */
+                      <label className={[
+                        "flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-8 text-center transition",
+                        olcuPhotoUploading
+                          ? "border-blue-400/40 bg-blue-500/5"
+                          : "border-blue-400/20 bg-black/20 hover:border-blue-400/40 hover:bg-blue-500/5",
+                      ].join(" ")}>
+                        {olcuPhotoUploading ? (
+                          <>
+                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                            <div className="mt-3 text-sm font-bold text-blue-300">Yükleniyor...</div>
+                            <div className="mt-1 text-xs text-slate-500">Lütfen bekleyin</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-2xl">
+                              📷
+                            </div>
+                            <div className="mt-3 text-sm font-bold text-blue-300">Ölçü Fotoğrafı Yükle</div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              JPG, PNG, HEIC · Maks 15 MB
+                            </div>
+                            <div className="mt-2 rounded-xl bg-blue-500/10 px-3 py-1.5 text-[11px] text-blue-400">
+                              Kamera veya galeride seç
+                            </div>
+                          </>
+                        )}
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          disabled={olcuPhotoUploading}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) uploadOlcuPhoto(f);
+                          }}
+                        />
+                      </label>
+                    )}
+
+                    {/* Tamamlanmış ölçü bilgisi */}
+                    {phaseRow?.isCompleted && phaseRow?.photoUploadedAt && (
+                      <div className="mt-3 rounded-2xl bg-blue-500/5 px-3 py-2">
+                        <p className="text-[11px] text-blue-300/70">
+                          Yüklenme: {dayjs(phaseRow.photoUploadedAt).format("DD MMM YYYY HH:mm")}
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                  {phase === "OLCU" || phase === "MONTAJ" ? "Adres / Notlar" : "İş Notları"}
-                </div>
+                {/* İmalat bilgileri */}
+                {phase === "IMALAT" && (
+                  <>
+                    <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5">
+                      <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Hesaplanan Süre</div>
+                      <div className="mt-2 text-3xl font-black text-amber-200">{toplamDakika > 0 ? `${Math.round(toplamDakika)} dk` : "Süre yok"}</div>
+                      {toplamDakika > 0 && <div className="mt-1 text-sm text-amber-100/70">{saat} saat {dakika} dakika</div>}
+                    </div>
 
-                {!editMode ? (
-                  <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-300">
-                    {schedule?.notes || job?.notlar || "Not/adres bilgisi girilmemiş."}
-                  </div>
-                ) : (
-                  <textarea
-                    value={notesDraft}
-                    onChange={(e) => setNotesDraft(e.target.value)}
-                    rows={5}
-                    placeholder="Adres, özel not, müşteri talebi..."
-                    className="mt-4 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-                  />
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                      <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Plaka Yerleşimi</div>
+                      <PlakaLayoutPreview job={job} />
+                    </div>
+                  </>
                 )}
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              {phase === "IMALAT" && (
-                <>
-                  <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5">
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Hesaplanan Süre</div>
-                    <div className="mt-2 text-3xl font-black text-amber-200">{toplamDakika > 0 ? `${Math.round(toplamDakika)} dk` : "Süre yok"}</div>
-                    {toplamDakika > 0 && <div className="mt-1 text-sm text-amber-100/70">{saat} saat {dakika} dakika</div>}
+                {/* Montaj (fotoğraf gelecek faz) */}
+                {phase === "MONTAJ" && (
+                  <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Montaj Kanıt Görselleri</div>
+                    <div className="mt-3 flex h-40 items-center justify-center rounded-2xl border border-dashed border-emerald-400/20 bg-black/20 text-center text-sm text-emerald-100/70">
+                      Fotoğraf yükleme sistemi bir sonraki fazda eklenecek.
+                    </div>
+                    <button disabled className="mt-3 w-full rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white/50">
+                      Görsel Yükle — yakında
+                    </button>
                   </div>
+                )}
 
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Plaka Yerleşimi</div>
-                    <PlakaLayoutPreview job={job} />
-                  </div>
-                </>
-              )}
+                {/* Durum */}
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Durum</div>
+                  <div className="mt-2 text-lg font-black">{phaseRow?.isCompleted ? "Tamamlandı" : "Bekliyor"}</div>
+                  {phaseRow?.completedAt && <div className="mt-1 text-sm text-slate-400">{fmtDate(phaseRow.completedAt)}</div>}
 
-              {phase === "MONTAJ" && (
-                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5">
-                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Montaj Kanıt Görselleri</div>
-                  <div className="mt-3 flex h-40 items-center justify-center rounded-2xl border border-dashed border-emerald-400/20 bg-black/20 text-center text-sm text-emerald-100/70">
-                    Fotoğraf yükleme ve arşiv sistemi bir sonraki fazda eklenecek.
-                  </div>
-                  <button disabled className="mt-3 w-full rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white/50">
-                    Görsel Yükle — yakında
-                  </button>
+                  {/* Tamamlanan ölçüde fotoğraf thumbnail */}
+                  {phase === "OLCU" && phaseRow?.isCompleted && savedPhotoUrl && (
+                    <button
+                      onClick={() => setPhotoPreviewOpen(true)}
+                      className="mt-3 block w-full overflow-hidden rounded-xl border border-blue-400/20 hover:border-blue-400/40 transition"
+                    >
+                      <img
+                        src={savedPhotoUrl}
+                        alt="Ölçü fotoğrafı"
+                        className="w-full object-cover"
+                        style={{ maxHeight: 100 }}
+                      />
+                    </button>
+                  )}
                 </div>
-              )}
-
-              <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Durum</div>
-                <div className="mt-2 text-lg font-black">{phaseRow?.isCompleted ? "Tamamlandı" : "Bekliyor"}</div>
-                {phaseRow?.completedAt && <div className="mt-1 text-sm text-slate-400">{fmtDate(phaseRow.completedAt)}</div>}
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex shrink-0 flex-col gap-3 border-t border-white/10 p-5 sm:flex-row">
-          <button
-            onClick={() => setEditMode((v) => !v)}
-            className="w-full rounded-2xl bg-white/10 px-5 py-4 text-base font-black hover:bg-white/15"
-          >
-            {editMode ? "Düzenlemeyi Kapat" : "Düzenle"}
-          </button>
-
-          {editMode && (
+          {/* Footer */}
+          <div className="flex shrink-0 flex-col gap-3 border-t border-white/10 p-5 sm:flex-row">
             <button
-              onClick={saveFullEdit}
-              disabled={saving || !plannedDate}
-              className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-900/30 hover:bg-blue-500 disabled:opacity-50"
+              onClick={() => setEditMode((v) => !v)}
+              className="w-full rounded-2xl bg-white/10 px-5 py-4 text-base font-black hover:bg-white/15"
             >
-              {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
+              {editMode ? "Düzenlemeyi Kapat" : "Düzenle"}
             </button>
-          )}
 
-          {!editMode && (
-            <button
-              onClick={completePhase}
-              disabled={saving || phaseRow?.isCompleted}
-              className="w-full rounded-2xl bg-emerald-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-emerald-900/30 hover:bg-emerald-500 disabled:opacity-50"
-            >
-              {phaseRow?.isCompleted ? "Zaten Tamamlandı" : saving ? "İşleniyor..." : "Tamamlandı"}
-            </button>
-          )}
+            {editMode && (
+              <button
+                onClick={saveFullEdit}
+                disabled={saving || !plannedDate}
+                className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-900/30 hover:bg-blue-500 disabled:opacity-50"
+              >
+                {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
+              </button>
+            )}
+
+            {!editMode && (
+              <button
+                onClick={completePhase}
+                disabled={saving || phaseRow?.isCompleted}
+                className="w-full rounded-2xl bg-emerald-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-emerald-900/30 hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {phaseRow?.isCompleted
+                  ? "Zaten Tamamlandı"
+                  : saving
+                  ? "İşleniyor..."
+                  : phase === "OLCU" && !olcuPhotoUrl
+                  ? "Tamamlandı (Fotoğrafsız)"
+                  : "Tamamlandı"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Fotoğraf tam ekran önizleme */}
+      {photoPreviewOpen && displayPhotoUrl && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 p-4"
+          onClick={() => setPhotoPreviewOpen(false)}
+          style={{ paddingTop: "env(safe-area-inset-top, 16px)", paddingBottom: "env(safe-area-inset-bottom, 16px)" }}
+        >
+          <img
+            src={displayPhotoUrl}
+            alt="Ölçü fotoğrafı tam ekran"
+            className="max-h-full max-w-full rounded-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className="absolute right-4 top-4 rounded-2xl bg-white/10 px-4 py-2.5 text-sm font-bold text-white backdrop-blur-sm hover:bg-white/20 transition"
+            style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+            onClick={() => setPhotoPreviewOpen(false)}
+          >
+            Kapat ✕
+          </button>
+        </div>
+      )}
+    </>
   );
 }
