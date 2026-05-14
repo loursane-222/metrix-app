@@ -40,6 +40,8 @@ export async function GET() {
         return {
           ...p,
           password: undefined,
+          brutMaas: Number(p.brutMaas),
+          sgkOrani: Number(p.sgkOrani),
           performansNotu: null,
           toplamGorev: 0,
           tamamlananGorev: 0,
@@ -63,6 +65,8 @@ export async function GET() {
       return {
         ...p,
         password: undefined,
+        brutMaas: Number(p.brutMaas),
+        sgkOrani: Number(p.sgkOrani),
         performansNotu,
         toplamGorev,
         tamamlananGorev: tamamlanan.length,
@@ -112,10 +116,23 @@ export async function POST(req: NextRequest) {
         email: veri.email || '',
         password: hashedPassword,
         aktif: true,
+        rolGrubu: veri.rolGrubu || 'DIGER',
+        brutMaas: parseFloat(veri.brutMaas) || 0,
+        sgkOrani: parseFloat(veri.sgkOrani) || 20.5,
+        iseBaslamaTarihi: veri.iseBaslamaTarihi ? new Date(veri.iseBaslamaTarihi) : null,
+        gunlukCalismaGun: parseInt(veri.gunlukCalismaGun) || 5,
+        userId: veri.userId || null,
       },
     })
 
-    return NextResponse.json({ personel: { ...personel, password: undefined } })
+    return NextResponse.json({
+      personel: {
+        ...personel,
+        password: undefined,
+        brutMaas: Number(personel.brutMaas),
+        sgkOrani: Number(personel.sgkOrani),
+      },
+    })
   } catch (error: any) {
     console.error('PERSONEL API POST HATASI:', error)
     return NextResponse.json(
@@ -163,10 +180,27 @@ export async function PUT(req: NextRequest) {
         telefon: veri.telefon || '',
         email: veri.email || '',
         aktif: veri.aktif ?? true,
+        ...(veri.rolGrubu !== undefined && { rolGrubu: veri.rolGrubu }),
+        ...(veri.brutMaas !== undefined && { brutMaas: parseFloat(veri.brutMaas) || 0 }),
+        ...(veri.sgkOrani !== undefined && { sgkOrani: parseFloat(veri.sgkOrani) || 20.5 }),
+        ...(veri.iseBaslamaTarihi !== undefined && {
+          iseBaslamaTarihi: veri.iseBaslamaTarihi ? new Date(veri.iseBaslamaTarihi) : null,
+        }),
+        ...(veri.gunlukCalismaGun !== undefined && {
+          gunlukCalismaGun: parseInt(veri.gunlukCalismaGun) || 5,
+        }),
+        ...(veri.userId !== undefined && { userId: veri.userId || null }),
       },
     })
 
-    return NextResponse.json({ personel: { ...personel, password: undefined } })
+    return NextResponse.json({
+      personel: {
+        ...personel,
+        password: undefined,
+        brutMaas: Number(personel.brutMaas),
+        sgkOrani: Number(personel.sgkOrani),
+      },
+    })
   } catch (error: any) {
     console.error('PERSONEL API PUT HATASI:', error)
     return NextResponse.json(

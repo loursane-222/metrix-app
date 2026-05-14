@@ -250,6 +250,15 @@ enum PhaseType {
   MONTAJ
 }
 
+enum PersonelRolGrubu {
+  OLCU
+  KESIM
+  TOPLAMA
+  MONTAJ
+  OFIS
+  DIGER
+}
+
 model WorkSchedule {
   id   String @id @default(cuid())
   isId String @unique
@@ -313,6 +322,13 @@ model Personel {
   email       String  @default("")
   password    String  @default("")
   aktif       Boolean @default(true)
+
+  rolGrubu         PersonelRolGrubu @default(DIGER)
+  brutMaas         Decimal          @default(0)
+  sgkOrani         Decimal          @default(20.5)
+  iseBaslamaTarihi DateTime?
+  gunlukCalismaGun Int              @default(5)
+  userId           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
