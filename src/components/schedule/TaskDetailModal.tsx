@@ -170,7 +170,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
       await togglePhaseCompletion({
         schedulePhaseId: phaseRow.id,
         isCompleted: true,
-        ...(phase === "OLCU" && olcuPhotoUrl ? { photoUrl: olcuPhotoUrl } : {}),
+        ...((phase === "OLCU" || phase === "MONTAJ") && olcuPhotoUrl ? { photoUrl: olcuPhotoUrl } : {}),
       });
       onUpdated();
     } catch (e: any) {
@@ -412,16 +412,113 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
                   </>
                 )}
 
-                {/* Montaj (fotoğraf gelecek faz) */}
+                {/* ── MONTAJ: Fotoğraf Yükleme ───────────────────────────── */}
                 {phase === "MONTAJ" && (
-                  <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5">
-                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Montaj Kanıt Görselleri</div>
-                    <div className="mt-3 flex h-40 items-center justify-center rounded-2xl border border-dashed border-emerald-400/20 bg-black/20 text-center text-sm text-emerald-100/70">
-                      Fotoğraf yükleme sistemi bir sonraki fazda eklenecek.
+                  <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.04] p-5">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300 mb-3">
+                      Montaj Kanıt Fotoğrafı
                     </div>
-                    <button disabled className="mt-3 w-full rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white/50">
-                      Görsel Yükle — yakında
-                    </button>
+
+                    {displayPhotoUrl ? (
+                      <div className="relative">
+                        <button
+                          onClick={() => setPhotoPreviewOpen(true)}
+                          className="block w-full overflow-hidden rounded-2xl border border-emerald-400/20 hover:border-emerald-400/40 transition"
+                        >
+                          <img
+                            src={displayPhotoUrl}
+                            alt="Montaj fotoğrafı"
+                            className="w-full object-cover"
+                            style={{ maxHeight: 180 }}
+                          />
+                        </button>
+
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-[11px] text-emerald-300/70">
+                            {savedPhotoUrl && !olcuPhotoUrl ? "Kayıtlı fotoğraf" : "Yeni fotoğraf"}
+                          </span>
+                          <button
+                            onClick={() => setPhotoPreviewOpen(true)}
+                            className="rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-300 hover:bg-emerald-500/20 transition"
+                          >
+                            Tam Ekran ↗
+                          </button>
+                        </div>
+
+                        {!phaseRow?.isCompleted && (
+                          <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-white/5 px-4 py-2.5 text-xs font-bold text-emerald-300 hover:bg-white/10 transition">
+                            {olcuPhotoUploading ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+                                Yükleniyor...
+                              </>
+                            ) : (
+                              <>📷 Fotoğrafı Değiştir</>
+                            )}
+                            <input
+                              ref={fileInputChangeRef}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              disabled={olcuPhotoUploading}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) uploadOlcuPhoto(f);
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ) : (
+                      <label className={[
+                        "flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-8 text-center transition",
+                        olcuPhotoUploading
+                          ? "border-emerald-400/40 bg-emerald-500/5"
+                          : "border-emerald-400/20 bg-black/20 hover:border-emerald-400/40 hover:bg-emerald-500/5",
+                      ].join(" ")}>
+                        {olcuPhotoUploading ? (
+                          <>
+                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+                            <div className="mt-3 text-sm font-bold text-emerald-300">Yükleniyor...</div>
+                            <div className="mt-1 text-xs text-slate-500">Lütfen bekleyin</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-2xl">
+                              📷
+                            </div>
+                            <div className="mt-3 text-sm font-bold text-emerald-300">Montaj Fotoğrafı Yükle</div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              JPG, PNG, HEIC · Maks 15 MB
+                            </div>
+                            <div className="mt-2 rounded-xl bg-emerald-500/10 px-3 py-1.5 text-[11px] text-emerald-400">
+                              Kamera veya galeride seç
+                            </div>
+                          </>
+                        )}
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          disabled={olcuPhotoUploading}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) uploadOlcuPhoto(f);
+                          }}
+                        />
+                      </label>
+                    )}
+
+                    {phaseRow?.isCompleted && phaseRow?.photoUploadedAt && (
+                      <div className="mt-3 rounded-2xl bg-emerald-500/5 px-3 py-2">
+                        <p className="text-[11px] text-emerald-300/70">
+                          Yüklenme: {dayjs(phaseRow.photoUploadedAt).format("DD MMM YYYY HH:mm")}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -431,15 +528,20 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
                   <div className="mt-2 text-lg font-black">{phaseRow?.isCompleted ? "Tamamlandı" : "Bekliyor"}</div>
                   {phaseRow?.completedAt && <div className="mt-1 text-sm text-slate-400">{fmtDate(phaseRow.completedAt)}</div>}
 
-                  {/* Tamamlanan ölçüde fotoğraf thumbnail */}
-                  {phase === "OLCU" && phaseRow?.isCompleted && savedPhotoUrl && (
+                  {/* Tamamlanan faz fotoğraf thumbnail */}
+                  {(phase === "OLCU" || phase === "MONTAJ") && phaseRow?.isCompleted && savedPhotoUrl && (
                     <button
                       onClick={() => setPhotoPreviewOpen(true)}
-                      className="mt-3 block w-full overflow-hidden rounded-xl border border-blue-400/20 hover:border-blue-400/40 transition"
+                      className={[
+                        "mt-3 block w-full overflow-hidden rounded-xl border transition",
+                        phase === "MONTAJ"
+                          ? "border-emerald-400/20 hover:border-emerald-400/40"
+                          : "border-blue-400/20 hover:border-blue-400/40",
+                      ].join(" ")}
                     >
                       <img
                         src={savedPhotoUrl}
-                        alt="Ölçü fotoğrafı"
+                        alt="Fotoğraf kanıtı"
                         className="w-full object-cover"
                         style={{ maxHeight: 100 }}
                       />
@@ -479,7 +581,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
                   ? "Zaten Tamamlandı"
                   : saving
                   ? "İşleniyor..."
-                  : phase === "OLCU" && !olcuPhotoUrl
+                  : (phase === "OLCU" || phase === "MONTAJ") && !olcuPhotoUrl
                   ? "Tamamlandı (Fotoğrafsız)"
                   : "Tamamlandı"}
               </button>
@@ -497,7 +599,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
         >
           <img
             src={displayPhotoUrl}
-            alt="Ölçü fotoğrafı tam ekran"
+            alt="Fotoğraf tam ekran"
             className="max-h-full max-w-full rounded-2xl object-contain"
             onClick={(e) => e.stopPropagation()}
           />
