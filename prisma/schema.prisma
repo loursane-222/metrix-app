@@ -250,6 +250,16 @@ enum PhaseType {
   MONTAJ
 }
 
+enum PhaseExecutionStatus {
+  PLANNED
+  STARTED
+  PAUSED
+  CANNOT_START
+  COMPLETED
+  CANCELLED
+  RESCHEDULE_REQUESTED
+}
+
 enum PersonelRolGrubu {
   OLCU
   KESIM
@@ -300,6 +310,7 @@ model SchedulePhase {
   updatedAt DateTime @updatedAt
 
   fazAtamalar FazAtama[]
+  executions  PhaseExecution[]
 
   @@unique([workScheduleId, phase])
   @@map("schedule_phases")
@@ -333,7 +344,8 @@ model Personel {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  fazAtamalar FazAtama[]
+  fazAtamalar     FazAtama[]
+  phaseExecutions PhaseExecution[]
 
   @@map("personel")
 }
@@ -482,4 +494,74 @@ model EmailVerification {
   createdAt DateTime @default(now())
 
   @@index([email])
+}
+
+// ─── Execution Engine (Faz 3A) ────────────────────────────────────────────────
+// SchedulePhase = plan entity (değişmez)
+// PhaseExecution = gerçek operasyon oturumu (additive, parallel)
+
+model PhaseExecution {
+  id              String               @id @default(cuid())
+  schedulePhaseId String
+  schedulePhase   SchedulePhase        @relation(fields: [schedulePhaseId], references: [id], onDelete: Cascade)
+
+  personelId      String?
+  personel        Personel?            @relation(fields: [personelId], references: [id], onDelete: SetNull)
+
+  atolyeId        String               // denormalize — sorgu performansı
+
+  status          PhaseExecutionStatus @default(PLANNED)
+
+  plannedStartAt  DateTime?            // SchedulePhase.plannedStart snapshot
+  plannedEndAt    DateTime?
+
+  actualStartedAt DateTime?            // STARTED event anı
+  actualEndedAt   DateTime?            // COMPLETED event anı
+
+  estimatedMinutes Int?                // Is.toplamSureDakika snapshot
+
+  // actualMinutes: kaynak değil, event/session'dan türetilecek cache
+  // Şu an null bırakılabilir; endpoint yazılırken event'lerden hesaplanır
+  actualMinutes   Int?
+
+  // pauseMinutes: ileride session modeli tamamlandığında event'lerden türetilecek
+  // Şu an null bırakılabilir
+  pauseMinutes    Int?
+
+  mtul            Decimal?             // gerçek üretim miktarı (mtül)
+  machineId       String?              // FK yok, ileride Makine ilişkisi eklenebilir
+
+  notes           String?
+  cannotStartReason String?            // CannotStartReason değeri (string)
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  events          PhaseExecutionEvent[]
+
+  @@index([schedulePhaseId])
+  @@index([atolyeId])
+  @@index([personelId])
+  @@map("phase_executions")
+}
+
+model PhaseExecutionEvent {
+  id               String         @id @default(cuid())
+  phaseExecutionId String
+  phaseExecution   PhaseExecution @relation(fields: [phaseExecutionId], references: [id], onDelete: Cascade)
+
+  schedulePhaseId  String         // denormalize — direkt faz bazlı sorgu
+  personelId       String?        // eventi gerçekleştiren personel
+  atolyeId         String         // denormalize
+
+  eventType        String         // PhaseExecutionEventType değeri (string)
+  note             String?
+  metadata         Json?
+
+  createdAt        DateTime       @default(now())
+
+  @@index([phaseExecutionId])
+  @@index([schedulePhaseId])
+  @@index([atolyeId])
+  @@map("phase_execution_events")
 }
