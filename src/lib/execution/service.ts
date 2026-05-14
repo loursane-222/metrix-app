@@ -1,4 +1,4 @@
-import type { PhaseExecutionStatus } from "@prisma/client"
+import { PhaseExecutionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { canTransition, eventTypeForTransition } from "./transitions"
 
@@ -40,6 +40,13 @@ export interface TransitionInput {
 // Her zaman PLANNED durumunda başlar.
 // Tek personel owner şu an; schema multi-staff'a kapalı değil.
 
+const ACTIVE_STATUSES: PhaseExecutionStatus[] = [
+  "PLANNED",
+  "STARTED",
+  "PAUSED",
+  "CANNOT_START",
+]
+
 export async function createExecution(input: CreateExecutionInput) {
   const {
     schedulePhaseId,
@@ -51,19 +58,33 @@ export async function createExecution(input: CreateExecutionInput) {
     note,
   } = input
 
-  const execution = await prisma.phaseExecution.create({
-    data: {
-      schedulePhaseId,
-      atolyeId,
-      personelId: personelId ?? null,
-      status: "PLANNED",
-      plannedStartAt: plannedStartAt ?? null,
-      plannedEndAt: plannedEndAt ?? null,
-      estimatedMinutes: estimatedMinutes ?? null,
-    },
+  // Aynı faz için zaten aktif bir execution varsa yeni kayıt açma.
+  // Transaction içinde: check + create atomik — race condition guard.
+  const execution = await prisma.$transaction(async (tx) => {
+    const existing = await tx.phaseExecution.findFirst({
+      where: { schedulePhaseId, atolyeId, status: { in: ACTIVE_STATUSES } },
+    })
+    if (existing) {
+      throw new ExecutionError(
+        "Bu faz için zaten aktif bir operasyon kaydı var",
+        409,
+      )
+    }
+
+    return tx.phaseExecution.create({
+      data: {
+        schedulePhaseId,
+        atolyeId,
+        personelId: personelId ?? null,
+        status: "PLANNED",
+        plannedStartAt: plannedStartAt ?? null,
+        plannedEndAt: plannedEndAt ?? null,
+        estimatedMinutes: estimatedMinutes ?? null,
+      },
+    })
   })
 
-  // CREATED event — immutable log başlangıcı
+  // CREATED event — immutable log başlangıcı (transaction dışı, ok)
   await prisma.phaseExecutionEvent.create({
     data: {
       phaseExecutionId: execution.id,

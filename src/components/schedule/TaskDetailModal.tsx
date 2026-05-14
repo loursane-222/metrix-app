@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { togglePhaseCompletion } from "@/app/actions/schedule";
+import ExecutionControlPanel from "@/components/execution/ExecutionControlPanel";
 
 dayjs.locale("tr");
 
@@ -550,6 +551,16 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
                 </div>
               </div>
             </div>
+
+            {/* Execution Panel — body scroll içinde, grid altında */}
+            {phaseRow?.id && !editMode && !phaseRow?.isCompleted && (
+              <div className="mt-4">
+                <ExecutionControlPanel
+                  schedulePhaseId={phaseRow.id}
+                  phaseType={phase as "OLCU" | "IMALAT" | "MONTAJ"}
+                />
+              </div>
+            )}
           </div>
 
           {/* Footer */}

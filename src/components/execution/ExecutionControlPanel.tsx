@@ -1,0 +1,424 @@
+"use client"
+
+import { useCallback, useEffect, useState } from "react"
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type ExecutionStatus =
+  | "PLANNED"
+  | "STARTED"
+  | "PAUSED"
+  | "CANNOT_START"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "RESCHEDULE_REQUESTED"
+
+interface ExecutionData {
+  id: string
+  status: ExecutionStatus
+  actualStartedAt: string | null
+  actualEndedAt: string | null
+  actualMinutes: number | null
+  cannotStartReason: string | null
+  estimatedMinutes: number | null
+}
+
+export interface ExecutionControlPanelProps {
+  schedulePhaseId: string
+  phaseType?: "OLCU" | "IMALAT" | "MONTAJ"
+  readOnly?: boolean
+  onTransitionSuccess?: (execution: ExecutionData) => void
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const STATUS_META: Record<ExecutionStatus, { label: string; badge: string }> = {
+  PLANNED:              { label: "Planlandı",             badge: "border-slate-700 bg-slate-800/50 text-slate-300" },
+  STARTED:              { label: "Çalışıyor",             badge: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" },
+  PAUSED:               { label: "Duraklatıldı",          badge: "border-amber-500/40 bg-amber-500/15 text-amber-300" },
+  CANNOT_START:         { label: "Başlanamadı",           badge: "border-red-500/40 bg-red-500/15 text-red-300" },
+  COMPLETED:            { label: "Tamamlandı",            badge: "border-blue-500/40 bg-blue-500/15 text-blue-300" },
+  CANCELLED:            { label: "İptal Edildi",          badge: "border-zinc-700 bg-zinc-800/50 text-zinc-400" },
+  RESCHEDULE_REQUESTED: { label: "Yeniden Planlanacak",   badge: "border-purple-500/40 bg-purple-500/15 text-purple-300" },
+}
+
+const CANNOT_START_REASONS = [
+  { value: "CUSTOMER_NOT_READY",    label: "Müşteri hazır değil" },
+  { value: "MATERIAL_MISSING",      label: "Malzeme eksik" },
+  { value: "MEASUREMENT_MISSING",   label: "Ölçü eksik" },
+  { value: "MACHINE_BUSY",          label: "Makine meşgul" },
+  { value: "PERSONNEL_UNAVAILABLE", label: "Personel yok" },
+  { value: "SITE_NOT_READY",        label: "Saha hazır değil" },
+  { value: "OTHER",                 label: "Diğer" },
+]
+
+const PHASE_LABELS: Record<string, string> = {
+  OLCU: "Ölçü", IMALAT: "İmalat", MONTAJ: "Montaj",
+}
+
+const TERMINAL: ExecutionStatus[] = ["COMPLETED", "CANCELLED"]
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function Spinner({ color = "border-white" }: { color?: string }) {
+  return (
+    <span className={`h-4 w-4 animate-spin rounded-full border-2 border-t-transparent ${color}`} />
+  )
+}
+
+function ActionBtn({
+  onClick,
+  disabled,
+  loading,
+  label,
+  loadingLabel = "İşleniyor...",
+  variant,
+}: {
+  onClick: () => void
+  disabled?: boolean
+  loading?: boolean
+  label: string
+  loadingLabel?: string
+  variant: "emerald" | "amber" | "blue" | "red" | "ghost"
+}) {
+  const base = "flex min-h-[52px] w-full items-center justify-center rounded-2xl px-5 font-bold transition disabled:opacity-50"
+  const styles: Record<string, string> = {
+    emerald: "bg-emerald-600 text-white hover:bg-emerald-500",
+    amber:   "border border-amber-500/30 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25",
+    blue:    "bg-blue-600 text-white hover:bg-blue-500",
+    red:     "border border-red-500/25 bg-red-500/10 text-red-400 hover:bg-red-500/20 min-h-[44px]",
+    ghost:   "border border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08]",
+  }
+
+  return (
+    <button onClick={onClick} disabled={disabled || loading} className={`${base} ${styles[variant]}`}>
+      {loading ? (
+        <span className="flex items-center gap-2">
+          <Spinner color={variant === "amber" ? "border-amber-300" : "border-white"} />
+          {loadingLabel}
+        </span>
+      ) : label}
+    </button>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function ExecutionControlPanel({
+  schedulePhaseId,
+  phaseType,
+  readOnly = false,
+  onTransitionSuccess,
+}: ExecutionControlPanelProps) {
+  const [execution, setExecution] = useState<ExecutionData | null>(null)
+  const [fetching, setFetching]   = useState(true)
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState<string | null>(null)
+  const [conflict, setConflict]   = useState(false)
+  const [showReasonPicker, setShowReasonPicker] = useState(false)
+  const [cannotReason, setCannotReason]         = useState("")
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
+
+  const refetch = useCallback(async () => {
+    setFetching(true)
+    try {
+      const res  = await fetch(
+        `/api/schedule/execution?schedulePhaseId=${encodeURIComponent(schedulePhaseId)}`,
+        { credentials: "include", cache: "no-store" },
+      )
+      const json = await res.json()
+      if (res.ok) {
+        setExecution(json.execution ?? null)
+        setConflict(false)
+        setError(null)
+      }
+    } catch {
+      // silently ignore — panel shows empty state
+    } finally {
+      setFetching(false)
+    }
+  }, [schedulePhaseId])
+
+  // Modal her açıldığında yeniden fetch: schedulePhaseId değiştiğinde
+  useEffect(() => { refetch() }, [refetch])
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  // PATCH wrapper — optimistic lock ve hata yönetimi
+  async function doTransition(
+    execId: string,
+    toStatus: ExecutionStatus,
+    extra?: { cannotStartReason?: string; mtul?: number },
+  ): Promise<ExecutionData | null> {
+    const res  = await fetch(`/api/schedule/execution/${execId}`, {
+      method:      "PATCH",
+      credentials: "include",
+      headers:     { "Content-Type": "application/json" },
+      body:        JSON.stringify({ toStatus, ...extra }),
+    })
+    const json = await res.json()
+
+    if (res.status === 409) {
+      await refetch()
+      setConflict(true)
+      return null
+    }
+    if (!res.ok) throw new Error(json.error || "İşlem başarısız")
+
+    return json.execution as ExecutionData
+  }
+
+  // Execution yoksa POST ile oluştur, varsa mevcut ID'yi döndür
+  async function ensureExecution(): Promise<string | null> {
+    if (execution?.id) return execution.id
+
+    const res  = await fetch("/api/schedule/execution", {
+      method:      "POST",
+      credentials: "include",
+      headers:     { "Content-Type": "application/json" },
+      body:        JSON.stringify({ schedulePhaseId }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error || "Görev kaydı oluşturulamadı")
+
+    setExecution(json.execution)
+    return json.execution.id as string
+  }
+
+  // ── Başla (POST if needed → PATCH STARTED) ────────────────────────────────
+
+  async function handleBasla() {
+    setLoading(true)
+    setError(null)
+    setConflict(false)
+
+    try {
+      const execId = await ensureExecution()
+      if (!execId) return
+
+      const updated = await doTransition(execId, "STARTED")
+      if (updated) {
+        setExecution(updated)
+        onTransitionSuccess?.(updated)
+      } else {
+        // 409 — conflict; refetch already called inside doTransition
+        setError("Görev oluşturuldu ama başlatılamadı — durum değişti")
+      }
+    } catch (e: any) {
+      // POST veya PATCH başarısız — mevcut durumu yenile
+      await refetch()
+      setError(e.message || "Görev oluşturuldu ama başlatılamadı")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Diğer geçişler ────────────────────────────────────────────────────────
+
+  async function handleTransition(
+    toStatus: ExecutionStatus,
+    extra?: { cannotStartReason?: string; mtul?: number },
+  ) {
+    if (!execution?.id) return
+    setLoading(true)
+    setError(null)
+    setConflict(false)
+
+    try {
+      const updated = await doTransition(execution.id, toStatus, extra)
+      if (updated) {
+        setExecution(updated)
+        onTransitionSuccess?.(updated)
+      }
+    } catch (e: any) {
+      setError(e.message || "İşlem başarısız")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCannotStart() {
+    if (!cannotReason) return
+    setShowReasonPicker(false)
+    await handleTransition("CANNOT_START", { cannotStartReason: cannotReason })
+    setCannotReason("")
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const status     = execution?.status ?? null
+  const isTerminal = status !== null && TERMINAL.includes(status)
+  const phaseLabel = phaseType ? PHASE_LABELS[phaseType] ?? phaseType : "Aşama"
+
+  // İlk yükleme
+  if (fetching) {
+    return (
+      <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Spinner color="border-slate-600" />
+          Operasyon durumu yükleniyor...
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+
+      {/* Header: faz etiketi + status badge */}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+          {phaseLabel} Operasyonu
+        </p>
+        {status && (
+          <span className={`rounded-full border px-3 py-1 text-xs font-bold ${STATUS_META[status].badge}`}>
+            {STATUS_META[status].label}
+          </span>
+        )}
+      </div>
+
+      {/* Conflict banner — 409 sonrası */}
+      {conflict && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <p className="text-sm text-amber-300">Durum başkası tarafından değiştirildi</p>
+          <button
+            onClick={refetch}
+            className="rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-300 transition hover:bg-amber-500/30"
+          >
+            Yenile
+          </button>
+        </div>
+      )}
+
+      {/* Error banner */}
+      {error && !conflict && (
+        <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* Başlanamadı — reason picker */}
+      {showReasonPicker && (
+        <div className="mb-2 space-y-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Başlanamama Nedeni</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {CANNOT_START_REASONS.map((r) => (
+              <button
+                key={r.value}
+                onClick={() => setCannotReason(r.value)}
+                className={[
+                  "rounded-2xl border px-3 py-2.5 text-left text-sm transition",
+                  cannotReason === r.value
+                    ? "border-red-500/50 bg-red-500/15 text-red-300"
+                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]",
+                ].join(" ")}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <ActionBtn
+              label="Vazgeç"
+              variant="ghost"
+              onClick={() => { setShowReasonPicker(false); setCannotReason("") }}
+            />
+            <ActionBtn
+              label="Başlanamadı Olarak İşaretle"
+              loadingLabel="Kaydediliyor..."
+              variant="red"
+              loading={loading}
+              disabled={!cannotReason}
+              onClick={handleCannotStart}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Terminal state: salt okunur bilgi */}
+      {isTerminal && !showReasonPicker && (
+        <p className="text-sm text-slate-500">
+          {status === "COMPLETED"
+            ? execution?.actualMinutes != null
+              ? `Toplam süre: ${execution.actualMinutes} dakika`
+              : "Operasyon tamamlandı"
+            : "Operasyon iptal edildi"}
+        </p>
+      )}
+
+      {/* Read-only, no execution */}
+      {readOnly && !status && !showReasonPicker && (
+        <p className="text-sm text-slate-500">Henüz operasyon başlatılmadı</p>
+      )}
+
+      {/* Action buttons — non-terminal, non-readonly, reason picker kapalı */}
+      {!isTerminal && !readOnly && !showReasonPicker && (
+
+        <div className="flex flex-col gap-2">
+
+          {/* BAŞLA — null / PLANNED / CANNOT_START */}
+          {(status === null || status === "PLANNED" || status === "CANNOT_START") && (
+            <ActionBtn
+              label={status === "CANNOT_START" ? "Yeniden Dene" : "Başla"}
+              variant="emerald"
+              loading={loading}
+              onClick={handleBasla}
+            />
+          )}
+
+          {/* DEVAM ET — PAUSED */}
+          {status === "PAUSED" && (
+            <ActionBtn
+              label="Devam Et"
+              variant="emerald"
+              loading={loading}
+              onClick={() => handleTransition("STARTED")}
+            />
+          )}
+
+          {/* DURAKLAT — STARTED */}
+          {status === "STARTED" && (
+            <ActionBtn
+              label="Duraklat"
+              variant="amber"
+              loading={loading}
+              onClick={() => handleTransition("PAUSED")}
+            />
+          )}
+
+          {/* TAMAMLA — STARTED */}
+          {status === "STARTED" && (
+            <ActionBtn
+              label="Tamamla"
+              variant="blue"
+              loading={loading}
+              onClick={() => handleTransition("COMPLETED")}
+            />
+          )}
+
+          {/* BAŞLANAMADI — sadece execution varken: PLANNED / STARTED */}
+          {(status === "PLANNED" || status === "STARTED") && (
+            <ActionBtn
+              label="Başlanamadı"
+              variant="red"
+              loading={loading}
+              onClick={() => setShowReasonPicker(true)}
+            />
+          )}
+
+        </div>
+      )}
+
+      {/* CANNOT_START reason display */}
+      {status === "CANNOT_START" && execution?.cannotStartReason && !showReasonPicker && (
+        <p className="mt-3 text-xs text-slate-500">
+          Neden:{" "}
+          {CANNOT_START_REASONS.find((r) => r.value === execution.cannotStartReason)?.label
+            ?? execution.cannotStartReason}
+        </p>
+      )}
+
+    </div>
+  )
+}
