@@ -382,6 +382,56 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
     );
   }
 
+  // ── Desktop Günlük View ────────────────────────────────────────────────────
+  function DesktopDay() {
+    return (
+      <div className="hidden md:block">
+        {/* Haftanın günleri — tıklayarak gün değiştir */}
+        <div className="mb-4 flex gap-2 rounded-3xl border border-white/10 bg-white/[0.03] p-2">
+          {weekDays.map((d, index) => {
+            const active = d.isSame(currentDate, "day");
+            const count = tasks.filter((task) => dayjs(task.date).isSame(d, "day")).length;
+            return (
+              <button
+                key={d.toString()}
+                onClick={() => setCurrentDate(d)}
+                className={[
+                  "flex-1 rounded-2xl px-3 py-3 text-center transition",
+                  active
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40"
+                    : "bg-slate-900/70 text-slate-400 hover:bg-slate-800",
+                ].join(" ")}
+              >
+                <div className="text-xs font-semibold">{WEEKDAYS[index]}</div>
+                <div className="mt-1 text-xl font-black">{d.format("DD")}</div>
+                <div className="mt-1 text-[10px] opacity-70">{count} iş</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Seçili günün görevleri */}
+        <div className="rounded-3xl border border-white/10 bg-slate-950/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-lg font-bold text-white">
+              {currentDate.format("DD MMMM YYYY dddd")}
+            </div>
+            <div className="text-sm text-slate-400">{selectedDayTasks.length} iş</div>
+          </div>
+          <div className="max-h-[calc(100dvh-500px)] space-y-3 overflow-y-auto pr-1">
+            {selectedDayTasks.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-white/10 p-8 text-center text-slate-500">
+                Bu güne planlanmış iş yok.
+              </div>
+            ) : (
+              selectedDayTasks.map((task) => <TaskCard key={task.id} task={task} />)
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function MobileDayList() {
     return (
       <div className="md:hidden">
@@ -419,6 +469,71 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
             </div>
           ) : (
             selectedDayTasks.map((task) => <TaskCard key={task.id} task={task} />)
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Mobile Haftalık View ────────────────────────────────────────────────────
+  function MobileWeekView() {
+    return (
+      <div className="md:hidden">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-sm font-semibold text-white">{trDateRange(startOfWeek)}</div>
+          <div className="text-sm text-slate-400">{weekTasks.length} iş</div>
+        </div>
+        <div className="space-y-2 pb-[120px]">
+          {weekDays.map((d, index) => {
+            const dayTasks = tasks.filter((task) => dayjs(task.date).isSame(d, "day"));
+            const isToday = d.isSame(dayjs(), "day");
+            return (
+              <button
+                key={d.toString()}
+                onClick={() => { setCurrentDate(d); setView("day"); }}
+                className={[
+                  "w-full rounded-2xl border p-3 text-left transition",
+                  isToday
+                    ? "border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10"
+                    : "border-white/10 bg-slate-900/40 hover:bg-slate-800/50",
+                ].join(" ")}
+              >
+                <div className="flex items-center justify-between">
+                  <div className={`text-sm font-bold flex items-center gap-2 ${isToday ? "text-blue-300" : "text-white"}`}>
+                    {WEEKDAYS[index]} · {d.format("DD MMMM")}
+                    {isToday && (
+                      <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] text-white font-semibold">
+                        Bugün
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    {dayTasks.length > 0 ? `${dayTasks.length} iş →` : "→"}
+                  </div>
+                </div>
+                {dayTasks.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {["OLCU", "IMALAT", "MONTAJ"].map((phase) => {
+                      const n = dayTasks.filter((t) => t.phase === phase).length;
+                      if (!n) return null;
+                      const m = meta(phase);
+                      return (
+                        <span key={phase} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${m.bg} ${m.text}`}>
+                          {m.icon} {n} {m.label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-1 text-xs text-slate-600">Plan yok</div>
+                )}
+              </button>
+            );
+          })}
+          {weekTasks.length === 0 && (
+            <div className="rounded-3xl border border-dashed border-white/10 p-8 text-center text-slate-500">
+              Bu hafta planlanmış iş yok.
+            </div>
           )}
         </div>
       </div>
@@ -476,7 +591,13 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
       <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-2xl font-black tracking-tight md:text-3xl">İş Programı</h1>
-          <p className="mt-1 text-sm text-slate-400">{trDateRange(startOfWeek)}</p>
+          <p className="mt-1 text-sm text-slate-400">
+          {view === "day"
+            ? currentDate.format("DD MMMM YYYY dddd")
+            : view === "month"
+            ? currentDate.format("MMMM YYYY")
+            : trDateRange(startOfWeek)}
+        </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -521,8 +642,8 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
         <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 p-2 md:p-4"><div className="text-[10px] md:text-xs text-purple-300">Tamam</div><div className="mt-1 text-xl md:text-3xl font-black text-purple-300">{stats.completed}</div></div>
       </div>
 
-      {view === "week" && <><DesktopWeek /><MobileDayList /></>}
-      {view === "day" && <MobileDayList />}
+      {view === "week" && <><DesktopWeek /><MobileWeekView /></>}
+      {view === "day" && <><DesktopDay /><MobileDayList /></>}
       {view === "month" && <MonthView />}
 
       <div className="mt-5 hidden md:grid grid-cols-1 gap-3 md:grid-cols-4">
