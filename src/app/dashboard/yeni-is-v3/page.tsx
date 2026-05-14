@@ -1275,7 +1275,7 @@ export default function YeniIsV3Page() {
                 )}
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end" }} className="desktop-sidebar">
                 <button onClick={() => sonraki && setAktifAdim(sonraki)} style={{ padding: "13px 32px", background: "#10b981", border: "none", borderRadius: "14px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer" }}>İleri →</button>
               </div>
             </div>
@@ -1488,8 +1488,8 @@ export default function YeniIsV3Page() {
                 <textarea className="yi-inp" style={{ height: "80px", resize: "none" }} placeholder="Özel notlar, müşteri talepleri..." value={form.notlar} onChange={(e) => setAlan("notlar", e.target.value)} />
               </div>
 
-              {/* Kaydet butonu */}
-              <button onClick={kaydet} disabled={kaydediliyor} style={{ width: "100%", padding: "18px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "16px", color: "#fff", fontSize: "17px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer", boxShadow: kaydediliyor ? "none" : "0 8px 32px rgba(16,185,129,0.4)" }}>
+              {/* Kaydet butonu — masaüstünde görünür, mobilde sticky bar karşılığı */}
+              <button onClick={kaydet} disabled={kaydediliyor} className="desktop-sidebar" style={{ width: "100%", padding: "18px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "16px", color: "#fff", fontSize: "17px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer", boxShadow: kaydediliyor ? "none" : "0 8px 32px rgba(16,185,129,0.4)" }}>
                 {kaydediliyor ? "Kaydediliyor..." : "✓ Hesapla & Kaydet"}
               </button>
             </div>

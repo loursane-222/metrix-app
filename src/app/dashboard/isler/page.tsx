@@ -1,6 +1,6 @@
 'use client'
 import SwipeToDelete from '@/components/ui/SwipeToDelete'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 import { PlakaPlanlayiciV2 } from '@/components/plaka-planlayici/PlakaPlanlayiciV2'
@@ -204,6 +204,30 @@ export default function IslerPage() {
       } catch {}
     })
   }, [])
+
+  // Back button → açık mobil modal/drawer'ı kapat (route değişimi olmadan)
+  const _modalPushed = useRef(false)
+  useEffect(() => {
+    const anyOpen = mobileActionsOpen || durumDegistirAcik || odemePopupAcik || plakaAcik || tahsilatAcik || uretimPlaniAcik
+    if (anyOpen && !_modalPushed.current) {
+      _modalPushed.current = true
+      window.history.pushState({ metrixIslerModal: true }, '')
+      const onPop = () => {
+        _modalPushed.current = false
+        setMobileActionsOpen(false)
+        setDurumDegistirAcik(false)
+        setOdemePopupAcik(false)
+        setPlakaAcik(false)
+        setTahsilatAcik(false)
+        setUretimPlaniAcik(false)
+      }
+      window.addEventListener('popstate', onPop, { once: true })
+    }
+    if (!anyOpen && _modalPushed.current) {
+      _modalPushed.current = false
+      if (window.history.state?.metrixIslerModal) window.history.back()
+    }
+  }, [mobileActionsOpen, durumDegistirAcik, odemePopupAcik, plakaAcik, tahsilatAcik, uretimPlaniAcik])
 
   const ozet = useMemo(() => {
     const toplam = isler.length
@@ -436,7 +460,7 @@ export default function IslerPage() {
               <div className="flex items-center justify-between gap-3">
                 <button onClick={() => setMobileView('list')} className="rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm font-bold min-w-[96px]">← İşler</button>
                 <div className="flex gap-2">
-                  <button onClick={() => router.push(`/dashboard/yeni-is-v3?duzenle=${aktifIs?.id}`)} disabled={!aktifIs?.id} className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-300 disabled:opacity-40">✏️</button>
+                  <button onClick={() => router.push(`/dashboard/isler/${aktifIs?.id}`)} disabled={!aktifIs?.id} className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-300 disabled:opacity-40">✏️</button>
                   <button onClick={aktifWhatsappGonder} disabled={!aktifIs?.teklifNo} className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm font-bold text-green-300 disabled:opacity-40">WA</button>
                   <button onClick={() => window.open(`/api/isler/${aktifIs?.id}/pdf`, "_blank")} disabled={!aktifIs?.id} className="rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm font-bold disabled:opacity-40">PDF</button>
                   <button onClick={() => setMobileActionsOpen(true)} className="rounded-xl border border-slate-700 bg-[#0B1120] px-4 py-3 text-sm font-bold">···</button>
