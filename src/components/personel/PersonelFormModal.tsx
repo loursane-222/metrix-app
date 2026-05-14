@@ -37,7 +37,7 @@ const BOS_FORM: FormState = {
 }
 
 const iCls =
-  "h-10 w-full rounded-xl border border-slate-700 bg-[#111827] px-3 text-sm text-white outline-none focus:border-blue-500 appearance-none"
+  "h-11 w-full rounded-xl border border-slate-700 bg-[#111827] px-3 text-sm text-white outline-none focus:border-blue-500 appearance-none"
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -163,7 +163,7 @@ export function PersonelFormModal({
           </div>
           <button
             onClick={onClose}
-            className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800"
+            className="min-h-[44px] rounded-xl border border-slate-700 px-4 py-3 text-sm text-slate-300 transition hover:bg-slate-800"
           >
             Kapat
           </button>

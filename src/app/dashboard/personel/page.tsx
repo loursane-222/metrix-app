@@ -273,8 +273,8 @@ export default function PersonelSayfasi() {
           )}
 
           {/* Mobile bottom action bar */}
-          <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-800 bg-[#030712]/95 backdrop-blur md:hidden">
-            <div className="flex gap-2 p-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}>
+          <div className="fixed bottom-0 left-0 right-0 z-[85] border-t border-slate-800 bg-[#030712]/95 backdrop-blur md:hidden">
+            <div className="flex gap-2 p-3" style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}>
               <button
                 onClick={() => acForm()}
                 className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white"
