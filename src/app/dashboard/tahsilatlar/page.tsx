@@ -358,7 +358,7 @@ export default function TahsilatlarPage() {
 
   // ── İÇERİK PANELLERİ ────────────────────────────────────────────────────
   const PanelMusteri = (
-    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px" }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px", paddingBottom:"140px" }}>
       <div className="kart">
         <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"8px", color:"#9ca3af" }}>👤 MÜŞTERİ</p>
         <div style={{ position:"relative" }}>
@@ -384,7 +384,24 @@ export default function TahsilatlarPage() {
         {seciliMusteri && (
           <div style={{ marginTop:"10px" }}>
             <div style={{ fontSize:"15px", fontWeight:900, color:"#10b981" }}>{seciliMusteri.firmaAdi||seciliMusteri.ad}</div>
-            <div style={{ fontSize:"12px", color:"#6b7280", marginTop:"2px" }}>{MUSTERI_TIP[seciliMusteri.musteriTipi]} · {seciliMusteri.telefon}</div>
+            <div style={{ fontSize:"12px", color:"#6b7280", marginTop:"2px" }}>
+              {MUSTERI_TIP[seciliMusteri.musteriTipi]} · {seciliMusteri.telefon || <span style={{ color:"#ef4444" }}>Telefon kayıtlı değil</span>}
+            </div>
+            {seciliMusteri.telefon ? (
+              <button
+                onClick={() => {
+                  let phone = seciliMusteri.telefon!.replace(/\D/g, "")
+                  if (phone.startsWith("0")) phone = "90" + phone.slice(1)
+                  if (phone && !phone.startsWith("90")) phone = "90" + phone
+                  const ad = seciliMusteri.firmaAdi || seciliMusteri.ad
+                  const mesaj = `Merhaba ${ad}, ödeme planınız hakkında bilgi vermek için ulaşıyoruz.`
+                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}`, "_blank")
+                }}
+                style={{ marginTop:"10px", width:"100%", padding:"10px", background:"rgba(34,197,94,0.08)", border:"1px solid rgba(34,197,94,0.2)", borderRadius:"12px", color:"#4ade80", fontSize:"13px", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"6px" }}
+              >
+                📲 WA Mesaj Gönder
+              </button>
+            ) : null}
             <div style={{ marginTop:"10px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"6px" }}>
               {[
                 { l:"Borç", v:tl(toplamBorc), c:"#f87171" },
@@ -425,7 +442,7 @@ export default function TahsilatlarPage() {
   );
 
   const PanelTahsilat = (
-    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px" }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px", paddingBottom:"140px" }}>
       {!seciliMusteri ? (
         <div style={{ textAlign:"center", padding:"60px 20px", color:"#4b5563" }}>
           <div style={{ fontSize:"36px", marginBottom:"10px" }}>💳</div>
@@ -490,7 +507,7 @@ export default function TahsilatlarPage() {
   );
 
   const PanelPlan = (
-    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px" }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px", paddingBottom:"140px" }}>
       {bugunListesi.length > 0 && !aktifIs && (
         <div className="kart" style={{ borderColor:"rgba(239,68,68,0.3)" }}>
           <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"10px", color:"#f87171" }}>🔔 BUGÜN BEKLEYENLER</p>
@@ -625,7 +642,7 @@ export default function TahsilatlarPage() {
   );
 
   const PanelSablon = (
-    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px" }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:"12px", height:"100%", overflowY:"auto", padding:"14px", paddingBottom:"140px" }}>
       <div className="kart">
         <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"10px", color:"#9ca3af" }}>💳 ÖDEME ŞABLONLARI</p>
         <p style={{ fontSize:"11px", color:"#4b5563", marginBottom:"12px" }}>Her müşteri tipi için 3 farklı ödeme planı tanımlayın. Teklif onayında müşteriye sunulur.</p>
@@ -831,7 +848,7 @@ export default function TahsilatlarPage() {
         </div>
 
         {/* Mobil alt sekme çubuğu */}
-        <div className="mobile-tabs" style={{ position:"fixed", bottom:"72px", left:0, right:0, zIndex:85, borderTop:"1px solid #1f2937", borderBottom:"1px solid #1f2937", background:"rgba(3,7,18,0.97)", backdropFilter:"blur(16px)", display:"flex" }}>
+        <div className="mobile-tabs" style={{ position:"fixed", bottom:"72px", left:0, right:0, zIndex:85, borderTop:"1px solid #1f2937", borderBottom:"1px solid #1f2937", background:"rgba(3,7,18,0.97)", backdropFilter:"blur(16px)", display:"flex", paddingBottom:"env(safe-area-inset-bottom, 0px)" }}>
           {([
             { id:"musteri" as Sekme, icon:"👤", label:"Müşteri", badge: seciliMusteri ? isler.length : 0 },
             { id:"tahsilat" as Sekme, icon:"💳", label:"Tahsilat", badge: tahsilatlar.length },
