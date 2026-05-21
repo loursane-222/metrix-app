@@ -553,10 +553,10 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
             </div>
 
             {/* Execution Panel — body scroll içinde, grid altında */}
-            {phaseRow?.id && !editMode && !phaseRow?.isCompleted && (
+            {task?.id && !editMode && !(phaseRow?.isCompleted ?? task?.completed) && (
               <div className="mt-4">
                 <ExecutionControlPanel
-                  schedulePhaseId={phaseRow.id}
+                  schedulePhaseId={task.id}
                   phaseType={phase as "OLCU" | "IMALAT" | "MONTAJ"}
                 />
               </div>
