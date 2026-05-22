@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { formatMtulTR } from '@/lib/format'
 
 function Input({ label, value, onChange }: any) {
   return (
@@ -96,7 +97,7 @@ function n(v: any) {
 }
 
 function tl(v: any) {
-  return Number(v || 0).toLocaleString('tr-TR', { maximumFractionDigits: 2 }) + ' ₺'
+  return Number(v || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺'
 }
 
 function tlInput(v: string) {
@@ -562,7 +563,7 @@ export default function AtolyePage() {
             <RightCard label="Dakika" value={tl(hesap.dakika)} />
             <RightCard label="Günlük Gider" value={tl(hesap.gunluk)} />
             <RightCard label="Aylık Plaka" value={`${hesap.toplamPlaka.toFixed(0)} adet`} />
-            <RightCard label="Aylık Mtül" value={`${hesap.aylikMtul.toFixed(1)} mtül`} />
+            <RightCard label="Aylık Mtül" value={formatMtulTR(hesap.aylikMtul, 1)} />
           </div>
           <div className={`mt-4 rounded-2xl border p-4 ${hesap.durumTone}`}>
             <p className="text-sm font-semibold">{hesap.durum}</p>
