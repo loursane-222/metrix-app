@@ -90,7 +90,13 @@ function AiWaButon({
       return;
     }
 
+    // Open the window synchronously inside the user gesture so mobile
+    // Safari does not block it as a popup after the async API call.
+    const win = window.open("", "_blank");
     setDurum("loading");
+    const fallbackMesaj = tip === "tahsilat"
+      ? `Merhaba ${payload.musteriAdi}, ödeme planınız hakkında bilgi vermek için ulaşıyoruz.`
+      : `Merhaba ${payload.musteriAdi}, teklifiniz hakkında görüşmek istiyoruz.`;
     try {
       const res = await fetch("/api/ai-sales", {
         method: "POST",
@@ -98,29 +104,21 @@ function AiWaButon({
         body: JSON.stringify({ ...payload, tip }),
       });
       const json = await res.json();
-      if (json.error) {
-        alert("Hata: " + json.error + (json.detail ? " - " + json.detail : ""));
-        setDurum("idle");
-        return;
-      }
-      const m = json.mesaj || "";
-      if (!m) {
-        alert("Mesaj uretilemedi, lutfen tekrar deneyin.");
-        setDurum("idle");
-        return;
-      }
+      const m: string = (!json.error && json.mesaj) ? json.mesaj : fallbackMesaj;
       setMesaj(m);
       setDurum("done");
-    } catch (err: any) {
-      alert("Baglanti hatasi: " + (err?.message || String(err)));
-      setDurum("idle");
+      if (win) win.location.href = waHref(phone, m);
+    } catch {
+      setMesaj(fallbackMesaj);
+      setDurum("done");
+      if (win) win.location.href = waHref(phone, fallbackMesaj);
     }
   }
 
   if (durum === "done" && mesaj) {
     const waUrl = waHref(phone, mesaj);
     return (
-      <a href={waUrl} className={className} style={{ display: "inline-block", textAlign: "center" }}>
+      <a href={waUrl} target="_blank" rel="noopener noreferrer" className={className} style={{ display: "inline-block", textAlign: "center" }}>
         WA Mesaj Gonder
       </a>
     );
