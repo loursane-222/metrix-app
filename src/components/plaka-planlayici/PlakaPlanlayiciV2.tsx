@@ -87,6 +87,8 @@ export type AIPlakaAktarSonucu = {
   toplamSureDakika: number;
   plakaGenislik: number;
   plakaYukseklik: number;
+  plakaImageUrl?: string;
+  rows?: KesimRow[];
   plakaLayoutJson?: any;
 };
 
@@ -291,6 +293,30 @@ export function PlakaPlanlayiciV2({
 
   const stopDrag = useCallback(() => { dragRef.current = null; }, []);
 
+  function rotatePiece(slabIndex: number, pieceId: number, plakaW: number, plakaH: number) {
+    setSonuclar(prev => prev.map(r => ({
+      ...r,
+      slabs: r.slabs.map(slab => {
+        if (slab.index !== slabIndex) return slab;
+        return {
+          ...slab,
+          yerlesim: slab.yerlesim.map(p => {
+            if (p.id !== pieceId) return p;
+            const nextW = p.yukseklik;
+            const nextH = p.genislik;
+            return {
+              ...p,
+              genislik: nextW,
+              yukseklik: nextH,
+              x: Math.max(0, Math.min(plakaW - nextW, p.x)),
+              y: Math.max(0, Math.min(plakaH - nextH, p.y)),
+            };
+          }),
+        };
+      }),
+    })));
+  }
+
   // ── Özet ─────────────────────────────────────────────────────────────────
   const toplamlar = useMemo(() => {
     const toplamPlaka = sonuclar.reduce((a, r) => a + r.plakaSayisi, 0);
@@ -327,10 +353,17 @@ export function PlakaPlanlayiciV2({
       stresAlmaMtul, stresAlmaDakika, fasonEbatlamaMtul, fasonEbatlamaDakika, toplamSureDakika,
       plakaGenislik: num(tip.plakaGenislik),
       plakaYukseklik: num(tip.plakaYukseklik),
+      plakaImageUrl: tip.imageUrl,
+      rows: tip.rows,
       plakaLayoutJson: sonuclar[0] ? {
         plakaSayisi: sonuclar[0].plakaSayisi,
         slabs: sonuclar[0].slabs,
         fireOrani: sonuclar[0].fireOrani,
+        rows: tip.rows,
+        plaka: {
+          genislik: num(tip.plakaGenislik),
+          yukseklik: num(tip.plakaYukseklik),
+        },
       } : null,
     };
   }
@@ -605,6 +638,7 @@ export function PlakaPlanlayiciV2({
                   result={result}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
+                  onRotate={rotatePiece}
                   stopDrag={stopDrag}
                 />
               ))}
@@ -617,9 +651,9 @@ export function PlakaPlanlayiciV2({
 }
 
 // ─── Tek plaka görseli ────────────────────────────────────────────────────────
-function SingleSlab({ slab, result, onPointerDown, onPointerMove, stopDrag }: {
+function SingleSlab({ slab, result, onPointerDown, onPointerMove, onRotate, stopDrag }: {
   slab: Slab; result: TipResult;
-  onPointerDown: any; onPointerMove: any; stopDrag: any;
+  onPointerDown: any; onPointerMove: any; onRotate: any; stopDrag: any;
 }) {
   const boardRef = useRef<HTMLDivElement>(null!);
   const parcaAlani = slab.yerlesim.reduce((s, p) => s + p.genislik * p.yukseklik, 0);
@@ -676,6 +710,18 @@ function SingleSlab({ slab, result, onPointerDown, onPointerMove, stopDrag }: {
                 padding: "2px",
               }}
             >
+              <button
+                type="button"
+                onPointerDown={e => e.stopPropagation()}
+                onClick={e => {
+                  e.stopPropagation();
+                  onRotate(slab.index, p.id, result.plakaGenislik, result.plakaYukseklik);
+                }}
+                className="absolute right-1 top-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-black text-slate-900 shadow"
+                title="90 derece döndür"
+              >
+                90°
+              </button>
               <span style={{ fontSize:"clamp(7px,1.1vw,11px)", fontWeight:900, lineHeight:1.2 }}>{label}</span>
               <small style={{ fontSize:"clamp(6px,0.9vw,10px)", opacity:0.8 }}>{p.genislik}×{p.yukseklik}</small>
             </div>
