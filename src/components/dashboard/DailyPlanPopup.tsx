@@ -111,8 +111,8 @@ export default function DailyPlanPopup() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 px-4 pt-4 pb-[calc(72px+env(safe-area-inset-bottom,0px)+16px)] md:p-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
         <div className="bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.34),transparent_35%),linear-gradient(135deg,#0f172a,#1e1b4b)] px-6 py-6 text-white">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/55">
             Günlük Operasyon Uyarısı
@@ -142,7 +142,7 @@ export default function DailyPlanPopup() {
           </div>
         </div>
 
-        <div className="max-h-[54vh] overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-6 py-5 max-h-[38vh] md:max-h-[54vh]">
           {loading ? (
             <p className="text-sm text-slate-500">Bugünün planı yükleniyor...</p>
           ) : items.length === 0 ? (
