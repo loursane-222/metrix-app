@@ -150,11 +150,14 @@ export async function GET(
   .footer { margin-top:8px; display:flex; justify-content:space-between; color:#64748b; font-size:8.5px; line-height:1.35; }
   .sign { border-top:1px solid #cbd5e1; width:145px; text-align:center; padding-top:5px; color:#334155; }
   .print { position:fixed; right:24px; top:24px; background:#2563eb; color:white; border:0; border-radius:14px; padding:12px 18px; font-weight:700; cursor:pointer; }
-  @media print { body{background:white;} .sheet{margin:0;} .print{display:none;} }
+  .no-print { position:fixed; left:24px; top:calc(env(safe-area-inset-top,0px) + 24px); background:rgba(15,23,42,0.85); color:#f1f5f9; border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:10px 18px; font-size:14px; font-weight:700; cursor:pointer; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); z-index:9999; }
+  .qr-fallback { width:76px; height:76px; background:#f8fafc; border:1px solid #dbeafe; border-radius:10px; display:flex; align-items:center; justify-content:center; text-align:center; color:#94a3b8; font-size:7.5px; line-height:1.4; }
+  @media print { body{background:white;} .sheet{margin:0;} .print{display:none;} .no-print{display:none !important;} }
 </style>
 </head>
 <body>
 <button class="print" onclick="window.print()">PDF olarak kaydet</button>
+<button class="no-print" onclick="window.close()">← Geri</button>
 
 <div class="sheet">
   <div class="hero">
@@ -241,7 +244,7 @@ export async function GET(
       <h3>Teklifi onaylamak için bize ulaşabilirsiniz.</h3>
       <p>Onay vermeniz durumunda ölçü, üretim ve uygulama süreci planlanarak iş programına alınacaktır.</p>
     </div>
-    ${qr ? `<img class="qr" src="${qr}" />` : `<div class="qr"></div>`}
+    ${qr ? `<img class="qr" src="${qr}" />` : `<div class="qr-fallback">WhatsApp<br>numarası<br>tanımlı değil</div>`}
   </div>
 
   <div class="footer">
