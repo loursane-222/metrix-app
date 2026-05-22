@@ -205,6 +205,10 @@ export default function DashboardPage() {
   const devamPct = toplamBar > 0 ? Math.round((finans.devam / toplamBar) * 100) : 0;
   const kaybPct = toplamBar > 0 ? 100 - onayPct - devamPct : 0;
 
+  const _bugun = new Date();
+  const gunAdi = _bugun.toLocaleDateString("tr-TR", { weekday: "long" });
+  const tamTarih = _bugun.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
+
   const kartlar = [
     { label: "Verilen Teklif", val: finans.verilen, sub: finans.teklifSayisi + " teklif", color: "text-white", border: "border-white/10" },
     { label: "Onaylanan", val: finans.onaylanan, sub: "%" + finans.donusumOrani + " donusum", color: "text-emerald-400", border: "border-emerald-500/20" },
@@ -238,56 +242,158 @@ export default function DashboardPage() {
 
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Genel Bakis</p>
-            <h1 className="mt-0.5 text-lg font-semibold text-white">Dashboard</h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Operasyon Merkezi</p>
+            <h1 className="mt-0.5 text-lg font-bold text-white">Dashboard</h1>
           </div>
-          <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
-            <button
-              onClick={() => setSekme("aylik")}
-              className={"rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all " + (sekme === "aylik" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white")}
-            >
-              Bu Ay
-            </button>
-            <button
-              onClick={() => setSekme("yillik")}
-              className={"rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all " + (sekme === "yillik" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white")}
-            >
-              Bu Yil
-            </button>
+          <div className="text-right">
+            <p className="text-xs font-semibold capitalize text-white">{gunAdi}</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">{tamTarih}</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          {kartlar.map((k) => (
-            <div key={k.label} className={"rounded-2xl border " + k.border + " bg-[#0B1120] p-4"}>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{k.label}</p>
-              <p className={"mt-2 text-[22px] font-black leading-none " + k.color}>{"₺" + fmt(k.val)}</p>
-              <p className="mt-1.5 text-[10px] text-slate-600">{k.sub}</p>
+        {/* ── 1. CANLI AKIŞ — hero section ─────────────────────────────────── */}
+        <div className="rounded-2xl border border-blue-500/15 bg-[#090f1d] p-4">
+          <div className="mb-4 flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-blue-400">Canli Akis</p>
+              <p className="mt-0.5 text-base font-bold text-white">Ekip Hareketleri</p>
             </div>
-          ))}
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
-          <p className="mb-3 text-[11px] uppercase tracking-[0.12em] text-slate-500">Teklif dagilimi</p>
-          <div className="flex h-2.5 w-full overflow-hidden rounded-full">
-            <div style={{ width: onayPct + "%", background: "#22c55e" }} className="transition-all duration-700" />
-            <div style={{ width: devamPct + "%", background: "#3b82f6" }} className="transition-all duration-700" />
-            <div style={{ width: kaybPct + "%", background: "#ef4444" }} className="transition-all duration-700" />
-          </div>
-          <div className="mt-3 flex flex-wrap gap-3">
-            {[
-              { color: "#22c55e", label: "Onaylanan", pct: onayPct },
-              { color: "#3b82f6", label: "Devam", pct: devamPct },
-              { color: "#ef4444", label: "Kaybedilen", pct: kaybPct },
-            ].map((l) => (
-              <span key={l.label} className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ background: l.color }} />
-                {l.label} %{l.pct}
+            <div className="flex flex-shrink-0 flex-col items-end gap-2">
+              <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-400">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                Canli
               </span>
+              <Link href="/dashboard/isler" className="text-[10px] text-slate-500 transition-colors hover:text-slate-300">
+                Tüm akışı görüntüle →
+              </Link>
+            </div>
+          </div>
+          {anaAkis.length === 0 && <p className="text-sm text-slate-600">Henuz aktivite yok.</p>}
+          <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
+            {anaAkis.map((a: any, i: number) => (
+              <div key={a.id || i} className="-mx-1 flex items-start gap-3 rounded-lg border-b border-white/5 px-1 py-3 last:border-0 transition-colors hover:bg-white/[0.03]">
+                <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ background: activityColor(a.type) }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] leading-snug text-slate-200">{a.message}</p>
+                  <p className="mt-0.5 text-[10px] uppercase tracking-wider text-slate-600">{a.type?.replace(/_/g, " ")}</p>
+                </div>
+                <span className="flex-shrink-0 whitespace-nowrap text-[10px] text-slate-600">{timeAgo(a.createdAt)}</span>
+              </div>
             ))}
           </div>
+          {anaAkis.length > 0 && (
+            <p className="mt-3 text-center text-[10px] text-slate-700">Son 5 is gunu · {anaAkis.length} hareket</p>
+          )}
         </div>
 
+        {/* ── 2. GÜNLÜK PLAN ────────────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Gunluk Plan</p>
+              <p className="mt-0.5 text-sm font-semibold text-white">Bugunun Programi</p>
+            </div>
+            <Link href="/dashboard/is-programi" className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-400 transition-colors hover:text-white">
+              Program
+            </Link>
+          </div>
+          {operasyonPlan.length === 0 && <p className="text-sm text-slate-600">Bugun icin planlanmis operasyon yok.</p>}
+          <div className="space-y-0">
+            {operasyonPlan.map((o: any) => (
+              <div key={o.id} className="flex items-start gap-3 border-b border-white/5 py-2.5 last:border-0">
+                <span className="w-10 flex-shrink-0 pt-0.5 text-[11px] font-semibold tabular-nums text-slate-500">{o.saat}</span>
+                <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ background: phaseColor(o.phase) }} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[12px] font-semibold text-white">{o.tip}</p>
+                    {o.tamamlandi && (
+                      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">Tamam</span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{o.musteri}{o.urun ? " · " + o.urun : ""}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {atelye.bugunOperasyon > 0 && (
+            <div className="mt-3 flex items-center justify-between rounded-xl border border-white/5 bg-white/5 px-3 py-2">
+              <span className="text-[11px] text-slate-500">
+                {atelye.bugunOperasyon - atelye.bekleyenOperasyon}/{atelye.bugunOperasyon} görev tamamlandı
+              </span>
+              <span className={`text-[11px] font-semibold ${atelye.bekleyenOperasyon === 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                {atelye.bekleyenOperasyon === 0 ? "Tümü tamam" : `${atelye.bekleyenOperasyon} aktif`}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ── 3. TAHSİLAT ──────────────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-amber-500/15 bg-[#0B1120] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-amber-600">Tahsilat</p>
+              <p className="mt-0.5 text-sm font-semibold text-white">Vadesi Gelen Odemeler</p>
+            </div>
+            <Link href="/dashboard/tahsilatlar" className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-400 transition-colors hover:text-white">
+              Tumu
+            </Link>
+          </div>
+          {vadesiGelenler.length === 0 && <p className="text-sm text-slate-600">Vadesi gelen odeme bulunmuyor.</p>}
+          <div className="space-y-0">
+            {vadesiGelenler.map((v: any) => {
+              const phone = phoneClean(v.musteriTelefon);
+              const isGecmis = v.durum === "gecmis";
+              const aiPayload = {
+                musteriAdi: v.musteriAdi,
+                tutar: v.tutar,
+                vadeTarihi: v.vadeTarihi,
+                gecenGun: v.gecenGun,
+                teklifNo: v.teklifNo,
+              };
+              return (
+                <div key={v.id} className="border-b border-white/5 py-3 last:border-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-semibold text-white">{v.musteriAdi}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-600">
+                        {new Date(v.vadeTarihi).toLocaleDateString("tr-TR")}{v.teklifNo ? " · " + v.teklifNo : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
+                      <p className={"text-[13px] font-black " + (isGecmis ? "text-red-400" : "text-amber-400")}>{"₺" + fmt(v.tutar)}</p>
+                      {isGecmis ? (
+                        <span className="rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-400">{v.gecenGun}g gecti</span>
+                      ) : (
+                        <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-400">Bugun</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-1.5">
+                    {phone.length > 0 ? (
+                      <AiWaButon
+                        label="WA Mesaj Gonder"
+                        phone={phone}
+                        payload={aiPayload}
+                        tip="tahsilat"
+                        className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-50 border border-amber-500/20"
+                      />
+                    ) : (
+                      <Link
+                        href={v.musteriId ? `/dashboard/musteriler?musteriId=${v.musteriId}&duzenle=1` : "/dashboard/musteriler"}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/60 px-2 py-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                      >
+                        <span>Telefon kayitli degil</span>
+                        <span className="text-slate-600">· Ekle</span>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── 4. SICAK SATIŞLAR ────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-emerald-500/15 bg-[#08111f] p-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -361,137 +467,53 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Canli Akis</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">Ekip Hareketleri</p>
+        {/* ── 5. FİNANS — compact, at bottom ──────────────────────────────── */}
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Finans Ozeti</p>
+          <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+            <button
+              onClick={() => setSekme("aylik")}
+              className={"rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all " + (sekme === "aylik" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white")}
+            >
+              Bu Ay
+            </button>
+            <button
+              onClick={() => setSekme("yillik")}
+              className={"rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all " + (sekme === "yillik" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white")}
+            >
+              Bu Yil
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {kartlar.map((k) => (
+            <div key={k.label} className={"rounded-2xl border " + k.border + " bg-[#0B1120] p-3"}>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{k.label}</p>
+              <p className={"mt-1.5 text-xl font-black leading-none " + k.color}>{"₺" + fmt(k.val)}</p>
+              <p className="mt-1 text-[10px] text-slate-600">{k.sub}</p>
             </div>
-            <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-400">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              Canli
-            </span>
-          </div>
-          {anaAkis.length === 0 && <p className="text-sm text-slate-600">Henuz aktivite yok.</p>}
-          <div
-            className="space-y-0 overflow-y-auto"
-            style={{ maxHeight: 380 }}
-          >
-            {anaAkis.map((a: any, i: number) => (
-              <div key={a.id || i} className="flex items-start gap-3 border-b border-white/5 py-2.5 last:border-0">
-                <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ background: activityColor(a.type) }} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] leading-snug text-slate-200">{a.message}</p>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <p className="text-[10px] uppercase tracking-wider text-slate-600">{a.type?.replace(/_/g, " ")}</p>
-                  </div>
-                </div>
-                <span className="flex-shrink-0 text-[10px] text-slate-600 whitespace-nowrap">{timeAgo(a.createdAt)}</span>
-              </div>
-            ))}
-          </div>
-          {anaAkis.length > 0 && (
-            <p className="mt-2 text-[10px] text-slate-700 text-center">Son 5 is gunu · {anaAkis.length} hareket</p>
-          )}
+          ))}
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
-          <div className="mb-3">
-            <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Gunluk Plan</p>
-            <p className="mt-0.5 text-sm font-semibold text-white">Bugunun Programi</p>
+          <p className="mb-3 text-[11px] uppercase tracking-[0.12em] text-slate-500">Teklif dagilimi</p>
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full">
+            <div style={{ width: onayPct + "%", background: "#22c55e" }} className="transition-all duration-700" />
+            <div style={{ width: devamPct + "%", background: "#3b82f6" }} className="transition-all duration-700" />
+            <div style={{ width: kaybPct + "%", background: "#ef4444" }} className="transition-all duration-700" />
           </div>
-          {operasyonPlan.length === 0 && <p className="text-sm text-slate-600">Bugun icin planlanmis operasyon yok.</p>}
-          <div className="space-y-0">
-            {operasyonPlan.map((o: any) => (
-              <div key={o.id} className="flex items-start gap-3 border-b border-white/5 py-2.5 last:border-0">
-                <span className="w-10 flex-shrink-0 pt-0.5 text-[11px] font-semibold tabular-nums text-slate-500">{o.saat}</span>
-                <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ background: phaseColor(o.phase) }} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[12px] font-semibold text-white">{o.tip}</p>
-                    {o.tamamlandi && (
-                      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">Tamam</span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-slate-500">{o.musteri}{o.urun ? " · " + o.urun : ""}</p>
-                </div>
-              </div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {[
+              { color: "#22c55e", label: "Onaylanan", pct: onayPct },
+              { color: "#3b82f6", label: "Devam", pct: devamPct },
+              { color: "#ef4444", label: "Kaybedilen", pct: kaybPct },
+            ].map((l) => (
+              <span key={l.label} className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ background: l.color }} />
+                {l.label} %{l.pct}
+              </span>
             ))}
-          </div>
-          {atelye.bugunOperasyon > 0 && (
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-white/5 bg-white/5 px-3 py-2">
-              <span className="text-[11px] text-slate-500">
-                {atelye.bugunOperasyon - atelye.bekleyenOperasyon}/{atelye.bugunOperasyon} görev tamamlandı
-              </span>
-              <span className={`text-[11px] font-semibold ${atelye.bekleyenOperasyon === 0 ? "text-emerald-400" : "text-amber-400"}`}>
-                {atelye.bekleyenOperasyon === 0 ? "Tümü tamam" : `${atelye.bekleyenOperasyon} aktif`}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-amber-500/15 bg-[#0B1120] p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-amber-600">Tahsilat</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">Vadesi Gelen Odemeler</p>
-            </div>
-            <Link href="/dashboard/tahsilatlar" className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-400 transition-colors hover:text-white">
-              Tumu
-            </Link>
-          </div>
-          {vadesiGelenler.length === 0 && <p className="text-sm text-slate-600">Vadesi gelen odeme bulunmuyor.</p>}
-          <div className="space-y-0">
-            {vadesiGelenler.map((v: any) => {
-              const phone = phoneClean(v.musteriTelefon);
-              const isGecmis = v.durum === "gecmis";
-              const aiPayload = {
-                musteriAdi: v.musteriAdi,
-                tutar: v.tutar,
-                vadeTarihi: v.vadeTarihi,
-                gecenGun: v.gecenGun,
-                teklifNo: v.teklifNo,
-              };
-              return (
-                <div key={v.id} className="border-b border-white/5 py-3 last:border-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] font-semibold text-white">{v.musteriAdi}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-600">
-                        {new Date(v.vadeTarihi).toLocaleDateString("tr-TR")}{v.teklifNo ? " · " + v.teklifNo : ""}
-                      </p>
-                    </div>
-                    <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
-                      <p className={"text-[13px] font-black " + (isGecmis ? "text-red-400" : "text-amber-400")}>{"₺" + fmt(v.tutar)}</p>
-                      {isGecmis ? (
-                        <span className="rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-400">{v.gecenGun}g gecti</span>
-                      ) : (
-                        <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-400">Bugun</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-1.5">
-                    {phone.length > 0 ? (
-                      <AiWaButon
-                        label="WA Mesaj Gonder"
-                        phone={phone}
-                        payload={aiPayload}
-                        tip="tahsilat"
-                        className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-50 border border-amber-500/20"
-                      />
-                    ) : (
-                      <Link
-                        href={v.musteriId ? `/dashboard/musteriler?musteriId=${v.musteriId}&duzenle=1` : "/dashboard/musteriler"}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/60 px-2 py-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-                      >
-                        <span>Telefon kayitli degil</span>
-                        <span className="text-slate-600">· Ekle</span>
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
 
