@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function TeklifClient({ teklifNo, pdfUrl }: any) {
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    setIsMobile(window.innerWidth < 760);
     fetch("/api/public/event", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -30,18 +32,44 @@ export default function TeklifClient({ teklifNo, pdfUrl }: any) {
   };
 
   return (
-    <button
-      onClick={openPdf}
-      style={{
-        padding: "12px 20px",
-        background: "#111",
-        color: "#fff",
-        borderRadius: "8px",
-        marginTop: "20px",
-        cursor: "pointer"
-      }}
-    >
-      PDF Teklifi Aç
-    </button>
+    <>
+      {isMobile && (
+        <button
+          onClick={() => history.back()}
+          style={{
+            position: "fixed",
+            top: "calc(12px + env(safe-area-inset-top, 0px))",
+            left: "12px",
+            zIndex: 9999,
+            background: "rgba(15,23,42,0.82)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            color: "#f1f5f9",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: "12px",
+            padding: "9px 16px",
+            fontSize: "14px",
+            fontWeight: 700,
+            cursor: "pointer",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          ← Geri
+        </button>
+      )}
+      <button
+        onClick={openPdf}
+        style={{
+          padding: "12px 20px",
+          background: "#111",
+          color: "#fff",
+          borderRadius: "8px",
+          marginTop: "20px",
+          cursor: "pointer"
+        }}
+      >
+        PDF Teklifi Aç
+      </button>
+    </>
   );
 }

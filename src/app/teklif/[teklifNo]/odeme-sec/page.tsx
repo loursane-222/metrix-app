@@ -51,8 +51,35 @@ export default function Page({ params }: { params: Promise<{ teklifNo: string }>
     }
   }
 
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => { setIsMobile(window.innerWidth < 760); }, []);
+
   return (
     <main style={{ minHeight: "100vh", background: "#eef2f7", padding: "36px", fontFamily: "Arial, sans-serif" }}>
+      {isMobile && (
+        <button
+          onClick={() => history.back()}
+          style={{
+            position: "fixed",
+            top: "calc(12px + env(safe-area-inset-top, 0px))",
+            left: "12px",
+            zIndex: 9999,
+            background: "rgba(15,23,42,0.82)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            color: "#f1f5f9",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: "12px",
+            padding: "9px 16px",
+            fontSize: "14px",
+            fontWeight: 700,
+            cursor: "pointer",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          ← Geri
+        </button>
+      )}
       <div style={{ maxWidth: 780, margin: "0 auto" }}>
         <div style={{ background: "linear-gradient(135deg,#0f172a,#1e1b4b)", color: "white", borderRadius: 24, padding: 28, marginBottom: 24 }}>
           <p style={{ margin: "0 0 4px", fontSize: 12, color: "#cbd5e1", letterSpacing: 2 }}>TEKLİF ONAY</p>
