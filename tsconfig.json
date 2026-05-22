@@ -40,6 +40,11 @@
     "_archive",
     "_archive/**/*",
     "backups",
-    "backups/**/*"
+    "backups/**/*",
+    "**/*.broken.*",
+    "**/*.backup.*",
+    "**/*.bak",
+    "**/*.bak-*",
+    "**/*.before-*"
   ]
 }
