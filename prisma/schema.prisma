@@ -532,7 +532,9 @@ model PhaseExecution {
   machineId       String?              // FK yok, ileride Makine ilişkisi eklenebilir
 
   notes           String?
-  cannotStartReason String?            // CannotStartReason değeri (string)
+  cannotStartReason   String?          // CannotStartReason değeri (string)
+  failureDescription  String?          // taş kırıldı vb. serbest metin detay
+  materialLossCost    Decimal?         // TL cinsinden tahmini maliyet kaybı
 
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt

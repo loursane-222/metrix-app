@@ -33,6 +33,8 @@ export interface TransitionInput {
   personelId?: string | null
   note?: string | null
   cannotStartReason?: string | null
+  failureDescription?: string | null
+  materialLossCost?: number | null
   mtul?: number | null
 }
 
@@ -111,6 +113,8 @@ export async function transitionExecution(input: TransitionInput) {
     personelId,
     note,
     cannotStartReason,
+    failureDescription,
+    materialLossCost,
     mtul,
   } = input
 
@@ -157,6 +161,8 @@ export async function transitionExecution(input: TransitionInput) {
 
     case "CANNOT_START":
       if (cannotStartReason) update.cannotStartReason = cannotStartReason
+      if (failureDescription) update.failureDescription = failureDescription
+      if (materialLossCost != null) update.materialLossCost = materialLossCost
       break
 
     case "PAUSED":
@@ -192,8 +198,12 @@ export async function transitionExecution(input: TransitionInput) {
         eventType,
         note: note ?? null,
         metadata:
-          toStatus === "CANNOT_START" && cannotStartReason
-            ? { cannotStartReason }
+          toStatus === "CANNOT_START"
+            ? {
+                ...(cannotStartReason ? { cannotStartReason } : {}),
+                ...(failureDescription ? { failureDescription } : {}),
+                ...(materialLossCost != null ? { materialLossCost } : {}),
+              }
             : undefined,
       },
     })

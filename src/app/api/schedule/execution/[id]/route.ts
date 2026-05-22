@@ -62,6 +62,8 @@ export async function PATCH(
       personelId,
       note: body.note ? String(body.note) : null,
       cannotStartReason: body.cannotStartReason ? String(body.cannotStartReason) : null,
+      failureDescription: body.failureDescription ? String(body.failureDescription) : null,
+      materialLossCost: body.materialLossCost != null ? Number(body.materialLossCost) : null,
       mtul: body.mtul != null ? Number(body.mtul) : null,
     })
 

@@ -20,6 +20,8 @@ interface ExecutionData {
   actualEndedAt: string | null
   actualMinutes: number | null
   cannotStartReason: string | null
+  failureDescription: string | null
+  materialLossCost: string | null  // Decimal → JSON string
   estimatedMinutes: number | null
 }
 
@@ -42,15 +44,35 @@ const STATUS_META: Record<ExecutionStatus, { label: string; badge: string }> = {
   RESCHEDULE_REQUESTED: { label: "Yeniden Planlanacak",   badge: "border-purple-500/40 bg-purple-500/15 text-purple-300" },
 }
 
-const CANNOT_START_REASONS = [
-  { value: "CUSTOMER_NOT_READY",    label: "Müşteri hazır değil" },
-  { value: "MATERIAL_MISSING",      label: "Malzeme eksik" },
-  { value: "MEASUREMENT_MISSING",   label: "Ölçü eksik" },
-  { value: "MACHINE_BUSY",          label: "Makine meşgul" },
-  { value: "PERSONNEL_UNAVAILABLE", label: "Personel yok" },
-  { value: "SITE_NOT_READY",        label: "Saha hazır değil" },
-  { value: "OTHER",                 label: "Diğer" },
+// Scalable failure reason structure — ileride phaseScope ile KESIM/TOPLAMA'ya genişler
+interface FailureReason {
+  value: string
+  label: string
+  requiresDetail?: boolean   // ek açıklama + maliyet alanı açar
+  phaseScope?: string[]      // hangi fazlarda gösterilir (undefined = tümü)
+}
+
+const FAILURE_REASONS: FailureReason[] = [
+  { value: "CUSTOMER_NOT_READY",      label: "Müşteri hazır değil" },
+  { value: "MATERIAL_MISSING",        label: "Malzeme eksik" },
+  { value: "MEASUREMENT_MISSING",     label: "Ölçü eksik" },
+  { value: "MACHINE_BUSY",            label: "Makine meşgul" },
+  { value: "PERSONNEL_UNAVAILABLE",   label: "Personel yok" },
+  { value: "SITE_NOT_READY",          label: "Saha hazır değil" },
+  {
+    value: "STONE_BROKEN_IN_CUTTING",
+    label: "Kesimde taş kırıldı",
+    requiresDetail: true,
+    phaseScope: ["IMALAT"],
+  },
+  { value: "OTHER",                   label: "Diğer" },
 ]
+
+function getReasonsForPhase(phaseType?: string): FailureReason[] {
+  return FAILURE_REASONS.filter(
+    (r) => !r.phaseScope || (phaseType && r.phaseScope.includes(phaseType)),
+  )
+}
 
 const PHASE_LABELS: Record<string, string> = {
   OLCU: "Ölçü", IMALAT: "İmalat", MONTAJ: "Montaj",
@@ -115,8 +137,10 @@ export default function ExecutionControlPanel({
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState<string | null>(null)
   const [conflict, setConflict]   = useState(false)
-  const [showReasonPicker, setShowReasonPicker] = useState(false)
-  const [cannotReason, setCannotReason]         = useState("")
+  const [showReasonPicker, setShowReasonPicker]     = useState(false)
+  const [cannotReason, setCannotReason]             = useState("")
+  const [failureDescription, setFailureDescription] = useState("")
+  const [materialLossCost, setMaterialLossCost]     = useState("")
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -149,7 +173,7 @@ export default function ExecutionControlPanel({
   async function doTransition(
     execId: string,
     toStatus: ExecutionStatus,
-    extra?: { cannotStartReason?: string; mtul?: number },
+    extra?: { cannotStartReason?: string; failureDescription?: string; materialLossCost?: number; mtul?: number },
   ): Promise<ExecutionData | null> {
     const res  = await fetch(`/api/schedule/execution/${execId}`, {
       method:      "PATCH",
@@ -218,7 +242,7 @@ export default function ExecutionControlPanel({
 
   async function handleTransition(
     toStatus: ExecutionStatus,
-    extra?: { cannotStartReason?: string; mtul?: number },
+    extra?: { cannotStartReason?: string; failureDescription?: string; materialLossCost?: number; mtul?: number },
   ) {
     if (!execution?.id) return
     setLoading(true)
@@ -240,9 +264,19 @@ export default function ExecutionControlPanel({
 
   async function handleCannotStart() {
     if (!cannotReason) return
+    const meta = FAILURE_REASONS.find((r) => r.value === cannotReason)
+    if (meta?.requiresDetail && (!materialLossCost || Number(materialLossCost) < 0)) return
     setShowReasonPicker(false)
-    await handleTransition("CANNOT_START", { cannotStartReason: cannotReason })
+    await handleTransition("CANNOT_START", {
+      cannotStartReason: cannotReason,
+      ...(meta?.requiresDetail ? {
+        failureDescription: failureDescription || undefined,
+        materialLossCost: Number(materialLossCost),
+      } : {}),
+    })
     setCannotReason("")
+    setFailureDescription("")
+    setMaterialLossCost("")
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -250,6 +284,11 @@ export default function ExecutionControlPanel({
   const status     = execution?.status ?? null
   const isTerminal = status !== null && TERMINAL.includes(status)
   const phaseLabel = phaseType ? PHASE_LABELS[phaseType] ?? phaseType : "Aşama"
+
+  const visibleReasons = getReasonsForPhase(phaseType)
+  const selectedReasonMeta = FAILURE_REASONS.find((r) => r.value === cannotReason)
+  const needsDetail = selectedReasonMeta?.requiresDetail ?? false
+  const detailValid = !needsDetail || (materialLossCost !== "" && Number(materialLossCost) >= 0)
 
   // İlk yükleme
   if (fetching) {
@@ -303,10 +342,10 @@ export default function ExecutionControlPanel({
         <div className="mb-2 space-y-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Başlanamama Nedeni</p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {CANNOT_START_REASONS.map((r) => (
+            {visibleReasons.map((r) => (
               <button
                 key={r.value}
-                onClick={() => setCannotReason(r.value)}
+                onClick={() => { setCannotReason(r.value); setFailureDescription(""); setMaterialLossCost("") }}
                 className={[
                   "rounded-2xl border px-3 py-2.5 text-left text-sm transition",
                   cannotReason === r.value
@@ -318,18 +357,61 @@ export default function ExecutionControlPanel({
               </button>
             ))}
           </div>
+
+          {/* Taş kırıldı — detay alanları */}
+          {needsDetail && (
+            <div className="space-y-3 rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-red-300/80">
+                  Açıklama
+                </label>
+                <textarea
+                  value={failureDescription}
+                  onChange={(e) => setFailureDescription(e.target.value)}
+                  rows={3}
+                  placeholder={"Köşe kırıldı\nDamar dağıldı\nOperatör hatası\nTaşıma sırasında çatladı"}
+                  className="w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-red-300/80">
+                  Maliyet Etkisi (TL) <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={materialLossCost}
+                    onChange={(e) => setMaterialLossCost(e.target.value)}
+                    placeholder="0"
+                    className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 pr-10 text-sm text-white outline-none placeholder:text-slate-600"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">
+                    ₺
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-1">
             <ActionBtn
               label="Vazgeç"
               variant="ghost"
-              onClick={() => { setShowReasonPicker(false); setCannotReason("") }}
+              onClick={() => {
+                setShowReasonPicker(false)
+                setCannotReason("")
+                setFailureDescription("")
+                setMaterialLossCost("")
+              }}
             />
             <ActionBtn
               label="Başlanamadı Olarak İşaretle"
               loadingLabel="Kaydediliyor..."
               variant="red"
               loading={loading}
-              disabled={!cannotReason}
+              disabled={!cannotReason || !detailValid}
               onClick={handleCannotStart}
             />
           </div>
@@ -412,11 +494,20 @@ export default function ExecutionControlPanel({
 
       {/* CANNOT_START reason display */}
       {status === "CANNOT_START" && execution?.cannotStartReason && !showReasonPicker && (
-        <p className="mt-3 text-xs text-slate-500">
-          Neden:{" "}
-          {CANNOT_START_REASONS.find((r) => r.value === execution.cannotStartReason)?.label
-            ?? execution.cannotStartReason}
-        </p>
+        <div className="mt-3 space-y-1.5 rounded-2xl border border-red-500/15 bg-red-500/5 px-4 py-3">
+          <p className="text-xs font-bold text-red-300/80">
+            {FAILURE_REASONS.find((r) => r.value === execution.cannotStartReason)?.label
+              ?? execution.cannotStartReason}
+          </p>
+          {execution.failureDescription && (
+            <p className="text-xs text-slate-400 leading-relaxed">{execution.failureDescription}</p>
+          )}
+          {execution.materialLossCost && (
+            <p className="text-xs font-bold text-red-300">
+              Maliyet etkisi: ₺{Number(execution.materialLossCost).toLocaleString("tr-TR")}
+            </p>
+          )}
+        </div>
       )}
 
     </div>
