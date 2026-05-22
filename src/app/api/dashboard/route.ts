@@ -248,9 +248,28 @@ export async function GET() {
             ).map((p) => [p.id, p.ad])
           )
         : {};
+    // userId → User.ad (admin girişleri için fallback)
+    const userIds = [
+      ...new Set(anaAkisRaw.map((a) => a.userId).filter(Boolean)),
+    ] as string[];
+    const userMap: Record<string, string> =
+      userIds.length > 0
+        ? Object.fromEntries(
+            (
+              await prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { id: true, ad: true },
+              })
+            ).map((u) => [u.id, u.ad || ""])
+          )
+        : {};
+
     const anaAkis = anaAkisRaw.map((a) => ({
       ...a,
-      personelAdi: a.personelId ? (personelMap[a.personelId] ?? null) : null,
+      actorAdi:
+        (a.personelId ? personelMap[a.personelId] : null) ??
+        (a.userId ? (userMap[a.userId] || null) : null) ??
+        null,
     }));
 
     // --- BUGÜNÜN PLANI ---

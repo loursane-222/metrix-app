@@ -258,15 +258,10 @@ export default function DashboardPage() {
               <p className="text-[11px] uppercase tracking-[0.12em] text-blue-400">Canli Akis</p>
               <p className="mt-0.5 text-base font-bold text-white">Ekip Hareketleri</p>
             </div>
-            <div className="flex flex-shrink-0 flex-col items-end gap-2">
-              <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                Canli
-              </span>
-              <Link href="/dashboard/isler" className="text-[10px] text-slate-500 transition-colors hover:text-slate-300">
-                Tüm akışı görüntüle →
-              </Link>
-            </div>
+            <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-400">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              Canli
+            </span>
           </div>
           {anaAkis.length === 0 && <p className="text-sm text-slate-600">Henuz aktivite yok.</p>}
           <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
@@ -276,8 +271,8 @@ export default function DashboardPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-[12px] leading-snug text-slate-200">{a.message}</p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                    {a.personelAdi && (
-                      <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">{a.personelAdi}</span>
+                    {a.actorAdi && (
+                      <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">{a.actorAdi}</span>
                     )}
                     <p className="text-[10px] uppercase tracking-wider text-slate-600">{a.type?.replace(/_/g, " ")}</p>
                   </div>

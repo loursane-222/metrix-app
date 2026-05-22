@@ -64,17 +64,17 @@ export async function PATCH(req: NextRequest) {
 
     if (nextDate) {
       const tarihStr = nextDate.toLocaleDateString("tr-TR");
-      await logActivity({ atolyeId: auth.atolyeId, type: "program_tarih_degisti", message: musteriAdi + " – " + fazAdi + " fazinin tarihi " + tarihStr + " olarak guncellendi.", refId: phaseId, userId: auth.userId });
+      await logActivity({ atolyeId: auth.atolyeId, type: "program_tarih_degisti", message: musteriAdi + " – " + fazAdi + " fazinin tarihi " + tarihStr + " olarak guncellendi.", refId: phaseId, userId: auth.userId, personelId: auth.personelId || undefined });
     }
 
     if (personelIds !== null) {
       const yeniPersoneller = await prisma.personel.findMany({ where: { id: { in: personelIds } }, select: { ad: true, soyad: true } });
       const isimler = yeniPersoneller.map((p) => p.ad + " " + p.soyad).join(", ") || "personel kaldirildi";
-      await logActivity({ atolyeId: auth.atolyeId, type: "program_personel_degisti", message: musteriAdi + " – " + fazAdi + " fazina atama degisti: " + isimler, refId: phaseId, userId: auth.userId });
+      await logActivity({ atolyeId: auth.atolyeId, type: "program_personel_degisti", message: musteriAdi + " – " + fazAdi + " fazina atama degisti: " + isimler, refId: phaseId, userId: auth.userId, personelId: auth.personelId || undefined });
     }
 
     if (notes !== undefined) {
-      await logActivity({ atolyeId: auth.atolyeId, type: "program_not_eklendi", message: musteriAdi + " – " + fazAdi + " fazina not eklendi.", refId: phaseId, userId: auth.userId });
+      await logActivity({ atolyeId: auth.atolyeId, type: "program_not_eklendi", message: musteriAdi + " – " + fazAdi + " fazina not eklendi.", refId: phaseId, userId: auth.userId, personelId: auth.personelId || undefined });
     }
 
     const updated = await prisma.schedulePhase.findUnique({

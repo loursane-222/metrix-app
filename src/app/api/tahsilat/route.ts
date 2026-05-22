@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     message: musteriAdi + " – " + Number(body.tutar || 0).toLocaleString("tr-TR") + " TL tahsilat yapildi.",
     refId: tahsilat.id,
     userId: auth.userId,
+    personelId: auth.personelId || undefined,
   });
 
   return NextResponse.json({ tahsilat });

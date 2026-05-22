@@ -355,6 +355,7 @@ export async function togglePhaseCompletion(data: {
       message: mesaj,
       refId: phase.workSchedule.isId,
       userId: auth.userId || undefined,
+      personelId: auth.personelId || undefined,
     })
   } catch {}
 

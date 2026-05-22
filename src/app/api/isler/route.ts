@@ -269,6 +269,7 @@ export async function POST(req: NextRequest) {
       message: musteriAdi + ' icin ' + teklifNo + ' numarali teklif olusturuldu. Tutar: ' + satisFiyati.toLocaleString('tr-TR') + ' TL',
       refId: is.id,
       userId: auth.userId,
+      personelId: auth.personelId || undefined,
     })
   } catch {}
 

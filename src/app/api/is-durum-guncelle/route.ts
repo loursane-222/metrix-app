@@ -49,11 +49,11 @@ export async function POST(req: Request) {
       const musteriAdi = updated.musteriAdi || updated.musteri?.firmaAdi || "Musteri";
       const teklifNo = updated.teklifNo || "";
       if (durum === "onaylandi") {
-        await logActivity({ atolyeId, type: "teklif_onaylandi", message: musteriAdi + " – " + teklifNo + " teklifi onaylandi. Tutar: " + tutar.toLocaleString("tr-TR") + " TL", refId: id });
+        await logActivity({ atolyeId, type: "teklif_onaylandi", message: musteriAdi + " – " + teklifNo + " teklifi onaylandi. Tutar: " + tutar.toLocaleString("tr-TR") + " TL", refId: id, userId: auth.userId, personelId: auth.personelId || undefined });
       } else if (durum === "kaybedildi") {
-        await logActivity({ atolyeId, type: "teklif_kaybedildi", message: musteriAdi + " – " + teklifNo + " teklifi kaybedildi.", refId: id });
+        await logActivity({ atolyeId, type: "teklif_kaybedildi", message: musteriAdi + " – " + teklifNo + " teklifi kaybedildi.", refId: id, userId: auth.userId, personelId: auth.personelId || undefined });
       } else if (durum === "teklif_verildi") {
-        await logActivity({ atolyeId, type: "teklif_guncellendi", message: musteriAdi + " – " + teklifNo + " durumu teklif verildi olarak guncellendi.", refId: id });
+        await logActivity({ atolyeId, type: "teklif_guncellendi", message: musteriAdi + " – " + teklifNo + " durumu teklif verildi olarak guncellendi.", refId: id, userId: auth.userId, personelId: auth.personelId || undefined });
       }
     }
 

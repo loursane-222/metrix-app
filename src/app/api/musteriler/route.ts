@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
       message: musteriAdi + ' adli yeni musteri kaydi olusturuldu.',
       refId: musteri.id,
       userId: auth.userId,
+      personelId: auth.personelId || undefined,
     })
   } catch {}
   return NextResponse.json({ musteri })
