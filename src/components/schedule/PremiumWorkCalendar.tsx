@@ -119,6 +119,11 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
                 .join(", ")
             : "Personel atanmadı";
 
+        const execs: Array<{ status: string }> = phase.executions || [];
+        const hasStarted = execs.some((e) => e.status === "STARTED");
+        const hasPaused = execs.some((e) => e.status === "PAUSED");
+        const executionStatus = hasStarted ? "STARTED" : hasPaused ? "PAUSED" : null;
+
         mapped.push({
           id: phase.id,
           scheduleId: schedule.id,
@@ -132,6 +137,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
           personelText,
           toplamSureDakika: phase.workSchedule?.is?.toplamSureDakika || 0,
           fazAtamalari: phase.fazAtamalar || [],
+          executionStatus,
         });
       });
     });
@@ -289,10 +295,20 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
             <div className={`text-xs font-bold ${m.text}`}>{formatTaskTime(task.date)}</div>
             <div className="mt-0.5 line-clamp-2 text-sm font-semibold text-white">{task.title}</div>
             <div className="mt-0.5 line-clamp-1 text-xs text-slate-400">{task.personelText}</div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
               <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${m.bg} ${m.text}`}>
                 {m.label.toUpperCase()}
               </span>
+              {task.executionStatus === "STARTED" && (
+                <span className="rounded-md bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-400">
+                  ÇALIŞIYOR
+                </span>
+              )}
+              {task.executionStatus === "PAUSED" && (
+                <span className="rounded-md bg-yellow-500/15 px-2 py-0.5 text-[10px] font-bold text-yellow-400">
+                  DURAKLADI
+                </span>
+              )}
               {delayed && (
                 <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-300">
                   GECİKTİ

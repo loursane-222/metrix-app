@@ -125,6 +125,9 @@ export async function getSchedulesForMonth(year: number, month: number) {
           },
         },
       },
+      executions: {
+        select: { status: true },
+      },
     },
   };
 
