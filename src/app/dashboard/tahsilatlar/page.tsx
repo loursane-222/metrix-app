@@ -395,7 +395,10 @@ export default function TahsilatlarPage() {
                   if (phone && !phone.startsWith("90")) phone = "90" + phone
                   const ad = seciliMusteri.firmaAdi || seciliMusteri.ad
                   const mesaj = `Merhaba ${ad}, ödeme planınız hakkında bilgi vermek için ulaşıyoruz.`
-                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}`, "_blank")
+                  const url = `https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}`
+                  const a = document.createElement("a")
+                  a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"
+                  document.body.appendChild(a); a.click(); document.body.removeChild(a)
                 }}
                 style={{ marginTop:"10px", width:"100%", padding:"10px", background:"rgba(34,197,94,0.08)", border:"1px solid rgba(34,197,94,0.2)", borderRadius:"12px", color:"#4ade80", fontSize:"13px", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"6px" }}
               >

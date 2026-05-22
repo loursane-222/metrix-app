@@ -133,9 +133,6 @@ export default function PremiumEkstreModal({ aktif, analiz, onClose, tl, pct, mu
   }
 
   async function whatsappPaylas() {
-    // Önce PDF'i indir
-    await pdfIndir();
-    // Sonra telefon numarasına yönlendir
     let phone = (aktif?.telefon || "").replace(/\D/g, "");
     if (phone.startsWith("0")) phone = "90" + phone.slice(1);
     if (phone && !phone.startsWith("90")) phone = "90" + phone;
@@ -143,7 +140,11 @@ export default function PremiumEkstreModal({ aktif, analiz, onClose, tl, pct, mu
       `Merhaba ${musteriAdi(aktif)},\n\nGüncel hesap ekstreniz ekte (PDF) gönderilmiştir.\n\nOnaylı Ciro: ${tl(analiz.ciro)}\nTahsilat: ${tl(analiz.tahsilat)}\nGüncel Bakiye: ${tl(analiz.bakiye)}\n\n${aiOdemeNotu()}`
     );
     const url = phone ? `https://wa.me/${phone}?text=${mesaj}` : `https://wa.me/?text=${mesaj}`;
-    window.open(url, "_blank");
+    // window.open must be called synchronously within the user gesture before any await,
+    // otherwise mobile Safari silently blocks it (gesture context lost after async gap).
+    const win = window.open("", "_blank");
+    await pdfIndir();
+    if (win) win.location.href = url;
   }
 
   if (!aktif || !analiz) return null;
