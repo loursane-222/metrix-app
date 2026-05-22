@@ -422,8 +422,12 @@ export default function DashboardPage() {
           </div>
           {atelye.bugunOperasyon > 0 && (
             <div className="mt-3 flex items-center justify-between rounded-xl border border-white/5 bg-white/5 px-3 py-2">
-              <span className="text-[11px] text-slate-500">{atelye.bekleyenOperasyon} bekliyor / {atelye.bugunOperasyon} toplam</span>
-              <span className="text-[11px] font-semibold text-blue-400">%{atelye.doluluk} doluluk</span>
+              <span className="text-[11px] text-slate-500">
+                {atelye.bugunOperasyon - atelye.bekleyenOperasyon}/{atelye.bugunOperasyon} görev tamamlandı
+              </span>
+              <span className={`text-[11px] font-semibold ${atelye.bekleyenOperasyon === 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                {atelye.bekleyenOperasyon === 0 ? "Tümü tamam" : `${atelye.bekleyenOperasyon} aktif`}
+              </span>
             </div>
           )}
         </div>
