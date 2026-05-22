@@ -491,20 +491,20 @@ export default function AtolyePage() {
         <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-28 pt-[104px] md:p-5 md:overflow-y-auto">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Maliyet Motoru</p>
-              <h2 className="mt-2 text-2xl font-semibold leading-tight md:text-3xl">Atölye Kârlılık Paneli</h2>
+              <p className="text-xs tracking-[0.25em] text-slate-400 uppercase">Maliyet Motoru</p>
+              <h2 className="mt-2 text-2xl font-bold leading-tight md:text-3xl">Atölye Kârlılık Paneli</h2>
             </div>
             <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${hesap.durumTone}`}>Verimlilik %{hesap.verimlilik.toFixed(0)}</span>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <Kpi label="Aylık Gider" value={tl(hesap.toplam)} />
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Kpi label="Aylık Gider" value={tl(hesap.toplam)} hero />
             <Kpi label="Dakika Maliyeti" value={tl(hesap.dakika)} tone="text-emerald-300" />
-            <Kpi label="Günlük Gider" value={tl(hesap.gunluk)} />
             <Kpi label="Mtül Maliyeti" value={tl(hesap.mtulMaliyet)} tone="text-cyan-300" />
+            <Kpi label="Günlük Gider" value={tl(hesap.gunluk)} />
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <section className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
               <p className="text-sm text-slate-400">Üretim Modeli</p>
               <div className="mt-5 grid grid-cols-2 gap-3">
@@ -545,10 +545,10 @@ export default function AtolyePage() {
             </section>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="mt-6 hidden md:grid md:grid-cols-4 md:gap-3">
             <SmallStat label="Personel" value={tl(hesap.personel)} />
             <SmallStat label="Sabit Gider" value={tl(hesap.sabit)} />
-            <SmallStat label="Makine Amort." value={tl(hesap.makine)} />
+            <SmallStat label="Makine Amortismanı" value={tl(hesap.makine)} />
             <SmallStat label="Araç Maliyeti" value={tl(hesap.arac)} />
           </div>
         </main>
@@ -558,7 +558,7 @@ export default function AtolyePage() {
           <button onClick={() => setMobileSagOpen(false)} className="mb-4 w-full rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden">Kapat</button>
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Karar Paneli</p>
           <h2 className="mt-1 text-lg font-semibold">Canlı Özet</h2>
-          <div className="mt-2 grid gap-1.5">
+          <div className="mt-2 grid gap-2">
             <RightCard label="Verimlilik" value={`%${hesap.verimlilik.toFixed(0)}`} />
             <RightCard label="Dakika" value={tl(hesap.dakika)} />
             <RightCard label="Günlük Gider" value={tl(hesap.gunluk)} />
@@ -807,11 +807,11 @@ function SideButton({ active, title, sub, onClick }: any) {
     </button>
   )
 }
-function Kpi({ label, value, tone = 'text-white' }: any) {
+function Kpi({ label, value, tone = 'text-white', hero = false }: any) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
+    <div className={`rounded-2xl border border-slate-800 bg-[#111827] p-4${hero ? ' sm:col-span-2' : ''}`}>
       <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-2 break-words text-lg font-semibold leading-tight tabular-nums md:text-xl ${tone}`}>{value}</p>
+      <p className={`mt-2 break-words font-semibold leading-tight tabular-nums ${hero ? 'text-2xl md:text-3xl' : 'text-lg md:text-xl'} ${tone}`}>{value}</p>
     </div>
   )
 }
@@ -819,9 +819,9 @@ function ModelCard({ label, value, sub, compact = false }: any) {
   return (
     <div className="min-w-0 rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
       <p className="text-xs text-slate-400">{label}</p>
-      <div className="mt-3 flex items-end gap-2">
-        <p className={`${compact ? 'text-[22px] md:text-[26px]' : 'text-[24px] md:text-[30px]'} break-words font-semibold leading-none tracking-tight tabular-nums`}>{value}</p>
-        <p className="pb-1 text-xs text-slate-500 whitespace-nowrap">{sub}</p>
+      <div className="mt-3 flex items-end gap-2 min-w-0">
+        <p className={`${compact ? 'text-[20px] md:text-[24px]' : 'text-[22px] md:text-[26px]'} break-words font-semibold leading-none tracking-tight tabular-nums min-w-0`}>{value}</p>
+        <p className="pb-1 text-xs text-slate-500 min-w-0 truncate">{sub}</p>
       </div>
     </div>
   )
@@ -837,9 +837,12 @@ function Break({ label, value, color }: any) {
 function ResourceCard({ title, count, value, onAdd, onDetail }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
-      <div className="flex justify-between">
-        <div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-xs text-slate-400">{count} kayıt · {value}</p></div>
-        <button onClick={onAdd} className="rounded-lg bg-blue-600 px-2 text-xs">+</button>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-1 text-xs text-slate-400 truncate">{count} kayıt · {value}</p>
+        </div>
+        <button onClick={onAdd} className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-600 text-sm font-bold shrink-0">+</button>
       </div>
       <button onClick={onDetail} className="mt-3 w-full rounded-xl border border-slate-700 py-2 text-xs text-slate-300">Detayları Gör</button>
     </div>
