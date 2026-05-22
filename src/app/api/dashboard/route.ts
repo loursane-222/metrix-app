@@ -224,7 +224,7 @@ export async function GET() {
     const simdi5IsGunu = new Date()
     simdi5IsGunu.setDate(simdi5IsGunu.getDate() - 7)
 
-    const anaAkis = await prisma.activityLog.findMany({
+    const anaAkisRaw = await prisma.activityLog.findMany({
       where: {
         atolyeId,
         createdAt: { gte: simdi5IsGunu },
@@ -232,6 +232,26 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       take: 100,
     });
+
+    // ActivityLog.personelId FK var ama @relation yok — ayrı lookup
+    const personelIds = [
+      ...new Set(anaAkisRaw.map((a) => a.personelId).filter(Boolean)),
+    ] as string[];
+    const personelMap: Record<string, string> =
+      personelIds.length > 0
+        ? Object.fromEntries(
+            (
+              await prisma.personel.findMany({
+                where: { id: { in: personelIds } },
+                select: { id: true, ad: true },
+              })
+            ).map((p) => [p.id, p.ad])
+          )
+        : {};
+    const anaAkis = anaAkisRaw.map((a) => ({
+      ...a,
+      personelAdi: a.personelId ? (personelMap[a.personelId] ?? null) : null,
+    }));
 
     // --- BUGÜNÜN PLANI ---
     const schedulePhases = await prisma.schedulePhase.findMany({
