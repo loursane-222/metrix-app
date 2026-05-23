@@ -29,6 +29,13 @@ export default function DashboardLayout({
           if (data.type === "activity" && data.message) {
             showToast("Metrix — Yeni Hareket", data.message);
           }
+          // Execution geçişlerini page-level listener'lara ilet.
+          // window.dispatchEvent cross-tab değil, aynı sekme içinde çalışır.
+          if (data.type === "execution_status") {
+            window.dispatchEvent(
+              new CustomEvent("metrix:execution_update", { detail: data }),
+            );
+          }
         } catch {}
       };
       es.onerror = () => {

@@ -1,5 +1,6 @@
 import { PhaseExecutionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { sseEmitter } from "@/lib/sseEmitter"
 import { canTransition, eventTypeForTransition } from "./transitions"
 
 // ─── Elapsed time helper ──────────────────────────────────────────────────────
@@ -277,7 +278,33 @@ export async function transitionExecution(input: TransitionInput) {
       },
     })
 
+    // SchedulePhase.isCompleted sync — COMPLETED execution ile KPI tutarlılığı.
+    // TODO(future): unified completion source of truth —
+    // togglePhaseCompletion ve execution COMPLETED tek yola indirgenmeli.
+    if (toStatus === "COMPLETED") {
+      await tx.schedulePhase.update({
+        where: { id: execution.schedulePhaseId },
+        data: {
+          isCompleted: true,
+          completedAt: now,
+          completedBy: personelId ?? null,
+        },
+      })
+    }
+
     return tx.phaseExecution.findUniqueOrThrow({ where: { id: executionId } })
+  })
+
+  // SSE — fire-and-forget, await yok. Tüm transition'larda live-ops
+  // dashboard'u invalidate eder. Vercel multi-instance'da kayıp olabilir;
+  // polling fallback (10s) her durumda devreye girer.
+  sseEmitter.emit(`activity:${atolyeId}`, {
+    type: "execution_status",
+    execId: executionId,
+    phaseId: execution.schedulePhaseId,
+    toStatus,
+    personelAd: null,   // extra query yok; dashboard live-ops poll'dan alır
+    musteriAdi: null,
   })
 
   return updated

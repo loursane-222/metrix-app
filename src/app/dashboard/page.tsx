@@ -294,6 +294,10 @@ export default function DashboardPage() {
   const lastAkisIdRef = useRef<string | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
 
+  // SSE invalidation için fetch ref'leri — window event handler'ı kapalı scope'tan erişir
+  const fetchLiveOpsRef = useRef<(() => void) | null>(null);
+  const fetchDashboardRef = useRef<(() => void) | null>(null);
+
 
   useEffect(() => {
     async function fetchDashboard(first: boolean) {
@@ -327,6 +331,7 @@ export default function DashboardPage() {
       }
     }
 
+    fetchDashboardRef.current = () => fetchDashboard(false);
     fetchDashboard(true);
     const interval = setInterval(() => fetchDashboard(false), 10000);
     return () => clearInterval(interval);
@@ -340,9 +345,24 @@ export default function DashboardPage() {
         if (r.ok) setLiveOps(await r.json());
       } catch {}
     }
+    fetchLiveOpsRef.current = fetchLiveOps;
     fetchLiveOps();
     const id = setInterval(fetchLiveOps, 10_000);
     return () => clearInterval(id);
+  }, []);
+
+  // SSE execution_status → immediate refetch (2s debounce guard)
+  useEffect(() => {
+    let lastFire = 0;
+    function handleExecutionUpdate() {
+      const now = Date.now();
+      if (now - lastFire < 2000) return;
+      lastFire = now;
+      fetchLiveOpsRef.current?.();
+      fetchDashboardRef.current?.();
+    }
+    window.addEventListener("metrix:execution_update", handleExecutionUpdate);
+    return () => window.removeEventListener("metrix:execution_update", handleExecutionUpdate);
   }, []);
 
   const finans: FinansBlok = useMemo(
