@@ -15,6 +15,38 @@ export function computeElapsedMinutes(
   return Math.max(0, Math.round((elapsedMs - pauseMs) / 60_000))
 }
 
+// ─── Risk state helpers ───────────────────────────────────────────────────────
+
+export type RiskState = "NO_PLAN" | "NORMAL" | "OVERRUN" | "CRITICAL" | "STALE"
+
+export function computeRiskState(
+  elapsedMinutes: number,
+  expectedMinutes: number | null | undefined,
+): RiskState {
+  if (elapsedMinutes > 1440) return "STALE"
+  if (!expectedMinutes || expectedMinutes <= 0) return "NO_PLAN"
+  const ratio = elapsedMinutes / expectedMinutes
+  if (ratio <= 1.0) return "NORMAL"
+  if (ratio <= 1.25) return "OVERRUN"
+  return "CRITICAL"
+}
+
+export function computeVariance(
+  elapsedMinutes: number,
+  expectedMinutes: number | null | undefined,
+): number | null {
+  if (!expectedMinutes || expectedMinutes <= 0) return null
+  return elapsedMinutes - expectedMinutes
+}
+
+export function computeProgressRatio(
+  elapsedMinutes: number,
+  expectedMinutes: number | null | undefined,
+): number | null {
+  if (!expectedMinutes || expectedMinutes <= 0) return null
+  return elapsedMinutes / expectedMinutes
+}
+
 // ─── Public error ─────────────────────────────────────────────────────────────
 
 export class ExecutionError extends Error {

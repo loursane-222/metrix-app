@@ -5,6 +5,8 @@ import Link from "next/link";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
 
 // ─── Live Ops types ───────────────────────────────────────────────────────────
+type RiskState = "NO_PLAN" | "NORMAL" | "OVERRUN" | "CRITICAL" | "STALE";
+
 type AktifEkipItem = {
   execId: string;
   phaseId: string;
@@ -15,7 +17,20 @@ type AktifEkipItem = {
   status: "STARTED" | "PAUSED";
   actualStartedAt: string | null;
   elapsedMinutes: number;
+  expectedMinutes: number | null;
+  varianceMinutes: number | null;
+  progressRatio: number | null;
+  riskState: RiskState;
   cannotStartReason: string | null;
+};
+
+// ─── Risk state config ────────────────────────────────────────────────────────
+const RISK_META: Record<RiskState, { label: string; bar: string; text: string; badge: string }> = {
+  NO_PLAN:  { label: "Plan yok",        bar: "bg-slate-700",    text: "text-slate-500",  badge: "text-slate-600 bg-slate-800/60" },
+  NORMAL:   { label: "",                bar: "bg-emerald-500",  text: "text-emerald-400",badge: "" },
+  OVERRUN:  { label: "+{v} dk geçti",   bar: "bg-amber-400",    text: "text-amber-300",  badge: "text-amber-400 bg-amber-500/10" },
+  CRITICAL: { label: "Kontrol gerekli", bar: "bg-red-500",      text: "text-red-400",    badge: "text-red-400 bg-red-500/10 animate-pulse" },
+  STALE:    { label: "Dünden açık",     bar: "bg-red-600",      text: "text-red-400",    badge: "text-red-400 bg-red-500/10 animate-pulse" },
 };
 
 // ─── Live Ops card ────────────────────────────────────────────────────────────
@@ -43,11 +58,34 @@ function LiveCard({ item }: { item: AktifEkipItem }) {
     item.phaseType === "MONTAJ" ? "bg-emerald-500/15 text-emerald-400" :
     "bg-blue-500/15 text-blue-400";
 
+  const risk = item.riskState;
+  const meta = RISK_META[risk];
+
+  // Progress bar genişliği: max %100 visually, overflow kırmızı gösterim için clamp
+  const barPct = item.progressRatio != null
+    ? Math.min(Math.round(item.progressRatio * 100), 100)
+    : null;
+
+  // variance label: "+X dk geçti" şeklinde interpolate
+  const varianceLabel = risk === "OVERRUN" && item.varianceMinutes != null
+    ? `+${item.varianceMinutes} dk geçti`
+    : risk === "CRITICAL" && item.varianceMinutes != null
+    ? `+${item.varianceMinutes} dk`
+    : meta.label;
+
+  // Elapsed rengi: risk state'e göre
+  const elapsedColor =
+    risk === "CRITICAL" || risk === "STALE" ? "text-red-400" :
+    risk === "OVERRUN" ? "text-amber-300" :
+    item.status === "PAUSED" ? "text-amber-300" :
+    "text-white";
+
   return (
     <div
-      style={{ scrollSnapAlign: "start", minWidth: 148 }}
+      style={{ scrollSnapAlign: "start", minWidth: 152 }}
       className="flex-shrink-0 rounded-2xl border border-white/10 bg-[#0c1322] p-3"
     >
+      {/* Phase badge + status dot */}
       <div className="mb-2 flex items-center justify-between gap-1">
         <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${phaseCls}`}>
           {phaseLabel}
@@ -58,6 +96,8 @@ function LiveCard({ item }: { item: AktifEkipItem }) {
           }`}
         />
       </div>
+
+      {/* Person + customer */}
       <p className="truncate text-[13px] font-bold leading-tight text-white">
         {item.personelAd || "—"}
       </p>
@@ -65,18 +105,46 @@ function LiveCard({ item }: { item: AktifEkipItem }) {
       {item.urunAdi ? (
         <p className="truncate text-[9px] text-slate-600">{item.urunAdi}</p>
       ) : null}
-      <p
-        className={`mt-2.5 text-[28px] font-black leading-none tabular-nums ${
-          item.status === "STARTED" ? "text-white" : "text-amber-300"
-        }`}
-      >
+
+      {/* Elapsed timer */}
+      <p className={`mt-2.5 text-[28px] font-black leading-none tabular-nums ${elapsedColor}`}>
         {mins}
-        <span className="ml-0.5 text-[12px] font-semibold text-slate-500">dk</span>
+        {item.expectedMinutes != null && (
+          <span className="ml-0.5 text-[10px] font-semibold text-slate-600">
+            /{item.expectedMinutes}
+          </span>
+        )}
+        <span className="ml-0.5 text-[11px] font-semibold text-slate-500">dk</span>
       </p>
-      {item.status === "PAUSED" && (
-        <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-500/60">
+
+      {/* Progress bar — sadece plan varsa */}
+      {barPct != null && (
+        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ${meta.bar}`}
+            style={{ width: `${barPct}%` }}
+          />
+        </div>
+      )}
+
+      {/* Risk badge / variance */}
+      {risk === "NORMAL" && item.status === "PAUSED" && (
+        <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-500/60">
           Beklemede
         </p>
+      )}
+      {risk === "NORMAL" && item.status !== "PAUSED" && barPct != null && (
+        <p className={`mt-1 text-[9px] font-semibold tabular-nums ${meta.text}`}>
+          %{barPct}
+        </p>
+      )}
+      {(risk === "OVERRUN" || risk === "CRITICAL" || risk === "STALE") && (
+        <p className={`mt-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold inline-block ${meta.badge}`}>
+          {varianceLabel || meta.label}
+        </p>
+      )}
+      {risk === "NO_PLAN" && (
+        <p className={`mt-1 text-[9px] font-semibold ${meta.text}`}>Plan yok</p>
       )}
     </div>
   );

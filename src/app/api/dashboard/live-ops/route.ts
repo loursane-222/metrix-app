@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server"
 import { getAtolyeAuth } from "@/lib/getAtolyeId"
 import { prisma } from "@/lib/prisma"
-import { computeElapsedMinutes } from "@/lib/execution/service"
+import {
+  computeElapsedMinutes,
+  computeRiskState,
+  computeVariance,
+  computeProgressRatio,
+} from "@/lib/execution/service"
 
 // GET /api/dashboard/live-ops
 // Şu an STARTED veya PAUSED durumundaki tüm execution'ları döner.
@@ -15,7 +20,7 @@ export async function GET() {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 401 })
     }
 
-    // Tek query — N+1 yok. Nested select ile personel + müşteri + ürün bilgisi.
+    // Tek query — N+1 yok. estimatedMinutes + toplamSureDakika fallback için is dahil.
     const executions = await prisma.phaseExecution.findMany({
       where: {
         atolyeId: auth.atolyeId,
@@ -27,6 +32,7 @@ export async function GET() {
         status: true,
         actualStartedAt: true,
         pauseMinutes: true,
+        estimatedMinutes: true,
         cannotStartReason: true,
         personel: {
           select: { ad: true, soyad: true },
@@ -40,6 +46,7 @@ export async function GET() {
                   select: {
                     musteriAdi: true,
                     urunAdi: true,
+                    toplamSureDakika: true,
                   },
                 },
               },
@@ -50,20 +57,36 @@ export async function GET() {
       orderBy: { actualStartedAt: "asc" },
     })
 
-    const aktifEkip = executions.map((ex) => ({
-      execId: ex.id,
-      phaseId: ex.schedulePhaseId,
-      personelAd: ex.personel
-        ? `${ex.personel.ad} ${ex.personel.soyad ?? ""}`.trim()
-        : "Atanmamış",
-      phaseType: ex.schedulePhase?.phase ?? "IMALAT",
-      musteriAdi: ex.schedulePhase?.workSchedule?.is?.musteriAdi ?? "—",
-      urunAdi: ex.schedulePhase?.workSchedule?.is?.urunAdi ?? "",
-      status: ex.status as "STARTED" | "PAUSED",
-      actualStartedAt: ex.actualStartedAt?.toISOString() ?? null,
-      elapsedMinutes: computeElapsedMinutes(ex.actualStartedAt, ex.pauseMinutes),
-      cannotStartReason: ex.cannotStartReason,
-    }))
+    const aktifEkip = executions.map((ex) => {
+      const elapsed = computeElapsedMinutes(ex.actualStartedAt, ex.pauseMinutes)
+
+      // Fallback zinciri: execution snapshot → Is.toplamSureDakika → null
+      const fallback = Number(ex.schedulePhase?.workSchedule?.is?.toplamSureDakika ?? 0) || null
+      const rawExpected = ex.estimatedMinutes ?? fallback
+
+      const variance = computeVariance(elapsed, rawExpected)
+      const progressRatio = computeProgressRatio(elapsed, rawExpected)
+      const riskState = computeRiskState(elapsed, rawExpected)
+
+      return {
+        execId: ex.id,
+        phaseId: ex.schedulePhaseId,
+        personelAd: ex.personel
+          ? `${ex.personel.ad} ${ex.personel.soyad ?? ""}`.trim()
+          : "Atanmamış",
+        phaseType: ex.schedulePhase?.phase ?? "IMALAT",
+        musteriAdi: ex.schedulePhase?.workSchedule?.is?.musteriAdi ?? "—",
+        urunAdi: ex.schedulePhase?.workSchedule?.is?.urunAdi ?? "",
+        status: ex.status as "STARTED" | "PAUSED",
+        actualStartedAt: ex.actualStartedAt?.toISOString() ?? null,
+        elapsedMinutes: elapsed,
+        expectedMinutes: rawExpected,
+        varianceMinutes: variance,
+        progressRatio,
+        riskState,
+        cannotStartReason: ex.cannotStartReason,
+      }
+    })
 
     return NextResponse.json({
       aktifEkip,

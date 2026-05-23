@@ -65,7 +65,9 @@ export async function POST(req: NextRequest) {
       where: { id: schedulePhaseId },
       include: {
         workSchedule: {
-          include: { is: { select: { atolyeId: true } } },
+          include: {
+            is: { select: { atolyeId: true, toplamSureDakika: true } },
+          },
         },
       },
     })
@@ -80,13 +82,18 @@ export async function POST(req: NextRequest) {
     const personelId: string | null =
       body.personelId ? String(body.personelId) : (auth.personelId ?? null)
 
+    // estimatedMinutes: caller'dan gelirse öncelikli, yoksa Is.toplamSureDakika snapshot
+    const snapshotMinutes = Number(phase.workSchedule.is.toplamSureDakika || 0) || null
+    const estimatedMinutes =
+      body.estimatedMinutes != null ? Number(body.estimatedMinutes) : snapshotMinutes
+
     const execution = await createExecution({
       schedulePhaseId,
       atolyeId: auth.atolyeId,
       personelId,
       plannedStartAt: phase.plannedStart ?? null,
       plannedEndAt: phase.plannedEnd ?? null,
-      estimatedMinutes: body.estimatedMinutes != null ? Number(body.estimatedMinutes) : null,
+      estimatedMinutes,
       note: body.note ? String(body.note) : null,
     })
 
