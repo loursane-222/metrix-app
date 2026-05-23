@@ -97,11 +97,13 @@ function LiveCard({ item }: { item: AktifEkipItem }) {
         />
       </div>
 
-      {/* Person + customer */}
+      {/* Customer primary, personel secondary */}
       <p className="truncate text-[13px] font-bold leading-tight text-white">
-        {item.personelAd || "—"}
+        {item.musteriAdi || "İsimsiz iş"}
       </p>
-      <p className="mt-0.5 truncate text-[10px] text-slate-500">{item.musteriAdi}</p>
+      <p className="mt-0.5 truncate text-[10px] text-slate-500">
+        {item.personelAd && item.personelAd !== "Atanmamış" ? item.personelAd : "Personel atanmamış"}
+      </p>
       {item.urunAdi ? (
         <p className="truncate text-[9px] text-slate-600">{item.urunAdi}</p>
       ) : null}
