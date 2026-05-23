@@ -300,6 +300,50 @@ export async function GET() {
     const workScheduleMap = new Map(workSchedules.map((w) => [w.id, w]));
     const isMap = new Map(operasyonIsleri.map((i) => [i.id, i]));
 
+    // --- OPERASYON KPI ---
+    const phaseIds = schedulePhases.map((p) => p.id);
+    const phaseExecutions =
+      phaseIds.length > 0
+        ? await prisma.phaseExecution.findMany({
+            where: { schedulePhaseId: { in: phaseIds }, atolyeId },
+            select: { schedulePhaseId: true, status: true },
+          })
+        : [];
+
+    // Aynı faz için birden fazla execution olabilir (önceki CANCELLED + yeni STARTED).
+    // Öncelik sırasına göre en aktif olanı tut.
+    const execPriority: Record<string, number> = {
+      STARTED: 5, PAUSED: 4, CANNOT_START: 3, PLANNED: 2, COMPLETED: 1, CANCELLED: 0,
+    };
+    const execStatusMap = new Map<string, string>();
+    for (const ex of phaseExecutions) {
+      const prev = execStatusMap.get(ex.schedulePhaseId);
+      if (!prev || (execPriority[ex.status] ?? 0) > (execPriority[prev] ?? 0)) {
+        execStatusMap.set(ex.schedulePhaseId, ex.status);
+      }
+    }
+
+    const kpiTamamlanan = schedulePhases.filter((p) => p.isCompleted).length;
+    const kpiIslemde = schedulePhases.filter((p) => {
+      if (p.isCompleted) return false;
+      const s = execStatusMap.get(p.id);
+      return s === "STARTED" || s === "PAUSED";
+    }).length;
+    const kpiGeciken = schedulePhases.filter((p) => {
+      if (p.isCompleted) return false;
+      const s = execStatusMap.get(p.id);
+      if (s === "COMPLETED" || s === "CANCELLED") return false;
+      return p.plannedEnd != null && new Date(p.plannedEnd) < simdi;
+    }).length;
+    const kpiPlanlanan = Math.max(0, schedulePhases.length - kpiTamamlanan - kpiIslemde - kpiGeciken);
+
+    const operasyonKpi = {
+      planlanan: kpiPlanlanan,
+      islemde: kpiIslemde,
+      tamamlanan: kpiTamamlanan,
+      geciken: kpiGeciken,
+    };
+
     const operasyonPlan = schedulePhases.map((p) => {
       const ws = workScheduleMap.get(p.workScheduleId);
       const ilgiliIs = ws ? isMap.get(ws.isId) : null;
@@ -409,6 +453,7 @@ export async function GET() {
       sicakTeklifler,
       anaAkis,
       operasyonPlan,
+      operasyonKpi,
       vadesiGelenler,
       atelye,
     });

@@ -197,6 +197,7 @@ export default function DashboardPage() {
   const sicakTeklifler = useMemo(() => data?.sicakTeklifler || [], [data]);
   const anaAkis = useMemo(() => data?.anaAkis || [], [data]);
   const operasyonPlan = useMemo(() => data?.operasyonPlan || [], [data]);
+  const operasyonKpi = useMemo(() => data?.operasyonKpi ?? { planlanan: 0, islemde: 0, tamamlanan: 0, geciken: 0 }, [data]);
   const vadesiGelenler = useMemo(() => data?.vadesiGelenler || [], [data]);
   const atelye = useMemo(() => data?.atelye || {}, [data]);
 
@@ -286,17 +287,42 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* ── 2. GÜNLÜK PLAN ────────────────────────────────────────────────── */}
+        {/* ── 2. OPERASYON KPI ──────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Gunluk Plan</p>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Gunluk Operasyon</p>
               <p className="mt-0.5 text-sm font-semibold text-white">Bugunun Programi</p>
             </div>
             <Link href="/dashboard/is-programi" className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-400 transition-colors hover:text-white">
               Program
             </Link>
           </div>
+
+          {/* 4 KPI kart — 2×2 grid */}
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Planlanan</p>
+              <p className="mt-1 text-2xl font-black leading-none text-white tabular-nums">{operasyonKpi.planlanan}</p>
+              <p className="mt-0.5 text-[10px] text-slate-600">operasyon</p>
+            </div>
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-blue-400">İşlemde</p>
+              <p className="mt-1 text-2xl font-black leading-none text-blue-300 tabular-nums">{operasyonKpi.islemde}</p>
+              <p className="mt-0.5 text-[10px] text-blue-400/50">aktif</p>
+            </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-500">Tamamlanan</p>
+              <p className="mt-1 text-2xl font-black leading-none text-emerald-400 tabular-nums">{operasyonKpi.tamamlanan}</p>
+              <p className="mt-0.5 text-[10px] text-emerald-500/50">bitti</p>
+            </div>
+            <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-red-400">Geciken</p>
+              <p className={`mt-1 text-2xl font-black leading-none tabular-nums ${operasyonKpi.geciken > 0 ? "text-red-400" : "text-slate-600"}`}>{operasyonKpi.geciken}</p>
+              <p className="mt-0.5 text-[10px] text-red-400/50">suresi gecti</p>
+            </div>
+          </div>
+
           {operasyonPlan.length === 0 && <p className="text-sm text-slate-600">Bugun icin planlanmis operasyon yok.</p>}
           <div className="space-y-0">
             {operasyonPlan.map((o: any) => (
