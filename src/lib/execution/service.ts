@@ -2,6 +2,19 @@ import { PhaseExecutionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { canTransition, eventTypeForTransition } from "./transitions"
 
+// ─── Elapsed time helper ──────────────────────────────────────────────────────
+// Server-side hesap: actualStartedAt'den şimdiye kadar geçen süre,
+// birikmiş pause dakikaları düşülmüş halde.
+export function computeElapsedMinutes(
+  actualStartedAt: Date | null | undefined,
+  pauseMinutes: number | null | undefined,
+): number {
+  if (!actualStartedAt) return 0
+  const elapsedMs = Date.now() - new Date(actualStartedAt).getTime()
+  const pauseMs = (pauseMinutes ?? 0) * 60_000
+  return Math.max(0, Math.round((elapsedMs - pauseMs) / 60_000))
+}
+
 // ─── Public error ─────────────────────────────────────────────────────────────
 
 export class ExecutionError extends Error {
@@ -148,6 +161,13 @@ export async function transitionExecution(input: TransitionInput) {
 
     case "COMPLETED":
       update.actualEndedAt = now
+      // TODO(Faz4C): SchedulePhase.isCompleted ile senkronizasyon.
+      // Bu execution COMPLETED olduğunda ilgili SchedulePhase.isCompleted = true
+      // yapılmalı. Şu an iki sistem bağımsız (isCompleted = manual toggle,
+      // execution.status = execution engine). KPI tutarsızlığını önlemek için
+      // burada `prisma.schedulePhase.update({ where: { id: execution.schedulePhaseId }, data: { isCompleted: true } })`
+      // transaction içine alınmalı — Faz4C kapsamında yapılacak.
+      //
       // actualMinutes: cache alanı, source-of-truth değil.
       // event'lerden recompute edilebilir; şimdilik basit hesap.
       if (execution.actualStartedAt) {
@@ -168,6 +188,23 @@ export async function transitionExecution(input: TransitionInput) {
     case "PAUSED":
     case "CANCELLED":
       break
+  }
+
+  // RESUMED: PAUSED → STARTED geçişinde son PAUSED event'inden bu yana geçen
+  // süreyi pauseMinutes'a ekle. Event log immutable olduğu için güvenli okuma.
+  if (toStatus === "STARTED" && execution.status === "PAUSED") {
+    const lastPause = await prisma.phaseExecutionEvent.findFirst({
+      where: { phaseExecutionId: executionId, eventType: "PAUSED" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    })
+    if (lastPause) {
+      const addedMin = Math.max(
+        0,
+        Math.round((now.getTime() - lastPause.createdAt.getTime()) / 60_000),
+      )
+      update.pauseMinutes = (execution.pauseMinutes ?? 0) + addedMin
+    }
   }
 
   const eventType = eventTypeForTransition(execution.status, toStatus)

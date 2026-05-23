@@ -4,6 +4,84 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
 
+// ─── Live Ops types ───────────────────────────────────────────────────────────
+type AktifEkipItem = {
+  execId: string;
+  phaseId: string;
+  personelAd: string;
+  phaseType: "OLCU" | "IMALAT" | "MONTAJ";
+  musteriAdi: string;
+  urunAdi: string;
+  status: "STARTED" | "PAUSED";
+  actualStartedAt: string | null;
+  elapsedMinutes: number;
+  cannotStartReason: string | null;
+};
+
+// ─── Live Ops card ────────────────────────────────────────────────────────────
+// Client-side ticker: server'dan gelen elapsedMinutes'a dakika başı +1 ekler.
+// Poll her 10s'de değeri senkronize eder.
+function LiveCard({ item }: { item: AktifEkipItem }) {
+  const [mins, setMins] = useState(item.elapsedMinutes);
+
+  useEffect(() => {
+    setMins(item.elapsedMinutes);
+  }, [item.elapsedMinutes]);
+
+  useEffect(() => {
+    if (item.status !== "STARTED") return;
+    const id = setInterval(() => setMins((m) => m + 1), 60_000);
+    return () => clearInterval(id);
+  }, [item.execId, item.status]);
+
+  const phaseLabel =
+    item.phaseType === "IMALAT" ? "İmalat" :
+    item.phaseType === "MONTAJ" ? "Montaj" : "Ölçü";
+
+  const phaseCls =
+    item.phaseType === "IMALAT" ? "bg-amber-500/15 text-amber-400" :
+    item.phaseType === "MONTAJ" ? "bg-emerald-500/15 text-emerald-400" :
+    "bg-blue-500/15 text-blue-400";
+
+  return (
+    <div
+      style={{ scrollSnapAlign: "start", minWidth: 148 }}
+      className="flex-shrink-0 rounded-2xl border border-white/10 bg-[#0c1322] p-3"
+    >
+      <div className="mb-2 flex items-center justify-between gap-1">
+        <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${phaseCls}`}>
+          {phaseLabel}
+        </span>
+        <span
+          className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+            item.status === "STARTED" ? "animate-pulse bg-emerald-400" : "bg-amber-400"
+          }`}
+        />
+      </div>
+      <p className="truncate text-[13px] font-bold leading-tight text-white">
+        {item.personelAd || "—"}
+      </p>
+      <p className="mt-0.5 truncate text-[10px] text-slate-500">{item.musteriAdi}</p>
+      {item.urunAdi ? (
+        <p className="truncate text-[9px] text-slate-600">{item.urunAdi}</p>
+      ) : null}
+      <p
+        className={`mt-2.5 text-[28px] font-black leading-none tabular-nums ${
+          item.status === "STARTED" ? "text-white" : "text-amber-300"
+        }`}
+      >
+        {mins}
+        <span className="ml-0.5 text-[12px] font-semibold text-slate-500">dk</span>
+      </p>
+      {item.status === "PAUSED" && (
+        <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-500/60">
+          Beklemede
+        </p>
+      )}
+    </div>
+  );
+}
+
 function fmt(n: number) {
   if (n >= 1000000) return (n / 1000000).toFixed(1).replace(".", ",") + "M";
   if (n >= 1000) return (n / 1000).toFixed(0) + "K";
@@ -139,6 +217,11 @@ export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [sekme, setSekme] = useState<"yillik" | "aylik">("aylik");
+  const [liveOps, setLiveOps] = useState<{
+    aktifEkip: AktifEkipItem[];
+    toplamAktif: number;
+    toplamPaused: number;
+  } | null>(null);
 
   const lastAkisIdRef = useRef<string | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
@@ -181,6 +264,19 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Live Ops polling — bağımsız interval, ileride SSE invalidation'a bağlanabilir
+  useEffect(() => {
+    async function fetchLiveOps() {
+      try {
+        const r = await fetch("/api/dashboard/live-ops");
+        if (r.ok) setLiveOps(await r.json());
+      } catch {}
+    }
+    fetchLiveOps();
+    const id = setInterval(fetchLiveOps, 10_000);
+    return () => clearInterval(id);
+  }, []);
+
   const finans: FinansBlok = useMemo(
     () =>
       data?.finans?.[sekme] ?? {
@@ -198,6 +294,9 @@ export default function DashboardPage() {
   const anaAkis = useMemo(() => data?.anaAkis || [], [data]);
   const operasyonPlan = useMemo(() => data?.operasyonPlan || [], [data]);
   const operasyonKpi = useMemo(() => data?.operasyonKpi ?? { planlanan: 0, islemde: 0, tamamlanan: 0, geciken: 0 }, [data]);
+  const aktifEkip = useMemo(() => liveOps?.aktifEkip ?? [], [liveOps]);
+  const liveToplamAktif = useMemo(() => liveOps?.toplamAktif ?? 0, [liveOps]);
+  const liveToplamPaused = useMemo(() => liveOps?.toplamPaused ?? 0, [liveOps]);
   const vadesiGelenler = useMemo(() => data?.vadesiGelenler || [], [data]);
   const atelye = useMemo(() => data?.atelye || {}, [data]);
 
@@ -286,6 +385,32 @@ export default function DashboardPage() {
             <p className="mt-3 text-center text-[10px] text-slate-700">Son 5 is gunu · {anaAkis.length} hareket</p>
           )}
         </div>
+
+        {/* ── 1b. AKTİF OPERASYON STRIP — sadece aktif varsa ──────────────── */}
+        {aktifEkip.length > 0 && (
+          <div>
+            <div className="mb-2.5 flex items-center justify-between">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Aktif Operasyon</p>
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                <span className="text-[10px] font-semibold text-emerald-400">{liveToplamAktif} çalışıyor</span>
+                {liveToplamPaused > 0 && (
+                  <span className="text-[10px] font-semibold text-amber-400">· {liveToplamPaused} beklemede</span>
+                )}
+              </span>
+            </div>
+            <div
+              className="flex gap-3 overflow-x-auto pb-1"
+              style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+            >
+              {aktifEkip.map((e) => (
+                <LiveCard key={e.execId} item={e} />
+              ))}
+              {/* Sağ tarafta hafif fade — peek hissi */}
+              <div className="flex-shrink-0" style={{ minWidth: 8 }} />
+            </div>
+          </div>
+        )}
 
         {/* ── 2. OPERASYON KPI ──────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
