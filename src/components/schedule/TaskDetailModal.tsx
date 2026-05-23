@@ -110,9 +110,6 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
       : "Personel atanmadı";
 
   const gecikme = delayDays(phaseRow?.plannedStart, !!phaseRow?.isCompleted);
-  const toplamDakika = Number(job?.toplamSureDakika || 0);
-  const saat = toplamDakika > 0 ? Math.floor(toplamDakika / 60) : 0;
-  const dakika = toplamDakika > 0 ? Math.round(toplamDakika % 60) : 0;
 
   // Mevcut kayıtlı fotoğraf (tamamlanmış ölçülerde)
   const savedPhotoUrl = phaseRow?.photoUrl || "";
@@ -401,9 +398,8 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
                 {phase === "IMALAT" && (
                   <>
                     <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5">
-                      <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Hesaplanan Süre</div>
-                      <div className="mt-2 text-3xl font-black text-amber-200">{toplamDakika > 0 ? `${Math.round(toplamDakika)} dk` : "Süre yok"}</div>
-                      {toplamDakika > 0 && <div className="mt-1 text-sm text-amber-100/70">{saat} saat {dakika} dakika</div>}
+                      <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Tahmini Süre</div>
+                      <div className="mt-2 text-sm text-amber-200/60">Tahmini süre girilmedi</div>
                     </div>
 
                     <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">

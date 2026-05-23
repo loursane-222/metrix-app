@@ -20,7 +20,7 @@ export async function GET() {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 401 })
     }
 
-    // Tek query — N+1 yok. estimatedMinutes + toplamSureDakika fallback için is dahil.
+    // Tek query — N+1 yok.
     const executions = await prisma.phaseExecution.findMany({
       where: {
         atolyeId: auth.atolyeId,
@@ -46,7 +46,6 @@ export async function GET() {
                   select: {
                     musteriAdi: true,
                     urunAdi: true,
-                    toplamSureDakika: true,
                   },
                 },
               },
@@ -60,9 +59,8 @@ export async function GET() {
     const aktifEkip = executions.map((ex) => {
       const elapsed = computeElapsedMinutes(ex.actualStartedAt, ex.pauseMinutes)
 
-      // Fallback zinciri: execution snapshot → Is.toplamSureDakika → null
-      const fallback = Number(ex.schedulePhase?.workSchedule?.is?.toplamSureDakika ?? 0) || null
-      const rawExpected = ex.estimatedMinutes ?? fallback
+      // estimatedMinutes null ise NO_PLAN state — toplamSureDakika fallback kaldırıldı.
+      const rawExpected = ex.estimatedMinutes ?? null
 
       const variance = computeVariance(elapsed, rawExpected)
       const progressRatio = computeProgressRatio(elapsed, rawExpected)

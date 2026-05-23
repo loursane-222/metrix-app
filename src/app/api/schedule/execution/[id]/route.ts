@@ -60,6 +60,7 @@ export async function PATCH(
       atolyeId: auth.atolyeId,
       toStatus: toStatusRaw as PhaseExecutionStatus,
       personelId,
+      userId: auth.userId,
       note: body.note ? String(body.note) : null,
       cannotStartReason: body.cannotStartReason ? String(body.cannotStartReason) : null,
       failureDescription: body.failureDescription ? String(body.failureDescription) : null,

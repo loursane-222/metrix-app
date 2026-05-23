@@ -1,6 +1,7 @@
 import { PhaseExecutionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { sseEmitter } from "@/lib/sseEmitter"
+import { logActivity } from "@/lib/activityLogger"
 import { canTransition, eventTypeForTransition } from "./transitions"
 
 // ─── Elapsed time helper ──────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ export interface TransitionInput {
   atolyeId: string           // ownership re-check burada da yapılır
   toStatus: PhaseExecutionStatus
   personelId?: string | null
+  userId?: string | null
   note?: string | null
   cannotStartReason?: string | null
   failureDescription?: string | null
@@ -157,6 +159,7 @@ export async function transitionExecution(input: TransitionInput) {
     atolyeId,
     toStatus,
     personelId,
+    userId,
     note,
     cannotStartReason,
     failureDescription,
@@ -295,17 +298,71 @@ export async function transitionExecution(input: TransitionInput) {
     return tx.phaseExecution.findUniqueOrThrow({ where: { id: executionId } })
   })
 
-  // SSE — fire-and-forget, await yok. Tüm transition'larda live-ops
-  // dashboard'u invalidate eder. Vercel multi-instance'da kayıp olabilir;
-  // polling fallback (10s) her durumda devreye girer.
+  // SSE execution_status — live-ops paneli invalidate eder (fire-and-forget).
+  // Vercel multi-instance'da kayıp olabilir; polling fallback (10s) devreye girer.
   sseEmitter.emit(`activity:${atolyeId}`, {
     type: "execution_status",
     execId: executionId,
     phaseId: execution.schedulePhaseId,
     toStatus,
-    personelAd: null,   // extra query yok; dashboard live-ops poll'dan alır
-    musteriAdi: null,
   })
+
+  // Activity log — fire-and-forget.
+  // ActivityLog DB + Notification + SSE(type=activity) → dashboard canlı akış + toast.
+  void (async () => {
+    try {
+      const FAZ_LABEL: Record<string, string> = {
+        IMALAT: "imalat", MONTAJ: "montaj", OLCU: "ölçü", TAS_ALINACAK: "taş alınacak",
+      }
+      const isResumed = toStatus === "STARTED" && fromStatus === "PAUSED"
+      const actType = isResumed
+        ? "execution_resumed"
+        : `execution_${String(toStatus).toLowerCase()}`
+
+      const [phaseCtx, actorName] = await Promise.all([
+        prisma.schedulePhase.findUnique({
+          where: { id: execution.schedulePhaseId },
+          select: {
+            phase: true,
+            workSchedule: { select: { is: { select: { musteriAdi: true } } } },
+          },
+        }),
+        personelId
+          ? prisma.personel
+              .findUnique({ where: { id: personelId }, select: { ad: true, soyad: true } })
+              .then((p) => (p ? `${p.ad}${p.soyad ? " " + p.soyad : ""}`.trim() : null))
+          : userId
+          ? prisma.user
+              .findUnique({ where: { id: userId }, select: { ad: true } })
+              .then((u) => u?.ad || "Admin")
+          : Promise.resolve(null),
+      ])
+
+      const fazLabel = FAZ_LABEL[phaseCtx?.phase ?? ""] ?? "faz"
+      const musteriAdi = phaseCtx?.workSchedule?.is?.musteriAdi || "—"
+      const actorLabel = actorName || "Atölye"
+
+      const MSG: Record<string, string> = {
+        execution_started:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını başlattı`,
+        execution_resumed:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını devam ettirdi`,
+        execution_paused:       `${actorLabel} — ${musteriAdi} ${fazLabel} fazını duraklattı`,
+        execution_completed:    `${actorLabel} — ${musteriAdi} ${fazLabel} fazını tamamladı`,
+        execution_cancelled:    `${actorLabel} — ${musteriAdi} ${fazLabel} fazı iptal edildi`,
+        execution_cannot_start: `${actorLabel} — ${musteriAdi} ${fazLabel} fazı başlatılamadı`,
+      }
+
+      await logActivity({
+        atolyeId,
+        personelId: personelId ?? undefined,
+        userId: userId ?? undefined,
+        type: actType,
+        message: MSG[actType] ?? `${actorLabel} — ${musteriAdi} ${fazLabel} durumu değişti`,
+        refId: executionId,
+      })
+    } catch {
+      // fire-and-forget — hata yutulur
+    }
+  })()
 
   return updated
 }
