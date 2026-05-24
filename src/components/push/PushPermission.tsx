@@ -29,6 +29,7 @@ type State = "loading" | "done" | "unsupported" | "ios-not-pwa" | "denied" | "id
 export default function PushPermission() {
   const [state, setState] = useState<State>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [debugStep, setDebugStep] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -66,8 +67,10 @@ export default function PushPermission() {
   async function enablePush() {
     try {
       setErrorMsg(null);
+      setDebugStep(null);
       setState("busy");
 
+      setDebugStep("requesting permission");
       console.log("[push] step: requestPermission");
       const permission = await Notification.requestPermission();
       console.log("[push] permission:", permission);
@@ -75,9 +78,11 @@ export default function PushPermission() {
       if (permission !== "granted") {
         localStorage.setItem("metrix_push_dismissed", "1");
         setState(permission === "denied" ? "denied" : "idle");
+        setDebugStep(null);
         return;
       }
 
+      setDebugStep("registering worker");
       console.log("[push] step: register sw");
       const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       console.log("[push] sw registered:", reg.scope);
@@ -85,6 +90,7 @@ export default function PushPermission() {
       await navigator.serviceWorker.ready;
       console.log("[push] sw ready");
 
+      setDebugStep("subscribing");
       console.log("[push] step: pushManager.subscribe, vapid key length:", VAPID_KEY.length);
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -94,11 +100,16 @@ export default function PushPermission() {
 
       const subJson = JSON.stringify(sub.toJSON());
 
+      setDebugStep("saving subscription");
       console.log("[push] step: get current-user");
-      const currentUserRes = await fetch("/api/auth/current-user", { cache: "no-store" });
+      const currentUserRes = await fetch("/api/auth/current-user", {
+        cache: "no-store",
+        credentials: "include",
+      });
       const currentUser = await currentUserRes.json();
       if (!currentUser?.userId) {
         setState("idle");
+        setDebugStep(null);
         setErrorMsg("Oturum bilgisi alınamadı, lütfen tekrar deneyin.");
         return;
       }
@@ -107,6 +118,7 @@ export default function PushPermission() {
       if (currentUser.role === "personel") {
         await fetch("/api/push/save-personel", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             personelId: currentUser.personelId,
@@ -117,6 +129,7 @@ export default function PushPermission() {
       } else {
         await fetch("/api/push/save", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId: currentUser.userId, token: subJson }),
         });
@@ -125,11 +138,17 @@ export default function PushPermission() {
       localStorage.setItem("metrix_push_enabled", "1");
       localStorage.removeItem("metrix_push_dismissed");
       console.log("[push] done ✓");
+      setDebugStep(null);
       setState("done");
     } catch (e: any) {
-      console.error("[push] error:", e);
+      console.error("[push] full error", e);
       setState("idle");
-      setErrorMsg("Bildirim açılamadı. Lütfen tekrar deneyin.");
+      setDebugStep(null);
+      setErrorMsg(
+        e?.message ||
+        e?.toString?.() ||
+        "Bildirim açılamadı."
+      );
     }
   }
 
@@ -170,8 +189,13 @@ export default function PushPermission() {
       <button onClick={enablePush} disabled={state === "busy"} style={btnStyle}>
         {state === "busy" ? "Açılıyor..." : "Bildirimleri Aç"}
       </button>
+      {debugStep && (
+        <p style={{ marginTop: 8, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+          [push-debug] {debugStep}
+        </p>
+      )}
       {errorMsg && (
-        <p style={{ marginTop: 10, fontSize: 12, color: "#f87171", textAlign: "center" }}>
+        <p style={{ marginTop: 8, fontSize: 12, color: "#f87171", textAlign: "center" }}>
           {errorMsg}
         </p>
       )}
