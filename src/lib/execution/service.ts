@@ -391,6 +391,7 @@ export async function transitionExecution(input: TransitionInput) {
         type: actType,
         message: MSG[actType] ?? `${actorLabel} — ${musteriAdi} ${fazLabel} durumu değişti`,
         refId: executionId,
+        url: `/dashboard/is-programi?phaseId=${execution.schedulePhaseId}`,
       })
     } catch {
       // fire-and-forget — hata yutulur
