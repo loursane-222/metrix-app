@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import ScheduleCreateModal from "./ScheduleCreateModal";
@@ -64,6 +65,7 @@ function formatTaskTime(dateValue: any) {
 }
 
 export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalendarProps) {
+  const searchParams = useSearchParams();
   const [view, setView] = useState<ViewMode>("week");
   const [currentDate, setCurrentDate] = useState(dayjs());
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
@@ -73,6 +75,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
   const [savingDrag, setSavingDrag] = useState(false);
   const [personelSayisi, setPersonelSayisi] = useState(1);
   const [personelTipleri, setPersonelTipleri] = useState({ olcucu: 0, usta: 0, montajci: 0 });
+  const autoOpenedRef = useRef(false);
 
   // Modal açıkken body scroll/zoom kilit
   useEffect(() => {
@@ -144,6 +147,18 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
 
     return mapped.sort((a, b) => +new Date(a.date) - +new Date(b.date));
   }, [schedules]);
+
+  // Auto-open modal from push notification deep-link (?phaseId=xxx)
+  useEffect(() => {
+    if (autoOpenedRef.current || tasks.length === 0) return;
+    const phaseId = searchParams.get("phaseId");
+    if (!phaseId) return;
+    const task = tasks.find((t) => t.id === phaseId);
+    if (task) {
+      setSelectedTask(task);
+      autoOpenedRef.current = true;
+    }
+  }, [tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startOfWeek = weekStartMonday(currentDate);
   const weekDays = Array.from({ length: 7 }).map((_, i) => startOfWeek.add(i, "day"));

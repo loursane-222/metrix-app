@@ -9,6 +9,7 @@ interface LogParams {
   type: string;
   message: string;
   refId?: string;
+  url?: string;
 }
 
 export async function logActivity(params: LogParams) {
@@ -50,6 +51,6 @@ export async function logActivity(params: LogParams) {
   void pushToAtolye(params.atolyeId, {
     title: "Metrix",
     body: params.message,
-    url: "/dashboard",
+    url: params.url ?? "/dashboard",
   }).catch((e) => console.error("[push] unhandled:", e));
 }
