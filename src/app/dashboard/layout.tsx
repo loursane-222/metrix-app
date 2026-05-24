@@ -83,8 +83,13 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#030712] text-slate-400">
-        Kontrol ediliyor...
+      <div className="flex h-screen items-center justify-center bg-[#030712]">
+        <div className="w-48 space-y-3">
+          <div className="animate-pulse h-3 w-3/4 rounded-md bg-white/[0.06]" />
+          <div className="animate-pulse h-5 w-full rounded-xl bg-white/[0.05]" />
+          <div className="animate-pulse h-3 w-2/3 rounded-md bg-white/[0.04]" />
+          <div className="animate-pulse h-3 w-1/2 rounded-md bg-white/[0.03]" />
+        </div>
       </div>
     );
   }

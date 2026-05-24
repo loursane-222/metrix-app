@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SkeletonCard, SkeletonLine, Skeleton } from "@/components/ui/Skeleton";
 import Link from "next/link";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
 import TaskDetailModal from "@/components/schedule/TaskDetailModal";
@@ -441,12 +442,55 @@ export default function DashboardPage() {
 
   if (!data && !error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#030712]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-700 border-t-blue-500" />
-          <p className="text-sm text-slate-500">Yukleniyor...</p>
+      <main className="min-h-screen bg-[#030712] px-3 pb-tab-bar pt-0 md:px-6 md:pb-8 md:pt-0">
+        <div className="mx-auto max-w-2xl">
+          {/* Header skeleton */}
+          <div className="-mx-3 flex items-center justify-between border-b border-white/[0.06] px-3 py-3 md:-mx-6 md:px-6 md:py-4">
+            <div className="space-y-1.5">
+              <SkeletonLine className="w-24 bg-white/[0.04]" />
+              <Skeleton className="h-5 w-28 bg-white/[0.06]" />
+            </div>
+            <div className="space-y-1.5 text-right">
+              <SkeletonLine className="ml-auto w-16 bg-white/[0.04]" />
+              <SkeletonLine className="ml-auto w-24 bg-white/[0.03]" />
+            </div>
+          </div>
+          {/* Card skeletons */}
+          <div className="space-y-4 pt-4">
+            {/* KPI card */}
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <SkeletonLine className="w-32 bg-white/[0.06]" />
+                <Skeleton className="h-6 w-16 rounded-lg bg-white/[0.04]" />
+              </div>
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2.5">
+                    <SkeletonLine className="mb-2 w-16 bg-white/[0.05]" />
+                    <Skeleton className="h-7 w-10 bg-white/[0.06]" />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2.5">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="flex items-center gap-3 border-b border-white/[0.04] py-2 last:border-0">
+                    <SkeletonLine className="w-8 shrink-0 bg-white/[0.04]" />
+                    <Skeleton className="h-2 w-2 shrink-0 rounded-full bg-white/[0.05]" />
+                    <div className="flex-1 space-y-1">
+                      <SkeletonLine className="w-3/4 bg-white/[0.05]" />
+                      <SkeletonLine className="w-1/2 bg-white/[0.03]" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Activity card */}
+            <SkeletonCard />
+            {/* Tahsilat card */}
+            <SkeletonCard />
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
