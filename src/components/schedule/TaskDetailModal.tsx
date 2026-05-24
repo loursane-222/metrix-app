@@ -554,6 +554,11 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
                 <ExecutionControlPanel
                   schedulePhaseId={task.id}
                   phaseType={phase as "OLCU" | "IMALAT" | "MONTAJ"}
+                  onTransitionSuccess={(execution) => {
+                    if (execution.status === "COMPLETED" || execution.status === "CANCELLED") {
+                      onUpdated()
+                    }
+                  }}
                 />
               </div>
             )}
