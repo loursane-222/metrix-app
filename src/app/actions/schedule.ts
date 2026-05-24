@@ -272,26 +272,30 @@ export async function togglePhaseCompletion(data: {
   if (!phase) throw new Error("Aşama bulunamadı");
   if (phase.workSchedule.is.atolyeId !== auth.atolyeId) throw new Error("Yetkisiz");
 
-  if (!auth.email) {
-    throw new Error("Kullanıcı e-posta bilgisi bulunamadı.");
-  }
+  let userPersonel: { id: string } | null = null;
 
-  const userPersonel = await prisma.personel.findFirst({
-    where: {
-      email: auth.email,
-      atolyeId: auth.atolyeId,
-      aktif: true,
-    },
-  });
+  if (!auth.isOwner) {
+    if (!auth.email) {
+      throw new Error("Kullanıcı e-posta bilgisi bulunamadı.");
+    }
 
-  if (!userPersonel) {
-    throw new Error("Bu işlem için personel kaydınız bulunmuyor.");
-  }
+    userPersonel = await prisma.personel.findFirst({
+      where: {
+        email: auth.email,
+        atolyeId: auth.atolyeId,
+        aktif: true,
+      },
+    });
 
-  const atanmisMi = phase.fazAtamalar.some((a) => a.personelId === userPersonel.id);
+    if (!userPersonel) {
+      throw new Error("Bu işlem için personel kaydınız bulunmuyor.");
+    }
 
-  if (!atanmisMi) {
-    throw new Error("Sadece bu faza atanmış personel durumu güncelleyebilir.");
+    const atanmisMi = phase.fazAtamalar.some((a) => a.personelId === userPersonel!.id);
+
+    if (!atanmisMi) {
+      throw new Error("Sadece bu faza atanmış personel durumu güncelleyebilir.");
+    }
   }
 
   if (data.isCompleted) {
@@ -331,7 +335,7 @@ export async function togglePhaseCompletion(data: {
     data: {
       isCompleted: data.isCompleted,
       completedAt: data.isCompleted ? new Date() : null,
-      completedBy: data.isCompleted ? userPersonel.id : null,
+      completedBy: data.isCompleted ? (userPersonel?.id ?? null) : null,
       isOverridden: !!data.overrideNote,
       overrideNote: data.overrideNote ?? null,
       ...(data.photoUrl !== undefined && {
