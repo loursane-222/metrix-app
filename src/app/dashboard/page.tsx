@@ -65,6 +65,13 @@ function LiveCard({ item, onClick }: { item: AktifEkipItem; onClick: () => void 
     setMins(item.elapsedMinutes);
   }, [item.elapsedMinutes]);
 
+  // Tick every minute for STARTED; server corrects value on every poll
+  useEffect(() => {
+    if (item.status !== "STARTED") return;
+    const id = setInterval(() => setMins((m) => m + 1), 60_000);
+    return () => clearInterval(id);
+  }, [item.status]);
+
   const phaseLabel =
     item.phaseType === "IMALAT" ? "İmalat" :
     item.phaseType === "MONTAJ" ? "Montaj" : "Ölçü";
@@ -100,7 +107,11 @@ function LiveCard({ item, onClick }: { item: AktifEkipItem; onClick: () => void 
     <button
       onClick={onClick}
       style={{ scrollSnapAlign: "start", minWidth: 152 }}
-      className="flex-shrink-0 rounded-2xl border border-white/10 bg-[#0c1322] p-3 cursor-pointer text-left transition-colors hover:border-white/20 hover:bg-[#111c30] active:scale-[0.98]"
+      className={`flex-shrink-0 rounded-2xl border p-3 cursor-pointer text-left transition-colors active:scale-[0.98] ${
+        item.status === "PAUSED"
+          ? "border-amber-500/30 bg-amber-500/[0.04] opacity-80 hover:border-amber-500/40 hover:bg-amber-500/[0.07]"
+          : "border-white/10 bg-[#0c1322] hover:border-white/20 hover:bg-[#111c30]"
+      }`}
     >
       {/* Phase badge + status dot */}
       <div className="mb-2 flex items-center justify-between gap-1">
@@ -463,72 +474,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── 1. CANLI AKIŞ — hero section ─────────────────────────────────── */}
-        <div className="rounded-2xl border border-blue-500/15 bg-[#090f1d] p-4">
-          <div className="mb-4 flex items-start justify-between gap-2">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-blue-400">Canli Akis</p>
-              <p className="mt-0.5 text-base font-bold text-white">Ekip Hareketleri</p>
-            </div>
-            <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-400">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              Canli
-            </span>
-          </div>
-          {anaAkis.length === 0 && <p className="text-sm text-slate-600">Henuz aktivite yok.</p>}
-          <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
-            {anaAkis.map((a: any, i: number) => (
-              <div key={a.id || i} className="-mx-1 flex items-start gap-3 rounded-lg border-b border-white/5 px-1 py-3 last:border-0 transition-colors hover:bg-white/[0.03]">
-                <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ background: activityColor(a.type) }} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] leading-snug text-slate-200">{a.message}</p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                    {a.actorAdi && (
-                      <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">{a.actorAdi}</span>
-                    )}
-                    <p className="text-[10px] uppercase tracking-wider text-slate-600">{a.type?.replace(/_/g, " ")}</p>
-                  </div>
-                </div>
-                <span className="flex-shrink-0 whitespace-nowrap text-[10px] text-slate-600">{timeAgo(a.createdAt)}</span>
-              </div>
-            ))}
-          </div>
-          {anaAkis.length > 0 && (
-            <p className="mt-3 text-center text-[10px] text-slate-700">Son 5 is gunu · {anaAkis.length} hareket</p>
-          )}
-        </div>
-
-        {/* ── 1b. AKTİF OPERASYON STRIP — sadece aktif varsa ──────────────── */}
-        {aktifEkip.length > 0 && (
-          <div>
-            <div className="mb-2.5 flex items-center justify-between">
-              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Aktif Operasyon</p>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                <span className="text-[10px] font-semibold text-emerald-400">{liveToplamAktif} çalışıyor</span>
-                {liveToplamPaused > 0 && (
-                  <span className="text-[10px] font-semibold text-amber-400">· {liveToplamPaused} beklemede</span>
-                )}
-              </span>
-            </div>
-            <div
-              className="flex gap-3 overflow-x-auto pb-1"
-              style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
-            >
-              {aktifEkip.map((e) => (
-                <LiveCard
-                  key={e.execId}
-                  item={e}
-                  onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
-                />
-              ))}
-              {/* Sağ tarafta hafif fade — peek hissi */}
-              <div className="flex-shrink-0" style={{ minWidth: 8 }} />
-            </div>
-          </div>
-        )}
-
-        {/* ── 1c. TAKİLAN İŞLER ────────────────────────────────────────────── */}
+        {/* ── 1. TAKİLAN İŞLER — kritik, en üstte ─────────────────────────── */}
         {blockedItems.length > 0 && (
           <div>
             <div className="mb-2 flex items-center justify-between">
@@ -559,7 +505,13 @@ export default function DashboardPage() {
                   <button
                     key={item.execId}
                     onClick={() => setLiveTask({ id: item.phaseId, phase: item.phaseType, title: item.musteriAdi, subtitle: item.urunAdi, completed: false, schedule: {} })}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5 cursor-pointer text-left transition-colors hover:border-red-500/25 hover:bg-red-500/[0.07] active:scale-[0.98]"
+                    className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 cursor-pointer text-left transition-colors active:scale-[0.98] ${
+                      item.elapsedBlockedMinutes >= 240
+                        ? "border-red-500/40 bg-red-500/[0.08] hover:border-red-500/50 hover:bg-red-500/[0.12]"
+                        : item.elapsedBlockedMinutes >= 120
+                        ? "border-red-500/25 bg-red-500/[0.06] hover:border-red-500/35 hover:bg-red-500/[0.09]"
+                        : "border-red-500/15 bg-red-500/[0.04] hover:border-red-500/25 hover:bg-red-500/[0.07]"
+                    }`}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -578,8 +530,11 @@ export default function DashboardPage() {
                       )}
                     </div>
                     <div className="flex-shrink-0 text-right">
-                      <p className="text-[11px] font-bold tabular-nums text-red-300">{blockedHours}</p>
+                      <p className={`text-[11px] font-bold tabular-nums ${item.elapsedBlockedMinutes >= 240 ? "animate-pulse text-red-300" : "text-red-300"}`}>{blockedHours}</p>
                       <p className="text-[9px] text-red-500/50">takılı</p>
+                      {item.elapsedBlockedMinutes >= 240 && (
+                        <span className="mt-0.5 inline-block rounded-md bg-red-500/20 px-1.5 py-0.5 text-[8px] font-bold text-red-400 animate-pulse">Acil</span>
+                      )}
                     </div>
                   </button>
                 );
@@ -588,7 +543,37 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── 2. OPERASYON KPI ──────────────────────────────────────────────── */}
+        {/* ── 2. AKTİF OPERASYON STRIP — sadece aktif varsa ───────────────── */}
+        {aktifEkip.length > 0 && (
+          <div>
+            <div className="mb-2.5 flex items-center justify-between">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Aktif Operasyon</p>
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                <span className="text-[10px] font-semibold text-emerald-400">{liveToplamAktif} çalışıyor</span>
+                {liveToplamPaused > 0 && (
+                  <span className="text-[10px] font-semibold text-amber-400">· {liveToplamPaused} beklemede</span>
+                )}
+              </span>
+            </div>
+            <div
+              className="flex gap-3 overflow-x-auto pb-1"
+              style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+            >
+              {aktifEkip.map((e) => (
+                <LiveCard
+                  key={e.execId}
+                  item={e}
+                  onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
+                />
+              ))}
+              {/* Sağ tarafta hafif fade — peek hissi */}
+              <div className="flex-shrink-0" style={{ minWidth: 8 }} />
+            </div>
+          </div>
+        )}
+
+        {/* ── 3. OPERASYON KPI ──────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -794,7 +779,42 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── 5. FİNANS — compact, at bottom ──────────────────────────────── */}
+        {/* ── 5. CANLI AKIŞ — geçmiş hareketler ───────────────────────────── */}
+        <div className="rounded-2xl border border-blue-500/15 bg-[#090f1d] p-4">
+          <div className="mb-4 flex items-start justify-between gap-2">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-blue-400">Canli Akis</p>
+              <p className="mt-0.5 text-base font-bold text-white">Ekip Hareketleri</p>
+            </div>
+            <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-400">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              Canli
+            </span>
+          </div>
+          {anaAkis.length === 0 && <p className="text-sm text-slate-600">Henuz aktivite yok.</p>}
+          <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
+            {anaAkis.map((a: any, i: number) => (
+              <div key={a.id || i} className="-mx-1 flex items-start gap-3 rounded-lg border-b border-white/5 px-1 py-3 last:border-0 transition-colors hover:bg-white/[0.03]">
+                <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ background: activityColor(a.type) }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] leading-snug text-slate-200">{a.message}</p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                    {a.actorAdi && (
+                      <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">{a.actorAdi}</span>
+                    )}
+                    <p className="text-[10px] uppercase tracking-wider text-slate-600">{a.type?.replace(/_/g, " ")}</p>
+                  </div>
+                </div>
+                <span className="flex-shrink-0 whitespace-nowrap text-[10px] text-slate-600">{timeAgo(a.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+          {anaAkis.length > 0 && (
+            <p className="mt-3 text-center text-[10px] text-slate-700">Son 5 is gunu · {anaAkis.length} hareket</p>
+          )}
+        </div>
+
+        {/* ── 6. FİNANS — compact, at bottom ──────────────────────────────── */}
         <div className="flex items-center justify-between pt-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Finans Ozeti</p>
           <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
