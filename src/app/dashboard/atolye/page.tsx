@@ -488,7 +488,7 @@ export default function AtolyePage() {
         </aside>
 
         {/* ORTA PANEL */}
-        <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-28 pt-[104px] md:p-5 md:overflow-y-auto">
+        <main className="min-w-0 rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-tab-bar pt-[104px] md:p-5 md:overflow-y-auto">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-xs tracking-[0.25em] text-slate-400 uppercase">Maliyet Motoru</p>

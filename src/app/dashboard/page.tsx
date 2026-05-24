@@ -459,7 +459,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#030712] px-3 pb-28 pt-4 md:px-6 md:pb-8 md:pt-6">
+    <main className="min-h-screen bg-[#030712] px-3 pb-tab-bar pt-4 md:px-6 md:pb-8 md:pt-6">
       <InAppToast />
       <div className="mx-auto max-w-2xl space-y-4">
 

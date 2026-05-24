@@ -255,7 +255,7 @@ export default function PersonelSayfasi() {
         {/* ── ORTA: DETAY ─────────────────────────────────────────────── */}
         <main
           className={[
-            "rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-28 pt-[104px] md:overflow-y-auto md:p-5",
+            "rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-tab-bar pt-[104px] md:overflow-y-auto md:p-5",
             mobileView === "detail" ? "block overflow-y-auto" : "hidden md:block",
           ].join(" ")}
         >
