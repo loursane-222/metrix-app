@@ -459,11 +459,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#030712] px-3 pb-tab-bar pt-4 md:px-6 md:pb-8 md:pt-6">
+    <main className="min-h-screen bg-[#030712] px-3 pb-tab-bar pt-0 md:px-6 md:pb-8 md:pt-0">
       <InAppToast />
-      <div className="mx-auto max-w-2xl space-y-4">
+      <div className="mx-auto max-w-2xl">
 
-        <div className="flex items-center justify-between">
+        <div className="sticky top-0 z-30 -mx-3 flex items-center justify-between border-b border-white/[0.06] bg-[#030712]/90 px-3 py-3 backdrop-blur-md md:-mx-6 md:px-6 md:py-4">
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Operasyon Merkezi</p>
             <h1 className="mt-0.5 text-lg font-bold text-white">Dashboard</h1>
@@ -474,6 +474,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        <div className="space-y-4 pt-4">
         {/* ── 1. GÜNÜN PROGRAMI ────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -864,6 +865,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        </div>{/* space-y-4 wrapper */}
       </div>
 
       {liveTask && (
