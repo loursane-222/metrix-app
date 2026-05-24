@@ -24,6 +24,28 @@ type AktifEkipItem = {
   cannotStartReason: string | null;
 };
 
+type BlockedItem = {
+  execId: string;
+  phaseId: string;
+  phaseType: "OLCU" | "IMALAT" | "MONTAJ";
+  musteriAdi: string;
+  urunAdi: string;
+  cannotStartReason: string | null;
+  materialLossCost: string | null;
+  elapsedBlockedMinutes: number;
+};
+
+const CANNOT_START_REASON_LABELS: Record<string, string> = {
+  CUSTOMER_NOT_READY:      "Müşteri hazır değil",
+  MATERIAL_MISSING:        "Malzeme eksik",
+  MEASUREMENT_MISSING:     "Ölçü eksik",
+  MACHINE_BUSY:            "Makine meşgul",
+  PERSONNEL_UNAVAILABLE:   "Personel yok",
+  SITE_NOT_READY:          "Saha hazır değil",
+  STONE_BROKEN_IN_CUTTING: "Kesimde taş kırıldı",
+  OTHER:                   "Diğer",
+};
+
 // ─── Risk state config ────────────────────────────────────────────────────────
 const RISK_META: Record<RiskState, { label: string; bar: string; text: string; badge: string }> = {
   NO_PLAN:  { label: "Plan yok",        bar: "bg-slate-700",    text: "text-slate-500",  badge: "text-slate-600 bg-slate-800/60" },
@@ -291,6 +313,8 @@ export default function DashboardPage() {
     aktifEkip: AktifEkipItem[];
     toplamAktif: number;
     toplamPaused: number;
+    blockedItems: BlockedItem[];
+    toplamBlocked: number;
   } | null>(null);
 
   const lastAkisIdRef = useRef<string | null>(null);
@@ -387,6 +411,8 @@ export default function DashboardPage() {
   const aktifEkip = useMemo(() => liveOps?.aktifEkip ?? [], [liveOps]);
   const liveToplamAktif = useMemo(() => liveOps?.toplamAktif ?? 0, [liveOps]);
   const liveToplamPaused = useMemo(() => liveOps?.toplamPaused ?? 0, [liveOps]);
+  const blockedItems = useMemo(() => liveOps?.blockedItems ?? [], [liveOps]);
+  const liveToplamBlocked = useMemo(() => liveOps?.toplamBlocked ?? 0, [liveOps]);
   const vadesiGelenler = useMemo(() => data?.vadesiGelenler || [], [data]);
   const atelye = useMemo(() => data?.atelye || {}, [data]);
 
@@ -498,6 +524,65 @@ export default function DashboardPage() {
               ))}
               {/* Sağ tarafta hafif fade — peek hissi */}
               <div className="flex-shrink-0" style={{ minWidth: 8 }} />
+            </div>
+          </div>
+        )}
+
+        {/* ── 1c. TAKİLAN İŞLER ────────────────────────────────────────────── */}
+        {blockedItems.length > 0 && (
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-red-400">Takılan İşler</p>
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                <span className="text-[10px] font-semibold text-red-400">{liveToplamBlocked} takılı</span>
+              </span>
+            </div>
+            <div className="space-y-2">
+              {blockedItems.map((item) => {
+                const phaseLabel =
+                  item.phaseType === "IMALAT" ? "İmalat" :
+                  item.phaseType === "MONTAJ" ? "Montaj" : "Ölçü";
+                const phaseCls =
+                  item.phaseType === "IMALAT" ? "bg-amber-500/15 text-amber-400" :
+                  item.phaseType === "MONTAJ" ? "bg-emerald-500/15 text-emerald-400" :
+                  "bg-blue-500/15 text-blue-400";
+                const reasonLabel = item.cannotStartReason
+                  ? (CANNOT_START_REASON_LABELS[item.cannotStartReason] ?? item.cannotStartReason)
+                  : null;
+                const hasCost = item.materialLossCost && Number(item.materialLossCost) > 0;
+                const blockedHours = item.elapsedBlockedMinutes >= 60
+                  ? `${Math.floor(item.elapsedBlockedMinutes / 60)} sa ${item.elapsedBlockedMinutes % 60} dk`
+                  : `${item.elapsedBlockedMinutes} dk`;
+
+                return (
+                  <div
+                    key={item.execId}
+                    className="flex items-center gap-3 rounded-2xl border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${phaseCls}`}>
+                          {phaseLabel}
+                        </span>
+                        <p className="truncate text-[12px] font-bold text-white">{item.musteriAdi}</p>
+                      </div>
+                      {reasonLabel && (
+                        <p className="mt-0.5 text-[10px] text-red-300/70">{reasonLabel}</p>
+                      )}
+                      {hasCost && (
+                        <p className="mt-0.5 text-[10px] font-bold text-red-400">
+                          ₺{Number(item.materialLossCost).toLocaleString("tr-TR")} maliyet
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <p className="text-[11px] font-bold tabular-nums text-red-300">{blockedHours}</p>
+                      <p className="text-[9px] text-red-500/50">takılı</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

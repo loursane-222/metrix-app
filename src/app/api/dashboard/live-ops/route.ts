@@ -20,41 +20,50 @@ export async function GET() {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 401 })
     }
 
-    // Tek query — N+1 yok.
-    const executions = await prisma.phaseExecution.findMany({
-      where: {
-        atolyeId: auth.atolyeId,
-        status: { in: ["STARTED", "PAUSED"] },
-      },
-      select: {
-        id: true,
-        schedulePhaseId: true,
-        status: true,
-        actualStartedAt: true,
-        pauseMinutes: true,
-        estimatedMinutes: true,
-        cannotStartReason: true,
-        personel: {
-          select: { ad: true, soyad: true },
-        },
-        schedulePhase: {
-          select: {
-            phase: true,
-            workSchedule: {
-              select: {
-                is: {
-                  select: {
-                    musteriAdi: true,
-                    urunAdi: true,
-                  },
-                },
+    // İki sorgu paralel — N+1 yok.
+    const [executions, blockedExecutions] = await Promise.all([
+      prisma.phaseExecution.findMany({
+        where: { atolyeId: auth.atolyeId, status: { in: ["STARTED", "PAUSED"] } },
+        select: {
+          id: true,
+          schedulePhaseId: true,
+          status: true,
+          actualStartedAt: true,
+          pauseMinutes: true,
+          estimatedMinutes: true,
+          cannotStartReason: true,
+          personel: { select: { ad: true, soyad: true } },
+          schedulePhase: {
+            select: {
+              phase: true,
+              workSchedule: {
+                select: { is: { select: { musteriAdi: true, urunAdi: true } } },
               },
             },
           },
         },
-      },
-      orderBy: { actualStartedAt: "asc" },
-    })
+        orderBy: { actualStartedAt: "asc" },
+      }),
+      prisma.phaseExecution.findMany({
+        where: { atolyeId: auth.atolyeId, status: "CANNOT_START" },
+        select: {
+          id: true,
+          schedulePhaseId: true,
+          cannotStartReason: true,
+          materialLossCost: true,
+          updatedAt: true,
+          schedulePhase: {
+            select: {
+              phase: true,
+              workSchedule: {
+                select: { is: { select: { musteriAdi: true, urunAdi: true } } },
+              },
+            },
+          },
+        },
+        orderBy: { updatedAt: "asc" }, // en uzun süredir takılı önce
+      }),
+    ])
 
     const aktifEkip = executions.map((ex) => {
       const elapsed = computeElapsedMinutes(ex.actualStartedAt, ex.pauseMinutes)
@@ -86,10 +95,23 @@ export async function GET() {
       }
     })
 
+    const blockedItems = blockedExecutions.map((ex) => ({
+      execId: ex.id,
+      phaseId: ex.schedulePhaseId,
+      phaseType: ex.schedulePhase?.phase ?? "IMALAT",
+      musteriAdi: ex.schedulePhase?.workSchedule?.is?.musteriAdi ?? "—",
+      urunAdi: ex.schedulePhase?.workSchedule?.is?.urunAdi ?? "",
+      cannotStartReason: ex.cannotStartReason,
+      materialLossCost: ex.materialLossCost != null ? String(ex.materialLossCost) : null,
+      elapsedBlockedMinutes: Math.round((Date.now() - ex.updatedAt.getTime()) / 60_000),
+    }))
+
     return NextResponse.json({
       aktifEkip,
       toplamAktif: aktifEkip.filter((e) => e.status === "STARTED").length,
       toplamPaused: aktifEkip.filter((e) => e.status === "PAUSED").length,
+      blockedItems,
+      toplamBlocked: blockedItems.length,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })

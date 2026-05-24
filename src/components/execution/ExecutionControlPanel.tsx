@@ -159,10 +159,10 @@ export default function ExecutionControlPanel({
     setShowReasonPicker(false)
     await execHandleCannotStart({
       cannotReason,
-      ...(meta?.requiresDetail ? {
-        failureDescription: failureDescription || undefined,
-        materialLossCost: Number(materialLossCost),
-      } : {}),
+      ...((meta?.requiresDetail || cannotReason === "OTHER") && failureDescription
+        ? { failureDescription }
+        : {}),
+      ...(meta?.requiresDetail ? { materialLossCost: Number(materialLossCost) } : {}),
     })
     setCannotReason("")
     setFailureDescription("")
@@ -248,40 +248,44 @@ export default function ExecutionControlPanel({
             ))}
           </div>
 
-          {/* Taş kırıldı — detay alanları */}
-          {needsDetail && (
+          {/* Detay alanları: STONE_BROKEN (zorunlu maliyet) veya OTHER (opsiyonel açıklama) */}
+          {(needsDetail || cannotReason === "OTHER") && (
             <div className="space-y-3 rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
               <div>
                 <label className="mb-1.5 block text-xs font-bold text-red-300/80">
-                  Açıklama
+                  Açıklama{!needsDetail && <span className="ml-1 font-normal text-slate-500">(opsiyonel)</span>}
                 </label>
                 <textarea
                   value={failureDescription}
                   onChange={(e) => setFailureDescription(e.target.value)}
                   rows={3}
-                  placeholder={"Köşe kırıldı\nDamar dağıldı\nOperatör hatası\nTaşıma sırasında çatladı"}
+                  placeholder={needsDetail
+                    ? "Köşe kırıldı\nDamar dağıldı\nOperatör hatası\nTaşıma sırasında çatladı"
+                    : "Kısa bir açıklama ekle..."}
                   className="w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600"
                 />
               </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-bold text-red-300/80">
-                  Maliyet Etkisi (TL) <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={materialLossCost}
-                    onChange={(e) => setMaterialLossCost(e.target.value)}
-                    placeholder="0"
-                    className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 pr-10 text-sm text-white outline-none placeholder:text-slate-600"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">
-                    ₺
-                  </span>
+              {needsDetail && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-red-300/80">
+                    Maliyet Etkisi (TL) <span className="text-red-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={materialLossCost}
+                      onChange={(e) => setMaterialLossCost(e.target.value)}
+                      placeholder="0"
+                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 pr-10 text-sm text-white outline-none placeholder:text-slate-600"
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">
+                      ₺
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -381,7 +385,7 @@ export default function ExecutionControlPanel({
           )}
 
           {/* BAŞLANAMADI — scroll içinde kalır, hideActions'dan etkilenmez */}
-          {(status === "PLANNED" || status === "STARTED") && (
+          {(status === "PLANNED" || status === "STARTED" || status === "PAUSED") && (
             <ActionBtn
               label="Başlanamadı"
               variant="red"

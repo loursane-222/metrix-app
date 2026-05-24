@@ -307,6 +307,16 @@ export async function transitionExecution(input: TransitionInput) {
       const FAZ_LABEL: Record<string, string> = {
         IMALAT: "imalat", MONTAJ: "montaj", OLCU: "ölçü", TAS_ALINACAK: "taş alınacak",
       }
+      const CANNOT_START_LABELS: Record<string, string> = {
+        CUSTOMER_NOT_READY:      "Müşteri hazır değil",
+        MATERIAL_MISSING:        "Malzeme eksik",
+        MEASUREMENT_MISSING:     "Ölçü eksik",
+        MACHINE_BUSY:            "Makine meşgul",
+        PERSONNEL_UNAVAILABLE:   "Personel yok",
+        SITE_NOT_READY:          "Saha hazır değil",
+        STONE_BROKEN_IN_CUTTING: "Kesimde taş kırıldı",
+        OTHER:                   "Diğer",
+      }
       const isResumed = toStatus === "STARTED" && fromStatus === "PAUSED"
       const actType = isResumed
         ? "execution_resumed"
@@ -334,6 +344,9 @@ export async function transitionExecution(input: TransitionInput) {
       const fazLabel = FAZ_LABEL[phaseCtx?.phase ?? ""] ?? "faz"
       const musteriAdi = phaseCtx?.workSchedule?.is?.musteriAdi || "—"
       const actorLabel = actorName || "Atölye"
+      const reasonSuffix = toStatus === "CANNOT_START" && cannotStartReason
+        ? ` (${CANNOT_START_LABELS[cannotStartReason] ?? cannotStartReason})`
+        : ""
 
       const MSG: Record<string, string> = {
         execution_started:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını başlattı`,
@@ -341,7 +354,7 @@ export async function transitionExecution(input: TransitionInput) {
         execution_paused:       `${actorLabel} — ${musteriAdi} ${fazLabel} fazını duraklattı`,
         execution_completed:    `${actorLabel} — ${musteriAdi} ${fazLabel} fazını tamamladı`,
         execution_cancelled:    `${actorLabel} — ${musteriAdi} ${fazLabel} fazı iptal edildi`,
-        execution_cannot_start: `${actorLabel} — ${musteriAdi} ${fazLabel} fazı başlatılamadı`,
+        execution_cannot_start: `${actorLabel} — ${musteriAdi} ${fazLabel} fazı başlatılamadı${reasonSuffix}`,
       }
 
       await logActivity({
