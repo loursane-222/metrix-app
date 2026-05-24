@@ -191,7 +191,7 @@ export default function PersonelSayfasi() {
   }, [personeller])
 
   return (
-    <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 text-white md:h-screen md:overflow-hidden md:p-3">
+    <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 text-white md:h-full md:overflow-hidden md:p-3">
       <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:min-h-0 md:grid-cols-[310px_minmax(0,1fr)_310px]">
 
         {/* ── SOL: LİSTE ──────────────────────────────────────────────── */}
@@ -305,7 +305,7 @@ export default function PersonelSayfasi() {
         <aside
           className={[
             "fixed right-0 top-0 z-[180] h-[100dvh] w-[86vw] max-w-[380px] flex-col overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300",
-            "md:static md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:flex md:flex-col md:overflow-hidden",
+            "md:static md:w-auto md:h-full md:translate-x-0 md:rounded-3xl md:border md:flex md:flex-col md:overflow-hidden",
             mobilePanelOpen ? "translate-x-0" : "translate-x-full",
           ].join(" ")}
         >
