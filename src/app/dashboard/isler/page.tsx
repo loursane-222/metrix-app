@@ -31,6 +31,9 @@ export default function IslerPage() {
   const [odemeYukleniyor, setOdemeYukleniyor] = useState(false)
   const [bekleyenDurum, setBekleyenDurum] = useState<string | null>(null)
   const [durumDegistirYukleniyor, setDurumDegistirYukleniyor] = useState(false)
+  const [filterSheetAcik, setFilterSheetAcik] = useState(false)
+  const [draftDurum, setDraftDurum] = useState("tumu")
+  const [draftZaman, setDraftZaman] = useState("tumu")
 
   function aktifTeklifLinki() {
     if (!aktifIs?.teklifNo) return ""
@@ -208,7 +211,7 @@ export default function IslerPage() {
   // Back button → açık mobil modal/drawer'ı kapat (route değişimi olmadan)
   const _modalPushed = useRef(false)
   useEffect(() => {
-    const anyOpen = mobileActionsOpen || durumDegistirAcik || odemePopupAcik || plakaAcik || tahsilatAcik || uretimPlaniAcik
+    const anyOpen = mobileActionsOpen || durumDegistirAcik || odemePopupAcik || plakaAcik || tahsilatAcik || uretimPlaniAcik || filterSheetAcik
     if (anyOpen && !_modalPushed.current) {
       _modalPushed.current = true
       window.history.pushState({ metrixIslerModal: true }, '')
@@ -220,6 +223,7 @@ export default function IslerPage() {
         setPlakaAcik(false)
         setTahsilatAcik(false)
         setUretimPlaniAcik(false)
+        setFilterSheetAcik(false)
       }
       window.addEventListener('popstate', onPop, { once: true })
     }
@@ -274,6 +278,7 @@ export default function IslerPage() {
     if (durum === 'montaj_tamamlandi') return '✓ Montaj Tamam'
     if (durum === 'kaybedildi') return 'Kaybedildi'
     if (durum === 'teklif_verildi') return 'Beklemede'
+    if (durum === 'program_bekliyor') return 'Program Bekliyor'
     return durum || 'Belirsiz'
   }
 
@@ -311,6 +316,8 @@ export default function IslerPage() {
         .filter(Boolean).join(" ").toLowerCase().includes(q)
     )
   }, [isler, isArama, durumFiltre, zamanFiltre])
+
+  const aktifFiltreCount = (durumFiltre !== "tumu" ? 1 : 0) + (zamanFiltre !== "tumu" ? 1 : 0)
 
   function TasBadge({ durum }: { durum?: string }) {
     if (!durum) return null
@@ -350,35 +357,33 @@ export default function IslerPage() {
                 )}
               </div>
 
-              {/* Durum filtreleri */}
-              <div className="mt-3 flex flex-wrap gap-2">
-                {[
-                  { key: "tumu", label: `Tümü (${ozet.toplam})`, renk: "text-white border-slate-600 bg-slate-700" },
-                  { key: "teklif_verildi", label: `Beklemede (${ozet.bekleyen})`, renk: "text-amber-300 border-amber-500/40 bg-amber-500/10" },
-                  { key: "onaylandi", label: `Onaylı (${ozet.onaylanan})`, renk: "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" },
-                  { key: "program_bekliyor", label: `Program Bekliyor`, renk: "text-orange-300 border-orange-500/40 bg-orange-500/10" },
-                  { key: "montaj_tamamlandi", label: `Montaj Tamam (${ozet.montajTamamlandi})`, renk: "text-teal-300 border-teal-500/40 bg-teal-500/10" },
-                  { key: "kaybedildi", label: `Kayıp (${ozet.kayip})`, renk: "text-red-300 border-red-500/40 bg-red-500/10" },
-                ].map((chip) => (
-                  <button key={chip.key} onClick={() => setDurumFiltre(chip.key)}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${durumFiltre === chip.key ? chip.renk : "border-slate-700 bg-transparent text-slate-400"}`}>
-                    {chip.label}
+              {/* Compact filter toolbar */}
+              <div className="mt-3 flex items-center gap-2 overflow-x-auto">
+                <button
+                  onClick={() => { setDraftDurum(durumFiltre); setDraftZaman(zamanFiltre); setFilterSheetAcik(true); }}
+                  className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/[0.10] bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-300"
+                  aria-label="Filtreleri aç"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h18M7 9.5h10M11 14.5h2"/></svg>
+                  Filtrele
+                  {aktifFiltreCount > 0 && (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[9px] font-bold text-white">{aktifFiltreCount}</span>
+                  )}
+                </button>
+                {durumFiltre !== "tumu" && (
+                  <button onClick={() => setDurumFiltre("tumu")}
+                    className="flex shrink-0 items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs font-medium text-slate-300">
+                    {durumEtiket(durumFiltre)}
+                    <svg className="h-3 w-3 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
-                ))}
-              </div>
-
-              {/* Zaman filtreleri */}
-              <div className="mt-2 flex flex-wrap gap-2">
-                {[
-                  { key: "tumu", label: "Tüm Zamanlar" },
-                  { key: "ay", label: "Bu Ay" },
-                  { key: "hafta", label: "Bu Hafta" },
-                ].map((chip) => (
-                  <button key={chip.key} onClick={() => setZamanFiltre(chip.key)}
-                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${zamanFiltre === chip.key ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-slate-700 bg-transparent text-slate-500"}`}>
-                    {chip.label}
+                )}
+                {zamanFiltre !== "tumu" && (
+                  <button onClick={() => setZamanFiltre("tumu")}
+                    className="flex shrink-0 items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs font-medium text-slate-300">
+                    {zamanFiltre === "ay" ? "Bu Ay" : "Bu Hafta"}
+                    <svg className="h-3 w-3 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
-                ))}
+                )}
               </div>
             </div>
 
@@ -576,34 +581,35 @@ export default function IslerPage() {
               </button>
             )}
           </div>
-          {/* Durum chip */}
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { key: "tumu", label: "Tümü", renk: "text-white border-slate-600 bg-slate-700" },
-              { key: "teklif_verildi", label: "Beklemede", renk: "text-amber-300 border-amber-500/40 bg-amber-500/10" },
-              { key: "onaylandi", label: "Onaylı", renk: "text-emerald-300 border-emerald-500/40 bg-emerald-500/10" },
-              { key: "program_bekliyor", label: "Program Bekliyor", renk: "text-orange-300 border-orange-500/40 bg-orange-500/10" },
-              { key: "montaj_tamamlandi", label: "Montaj Tamam", renk: "text-teal-300 border-teal-500/40 bg-teal-500/10" },
-              { key: "kaybedildi", label: "Kayıp", renk: "text-red-300 border-red-500/40 bg-red-500/10" },
-            ].map((chip) => (
-              <button key={chip.key} onClick={() => setDurumFiltre(chip.key)}
-                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${durumFiltre === chip.key ? chip.renk : "border-slate-700 bg-transparent text-slate-500"}`}>
-                {chip.label}
-              </button>
-            ))}
-          </div>
-          {/* Zaman chip */}
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { key: "tumu", label: "Tüm Zamanlar" },
-              { key: "ay", label: "Bu Ay" },
-              { key: "hafta", label: "Bu Hafta" },
-            ].map((chip) => (
-              <button key={chip.key} onClick={() => setZamanFiltre(chip.key)}
-                className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-medium transition ${zamanFiltre === chip.key ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-slate-700 bg-transparent text-slate-500"}`}>
-                {chip.label}
-              </button>
-            ))}
+          {/* Compact filter toolbar */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center rounded-xl border border-white/[0.06] bg-white/[0.03] p-1">
+              {[
+                { key: "tumu", label: "Tümü" },
+                { key: "teklif_verildi", label: "Bekliyor" },
+                { key: "onaylandi", label: "Onaylı" },
+                { key: "program_bekliyor", label: "Program" },
+                { key: "montaj_tamamlandi", label: "Montaj" },
+                { key: "kaybedildi", label: "Kayıp" },
+              ].map((opt) => (
+                <button key={opt.key} onClick={() => setDurumFiltre(opt.key)}
+                  className={`flex-1 rounded-lg py-1.5 text-[10px] font-semibold transition ${durumFiltre === opt.key ? 'bg-white/[0.10] text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center rounded-xl border border-white/[0.06] bg-white/[0.03] p-1">
+              {[
+                { key: "tumu", label: "Tüm Zamanlar" },
+                { key: "ay", label: "Bu Ay" },
+                { key: "hafta", label: "Bu Hafta" },
+              ].map((opt) => (
+                <button key={opt.key} onClick={() => setZamanFiltre(opt.key)}
+                  className={`flex-1 rounded-lg py-1.5 text-[10px] font-semibold transition ${zamanFiltre === opt.key ? 'bg-white/[0.10] text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -775,6 +781,60 @@ export default function IslerPage() {
         <button onClick={aktifRevizeEt} disabled={!aktifIs} className="w-full rounded-2xl bg-purple-600 px-5 py-4 text-white font-bold hover:bg-purple-500 disabled:opacity-40">✏️ Revize Teklif</button>
         <button onClick={aktifTakipMesajiKopyala} disabled={!aktifIs?.teklifNo} className="w-full rounded-2xl bg-amber-600 px-5 py-4 text-white font-bold hover:bg-amber-500 disabled:opacity-40">⏱ Akıllı Takip Mesajı Kopyala</button>
       </div>
+
+      {/* FİLTRE BOTTOM SHEET */}
+      {filterSheetAcik && (
+        <div className="fixed inset-0 z-[200] flex items-end md:hidden">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setFilterSheetAcik(false)} />
+          <div className="relative w-full rounded-t-3xl border-t border-white/[0.08] bg-[#0B1120]" style={{paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
+            <div className="flex justify-center pb-1 pt-3">
+              <div className="h-1 w-10 rounded-full bg-white/20" />
+            </div>
+            <div className="px-5 pb-6 pt-2">
+              <h3 className="mb-4 text-sm font-semibold text-white">Filtrele</h3>
+              <p className="mb-2 text-[11px] uppercase tracking-[0.15em] text-slate-500">Durum</p>
+              <div className="mb-5 flex flex-wrap gap-2">
+                {[
+                  { key: "tumu", label: "Tümü" },
+                  { key: "teklif_verildi", label: "Beklemede" },
+                  { key: "onaylandi", label: "Onaylı" },
+                  { key: "program_bekliyor", label: "Program Bekliyor" },
+                  { key: "montaj_tamamlandi", label: "Montaj Tamam" },
+                  { key: "kaybedildi", label: "Kayıp" },
+                ].map((opt) => (
+                  <button key={opt.key} onClick={() => setDraftDurum(opt.key)}
+                    className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${draftDurum === opt.key ? 'border-blue-500/50 bg-blue-500/15 text-blue-300' : 'border-white/[0.08] bg-white/[0.03] text-slate-400'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mb-2 text-[11px] uppercase tracking-[0.15em] text-slate-500">Zaman</p>
+              <div className="mb-6 flex gap-2">
+                {[
+                  { key: "tumu", label: "Tüm Zamanlar" },
+                  { key: "ay", label: "Bu Ay" },
+                  { key: "hafta", label: "Bu Hafta" },
+                ].map((opt) => (
+                  <button key={opt.key} onClick={() => setDraftZaman(opt.key)}
+                    className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${draftZaman === opt.key ? 'border-blue-500/50 bg-blue-500/15 text-blue-300' : 'border-white/[0.08] bg-white/[0.03] text-slate-400'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => { setDraftDurum("tumu"); setDraftZaman("tumu"); }}
+                  className="rounded-xl border border-white/[0.08] bg-white/[0.03] py-3.5 text-sm font-semibold text-slate-400">
+                  Temizle
+                </button>
+                <button onClick={() => { setDurumFiltre(draftDurum); setZamanFiltre(draftZaman); setFilterSheetAcik(false); }}
+                  className="rounded-xl bg-blue-600 py-3.5 text-sm font-semibold text-white">
+                  Uygula{(draftDurum !== "tumu" || draftZaman !== "tumu") ? ` (${(draftDurum !== "tumu" ? 1 : 0) + (draftZaman !== "tumu" ? 1 : 0)})` : ""}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MOBİL DRAWER */}
       {mobileActionsOpen && (
