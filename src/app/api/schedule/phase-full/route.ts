@@ -73,7 +73,8 @@ export async function PATCH(req: NextRequest) {
       await logActivity({ atolyeId: auth.atolyeId, type: "program_personel_degisti", message: musteriAdi + " – " + fazAdi + " fazina atama degisti: " + isimler, refId: phaseId, userId: auth.userId, personelId: auth.personelId || undefined });
     }
 
-    if (notes !== undefined) {
+    const prevNotes = phase.workSchedule.notes ?? "";
+    if (notes !== undefined && notes.trim() !== "" && notes.trim() !== prevNotes.trim()) {
       await logActivity({ atolyeId: auth.atolyeId, type: "program_not_eklendi", message: musteriAdi + " – " + fazAdi + " fazina not eklendi.", refId: phaseId, userId: auth.userId, personelId: auth.personelId || undefined });
     }
 
