@@ -806,6 +806,8 @@ export default function YeniIsV3Page() {
           .desktop-sidebar{display:none!important;}
           .parca-row{grid-template-columns:1fr 1fr!important;}
           .parca-row .parca-ad-col{grid-column:1/-1;}
+          .mobile-gizle{display:none!important;}
+          .musteri-tipi-grid{grid-template-columns:repeat(3,1fr)!important;}
         }
         @media(min-width:641px){
           .mobile-only{display:none!important;}
@@ -909,7 +911,7 @@ export default function YeniIsV3Page() {
                 {/* Müşteri tipi */}
                 <div style={{ marginTop: "12px" }}>
                   <span className="yi-label">Müşteri Tipi</span>
-                  <div className="ikon-grid" style={{ gridTemplateColumns: "repeat(5,1fr)" }}>
+                  <div className="ikon-grid musteri-tipi-grid" style={{ gridTemplateColumns: "repeat(5,1fr)" }}>
                     {MUSTERI_TIPLERI.map((t) => (
                       <button key={t.id} onClick={() => { setAlan("musteriTipi", t.id); setAlan("carpan", t.carpan); }} className={`ikon-btn${form.musteriTipi === t.id ? " aktif" : ""}`}>
                         <span style={{ fontSize: "20px" }}>{t.ikon}</span>
@@ -1363,7 +1365,7 @@ export default function YeniIsV3Page() {
               </div>
 
               {/* İş özeti */}
-              <div className="yi-kart">
+              <div className="yi-kart mobile-gizle">
                 <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>📋 İş Özeti</p>
                 {[
                   { l: "Müşteri",      v: form.musteriAdi || "—" },
@@ -1384,7 +1386,7 @@ export default function YeniIsV3Page() {
 
               {/* Kalem Bazlı Maliyet & Birim Fiyat Tablosu */}
               {hesap.toplamMtul > 0 && (
-                <div className="yi-kart">
+                <div className="yi-kart mobile-gizle">
                   <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "14px" }}>📐 Kalem Bazlı Birim Analiz</p>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
@@ -1505,10 +1507,10 @@ export default function YeniIsV3Page() {
           onClick={() => setAiMode(true)}
           style={{
             position: "fixed",
-            bottom: "calc(env(safe-area-inset-bottom) + 80px)",
+            bottom: "calc(env(safe-area-inset-bottom) + 96px)",
             right: "16px",
             zIndex: 1300,
-            minWidth: "142px",
+            minWidth: "auto",
             height: "52px",
             borderRadius: "18px",
             background: "linear-gradient(135deg, #10b981, #059669)",
