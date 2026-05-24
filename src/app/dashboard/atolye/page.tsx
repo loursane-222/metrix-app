@@ -811,7 +811,7 @@ function Kpi({ label, value, tone = 'text-white', hero = false }: any) {
   return (
     <div className={`rounded-2xl border border-slate-800 bg-[#111827] p-4${hero ? ' sm:col-span-2' : ''}`}>
       <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-2 break-words font-semibold leading-tight tabular-nums ${hero ? 'text-2xl md:text-3xl' : 'text-lg md:text-xl'} ${tone}`}>{value}</p>
+      <p className={`mt-2 whitespace-nowrap overflow-hidden font-semibold leading-tight tabular-nums ${hero ? 'text-2xl md:text-3xl' : 'text-lg md:text-xl'} ${tone}`}>{value}</p>
     </div>
   )
 }
@@ -820,7 +820,7 @@ function ModelCard({ label, value, sub, compact = false }: any) {
     <div className="min-w-0 rounded-2xl border border-slate-800 bg-[#0B1120] p-4">
       <p className="text-xs text-slate-400">{label}</p>
       <div className="mt-3 flex items-end gap-2 min-w-0">
-        <p className={`${compact ? 'text-[20px] md:text-[24px]' : 'text-[22px] md:text-[26px]'} break-words font-semibold leading-none tracking-tight tabular-nums min-w-0`}>{value}</p>
+        <p className={`${compact ? 'text-[18px] md:text-[22px]' : 'text-[20px] md:text-[24px]'} whitespace-nowrap overflow-hidden font-semibold leading-none tracking-tight tabular-nums`}>{value}</p>
         <p className="pb-1 text-xs text-slate-500 min-w-0 truncate">{sub}</p>
       </div>
     </div>
@@ -852,7 +852,7 @@ function SmallStat({ label, value }: any) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
       <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-2 break-words font-semibold leading-tight tabular-nums">{value}</p>
+      <p className="mt-2 text-sm font-semibold leading-tight tabular-nums truncate">{value}</p>
     </div>
   )
 }

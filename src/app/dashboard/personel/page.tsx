@@ -192,7 +192,7 @@ export default function PersonelSayfasi() {
 
   return (
     <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 text-white md:h-screen md:overflow-hidden md:p-3">
-      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:min-h-0 md:grid-cols-[310px_minmax(0,1fr)_310px]">
+      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:min-h-0 md:grid-cols-[270px_minmax(0,1fr)_300px]">
 
         {/* ── SOL: LİSTE ──────────────────────────────────────────────── */}
         <aside
