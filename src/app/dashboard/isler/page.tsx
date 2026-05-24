@@ -433,7 +433,7 @@ export default function IslerPage() {
               {filtreliIsler.map((is: any) => (
                 <SwipeToDelete key={is.id} onDelete={() => isSil(is.id)}>
                 <button onClick={() => { setAktifIs(is); setMobileView('detail') }}
-                  className="block w-full border-b border-slate-800 p-4 text-left active:bg-[#111827]">
+                  className="block w-full border-b border-slate-800 px-4 py-3.5 text-left active:bg-[#111827]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-base font-black">{is.musteriAdi}</p>
@@ -447,8 +447,8 @@ export default function IslerPage() {
                         );
                         if (!faz) return null;
                         return (
-                          <div className={`mt-1 flex items-center gap-1 text-[11px] font-semibold ${faz.done ? 'text-teal-400' : 'text-blue-300'}`}>
-                            <span>{faz.done ? '✓ Teslim Edildi' : `${faz.label}${faz.date ? ': ' + faz.date : ''}`}</span>
+                          <div className={`mt-1 flex w-fit items-center rounded-lg border px-2 py-0.5 text-[10px] font-medium ${faz.done ? 'border-teal-500/20 bg-teal-500/10 text-teal-300' : 'border-blue-500/20 bg-blue-500/10 text-blue-300'}`}>
+                            {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
                           </div>
                         );
                       })()}
@@ -655,11 +655,11 @@ export default function IslerPage() {
           )}
           {filtreliIsler.map((is) => (
             <div key={is.id} onClick={() => setAktifIs(is)}
-              className={`group relative p-4 border-b border-slate-800 cursor-pointer hover:bg-[#111827] ${aktifIs?.id === is.id ? 'bg-[#111827]' : ''}`}>
+              className={`group relative border-b border-l-2 border-slate-800 p-4 cursor-pointer hover:bg-[#111827] transition-colors ${aktifIs?.id === is.id ? 'bg-[#111827] border-l-blue-400/70' : 'border-l-transparent'}`}>
 
               <div className="flex justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold">{is.musteriAdi}</p>
+                  <p className="text-sm font-bold text-slate-100">{is.musteriAdi}</p>
                   {(() => {
                     const faz = aktifFazBilgisi(is.id);
                     if (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) return (
@@ -670,9 +670,9 @@ export default function IslerPage() {
                     );
                     if (!faz) return null;
                     return (
-                      <p className={`text-[11px] font-semibold ${faz.done ? 'text-teal-400' : 'text-blue-300'}`}>
-                        {faz.done ? '✓ Teslim Edildi' : `${faz.label}${faz.date ? ': ' + faz.date : ''}`}
-                      </p>
+                      <div className={`mt-0.5 flex w-fit items-center rounded-lg border px-2 py-0.5 text-[10px] font-medium ${faz.done ? 'border-teal-500/20 bg-teal-500/10 text-teal-300' : 'border-blue-500/20 bg-blue-500/10 text-blue-300'}`}>
+                        {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
+                      </div>
                     );
                   })()}
                   <div className="mt-1 flex items-center gap-2">
