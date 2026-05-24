@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 import { PlakaPlanlayiciV2 } from '@/components/plaka-planlayici/PlakaPlanlayiciV2'
 import UretimPlaniModal from '@/components/schedule/UretimPlaniModal'
+import { MobileBottomSheet } from '@/components/ui/mobile/MobileBottomSheet'
 import { DarkBadge, type BadgeTone } from '@/components/ui/DarkBadge'
 
 function whatsappTeklifGonder(is: any) {
@@ -212,7 +213,7 @@ export default function IslerPage() {
   // Back button → açık mobil modal/drawer'ı kapat (route değişimi olmadan)
   const _modalPushed = useRef(false)
   useEffect(() => {
-    const anyOpen = mobileActionsOpen || durumDegistirAcik || odemePopupAcik || plakaAcik || tahsilatAcik || uretimPlaniAcik || filterSheetAcik
+    const anyOpen = mobileActionsOpen || durumDegistirAcik || odemePopupAcik || plakaAcik || tahsilatAcik || uretimPlaniAcik
     if (anyOpen && !_modalPushed.current) {
       _modalPushed.current = true
       window.history.pushState({ metrixIslerModal: true }, '')
@@ -224,7 +225,6 @@ export default function IslerPage() {
         setPlakaAcik(false)
         setTahsilatAcik(false)
         setUretimPlaniAcik(false)
-        setFilterSheetAcik(false)
       }
       window.addEventListener('popstate', onPop, { once: true })
     }
@@ -818,58 +818,53 @@ export default function IslerPage() {
       </div>
 
       {/* FİLTRE BOTTOM SHEET */}
-      {filterSheetAcik && (
-        <div className="fixed inset-0 z-[200] flex items-end md:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setFilterSheetAcik(false)} />
-          <div className="relative w-full rounded-t-3xl border-t border-white/[0.08] bg-[#0B1120]" style={{paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
-            <div className="flex justify-center pb-1 pt-3">
-              <div className="h-1 w-10 rounded-full bg-white/20" />
-            </div>
-            <div className="px-5 pb-6 pt-2">
-              <h3 className="mb-4 text-sm font-semibold text-white">Filtrele</h3>
-              <p className="mb-2 text-[11px] uppercase tracking-[0.15em] text-slate-500">Durum</p>
-              <div className="mb-5 flex flex-wrap gap-2">
-                {[
-                  { key: "tumu", label: "Tümü" },
-                  { key: "teklif_verildi", label: "Beklemede" },
-                  { key: "onaylandi", label: "Onaylı" },
-                  { key: "program_bekliyor", label: "Program Bekliyor" },
-                  { key: "montaj_tamamlandi", label: "Montaj Tamam" },
-                  { key: "kaybedildi", label: "Kayıp" },
-                ].map((opt) => (
-                  <button key={opt.key} onClick={() => setDraftDurum(opt.key)}
-                    className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${draftDurum === opt.key ? 'border-blue-500/50 bg-blue-500/15 text-blue-300' : 'border-white/[0.08] bg-white/[0.03] text-slate-400'}`}>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              <p className="mb-2 text-[11px] uppercase tracking-[0.15em] text-slate-500">Zaman</p>
-              <div className="mb-6 flex gap-2">
-                {[
-                  { key: "tumu", label: "Tüm Zamanlar" },
-                  { key: "ay", label: "Bu Ay" },
-                  { key: "hafta", label: "Bu Hafta" },
-                ].map((opt) => (
-                  <button key={opt.key} onClick={() => setDraftZaman(opt.key)}
-                    className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${draftZaman === opt.key ? 'border-blue-500/50 bg-blue-500/15 text-blue-300' : 'border-white/[0.08] bg-white/[0.03] text-slate-400'}`}>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => { setDraftDurum("tumu"); setDraftZaman("tumu"); }}
-                  className="rounded-xl border border-white/[0.08] bg-white/[0.03] py-3.5 text-sm font-semibold text-slate-400">
-                  Temizle
-                </button>
-                <button onClick={() => { setDurumFiltre(draftDurum); setZamanFiltre(draftZaman); setFilterSheetAcik(false); }}
-                  className="rounded-xl bg-blue-600 py-3.5 text-sm font-semibold text-white">
-                  Uygula ({previewResultCount})
-                </button>
-              </div>
-            </div>
+      <MobileBottomSheet
+        open={filterSheetAcik}
+        onClose={() => setFilterSheetAcik(false)}
+        title="Filtrele"
+      >
+        <div>
+          <p className="mb-2 text-[11px] uppercase tracking-[0.15em] text-slate-500">Durum</p>
+          <div className="mb-5 flex flex-wrap gap-2">
+            {[
+              { key: "tumu", label: "Tümü" },
+              { key: "teklif_verildi", label: "Beklemede" },
+              { key: "onaylandi", label: "Onaylı" },
+              { key: "program_bekliyor", label: "Program Bekliyor" },
+              { key: "montaj_tamamlandi", label: "Montaj Tamam" },
+              { key: "kaybedildi", label: "Kayıp" },
+            ].map((opt) => (
+              <button key={opt.key} onClick={() => setDraftDurum(opt.key)}
+                className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${draftDurum === opt.key ? 'border-blue-500/50 bg-blue-500/15 text-blue-300' : 'border-white/[0.08] bg-white/[0.03] text-slate-400'}`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="mb-2 text-[11px] uppercase tracking-[0.15em] text-slate-500">Zaman</p>
+          <div className="mb-6 flex gap-2">
+            {[
+              { key: "tumu", label: "Tüm Zamanlar" },
+              { key: "ay", label: "Bu Ay" },
+              { key: "hafta", label: "Bu Hafta" },
+            ].map((opt) => (
+              <button key={opt.key} onClick={() => setDraftZaman(opt.key)}
+                className={`rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${draftZaman === opt.key ? 'border-blue-500/50 bg-blue-500/15 text-blue-300' : 'border-white/[0.08] bg-white/[0.03] text-slate-400'}`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => { setDraftDurum("tumu"); setDraftZaman("tumu"); }}
+              className="rounded-xl border border-white/[0.08] bg-white/[0.03] py-3.5 text-sm font-semibold text-slate-400">
+              Temizle
+            </button>
+            <button onClick={() => { setDurumFiltre(draftDurum); setZamanFiltre(draftZaman); setFilterSheetAcik(false); }}
+              className="rounded-xl bg-blue-600 py-3.5 text-sm font-semibold text-white">
+              Uygula ({previewResultCount})
+            </button>
           </div>
         </div>
-      )}
+      </MobileBottomSheet>
 
       {/* MOBİL DRAWER */}
       {mobileActionsOpen && (
