@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SkeletonCard, SkeletonLine, Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import Link from "next/link";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
 import TaskDetailModal from "@/components/schedule/TaskDetailModal";
@@ -555,7 +556,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {operasyonPlan.length === 0 && <p className="text-sm text-slate-600">Bugun icin planlanmis operasyon yok.</p>}
+          {operasyonPlan.length === 0 && (
+            <EmptyState
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
+              title="Bugün için plan yok"
+              description="İş programından operasyon ekleyebilirsin."
+              action={{ label: "İş Programına Git", href: "/dashboard/is-programi" }}
+            />
+          )}
           <div className="space-y-0">
             {operasyonPlan.map((o: any) => (
               <div key={o.id} className="flex items-start gap-3 border-b border-white/5 py-2.5 last:border-0">
@@ -627,7 +635,13 @@ export default function DashboardPage() {
               Canli
             </span>
           </div>
-          {anaAkis.length === 0 && <p className="text-sm text-slate-600">Henuz aktivite yok.</p>}
+          {anaAkis.length === 0 && (
+            <EmptyState
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}
+              title="Henüz aktivite yok"
+              description="İşlemler başladıkça burada görünecek."
+            />
+          )}
           <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
             {anaAkis.map((a: any, i: number) => (
               <div key={a.id || i} className="-mx-1 flex items-start gap-3 rounded-lg border-b border-white/5 px-1 py-3 last:border-0 transition-colors hover:bg-white/[0.03]">
@@ -730,7 +744,13 @@ export default function DashboardPage() {
               Tumu
             </Link>
           </div>
-          {vadesiGelenler.length === 0 && <p className="text-sm text-slate-600">Vadesi gelen odeme bulunmuyor.</p>}
+          {vadesiGelenler.length === 0 && (
+            <EmptyState
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>}
+              title="Vadesi gelen ödeme yok"
+              description="Tüm ödemeler zamanında."
+            />
+          )}
           <div className="space-y-0">
             {vadesiGelenler.map((v: any) => {
               const phone = phoneClean(v.musteriTelefon);
@@ -798,7 +818,12 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-3">
             {sicakTeklifler.length === 0 && (
-              <p className="text-sm text-slate-600">Su an takip gerektiren teklif yok.</p>
+              <EmptyState
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>}
+                title="Takip gerektiren teklif yok"
+                description="Aktif teklifler burada listelenecek."
+                action={{ label: "İşlere Git", href: "/dashboard/isler" }}
+              />
             )}
             {sicakTeklifler.map((t: any) => {
               const score = Number(t.ihtimal || 0);
