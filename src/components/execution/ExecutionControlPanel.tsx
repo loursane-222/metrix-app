@@ -1,31 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import ExecutionTimeline, { type TimelineEvent } from "./ExecutionTimeline"
+import { useEffect, useState } from "react"
+import ExecutionTimeline from "./ExecutionTimeline"
+import { useExecution, TERMINAL_STATUSES } from "@/hooks/useExecution"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Re-export shared types so existing consumers don't need to change imports
+export type { ExecutionStatus, ExecutionData } from "@/hooks/useExecution"
 
-type ExecutionStatus =
-  | "PLANNED"
-  | "STARTED"
-  | "PAUSED"
-  | "CANNOT_START"
-  | "COMPLETED"
-  | "CANCELLED"
-  | "RESCHEDULE_REQUESTED"
+// ─── Props ────────────────────────────────────────────────────────────────────
 
-interface ExecutionData {
-  id: string
-  status: ExecutionStatus
-  actualStartedAt: string | null
-  actualEndedAt: string | null
-  actualMinutes: number | null
-  cannotStartReason: string | null
-  failureDescription: string | null
-  materialLossCost: string | null  // Decimal → JSON string
-  estimatedMinutes: number | null
-  events?: TimelineEvent[]
-}
+import type { ExecutionData } from "@/hooks/useExecution"
 
 export interface ExecutionControlPanelProps {
   schedulePhaseId: string
@@ -37,6 +21,8 @@ export interface ExecutionControlPanelProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+import type { ExecutionStatus } from "@/hooks/useExecution"
+
 const STATUS_META: Record<ExecutionStatus, { label: string; badge: string }> = {
   PLANNED:              { label: "Planlandı",             badge: "border-slate-700 bg-slate-800/50 text-slate-300" },
   STARTED:              { label: "Çalışıyor",             badge: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300" },
@@ -47,12 +33,11 @@ const STATUS_META: Record<ExecutionStatus, { label: string; badge: string }> = {
   RESCHEDULE_REQUESTED: { label: "Yeniden Planlanacak",   badge: "border-purple-500/40 bg-purple-500/15 text-purple-300" },
 }
 
-// Scalable failure reason structure — ileride phaseScope ile KESIM/TOPLAMA'ya genişler
 interface FailureReason {
   value: string
   label: string
-  requiresDetail?: boolean   // ek açıklama + maliyet alanı açar
-  phaseScope?: string[]      // hangi fazlarda gösterilir (undefined = tümü)
+  requiresDetail?: boolean
+  phaseScope?: string[]
 }
 
 const FAILURE_REASONS: FailureReason[] = [
@@ -80,8 +65,6 @@ function getReasonsForPhase(phaseType?: string): FailureReason[] {
 const PHASE_LABELS: Record<string, string> = {
   OLCU: "Ölçü", IMALAT: "İmalat", MONTAJ: "Montaj",
 }
-
-const TERMINAL: ExecutionStatus[] = ["COMPLETED", "CANCELLED"]
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -136,151 +119,41 @@ export default function ExecutionControlPanel({
   completedAt,
   onTransitionSuccess,
 }: ExecutionControlPanelProps) {
-  const [execution, setExecution] = useState<ExecutionData | null>(null)
-  const [fetching, setFetching]   = useState(true)
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState<string | null>(null)
-  const [conflict, setConflict]   = useState(false)
+  // ── Execution state via hook ───────────────────────────────────────────────
+  const {
+    execution,
+    fetching,
+    loading,
+    error,
+    conflict,
+    refetch,
+    handleBasla,
+    handleTransition,
+    handleCannotStart: execHandleCannotStart,
+  } = useExecution({ schedulePhaseId, onTransitionSuccess })
+
+  // ── UI-only state (reason picker + timeline collapse) ─────────────────────
   const [showReasonPicker, setShowReasonPicker]     = useState(false)
   const [cannotReason, setCannotReason]             = useState("")
   const [failureDescription, setFailureDescription] = useState("")
   const [materialLossCost, setMaterialLossCost]     = useState("")
   const [timelineOpen, setTimelineOpen]             = useState(false)
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
-
-  const refetch = useCallback(async () => {
-    setFetching(true)
-    try {
-      const res  = await fetch(
-        `/api/schedule/execution?schedulePhaseId=${encodeURIComponent(schedulePhaseId)}`,
-        { credentials: "include", cache: "no-store" },
-      )
-      const json = await res.json()
-      if (res.ok) {
-        setExecution(json.execution ?? null)
-        setConflict(false)
-        setError(null)
-      }
-    } catch {
-      // silently ignore — panel shows empty state
-    } finally {
-      setFetching(false)
-    }
-  }, [schedulePhaseId])
-
-  // Modal her açıldığında yeniden fetch: schedulePhaseId değiştiğinde
-  useEffect(() => { refetch() }, [refetch])
-
   // Terminal durumlarda timeline default açık
   useEffect(() => {
     if (execution) {
-      setTimelineOpen(TERMINAL.includes(execution.status))
+      setTimelineOpen(TERMINAL_STATUSES.includes(execution.status))
     }
   }, [execution?.status])
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  // PATCH wrapper — optimistic lock ve hata yönetimi
-  async function doTransition(
-    execId: string,
-    toStatus: ExecutionStatus,
-    extra?: { cannotStartReason?: string; failureDescription?: string; materialLossCost?: number; mtul?: number },
-  ): Promise<ExecutionData | null> {
-    const res  = await fetch(`/api/schedule/execution/${execId}`, {
-      method:      "PATCH",
-      credentials: "include",
-      headers:     { "Content-Type": "application/json" },
-      body:        JSON.stringify({ toStatus, ...extra }),
-    })
-    const json = await res.json()
-
-    if (res.status === 409) {
-      await refetch()
-      setConflict(true)
-      return null
-    }
-    if (!res.ok) throw new Error(json.error || "İşlem başarısız")
-
-    return json.execution as ExecutionData
-  }
-
-  // Execution yoksa POST ile oluştur, varsa mevcut ID'yi döndür
-  async function ensureExecution(): Promise<string | null> {
-    if (execution?.id) return execution.id
-
-    const res  = await fetch("/api/schedule/execution", {
-      method:      "POST",
-      credentials: "include",
-      headers:     { "Content-Type": "application/json" },
-      body:        JSON.stringify({ schedulePhaseId }),
-    })
-    const json = await res.json()
-    if (!res.ok) throw new Error(json.error || "Görev kaydı oluşturulamadı")
-
-    setExecution(json.execution)
-    return json.execution.id as string
-  }
-
-  // ── Başla (POST if needed → PATCH STARTED) ────────────────────────────────
-
-  async function handleBasla() {
-    setLoading(true)
-    setError(null)
-    setConflict(false)
-
-    try {
-      const execId = await ensureExecution()
-      if (!execId) return
-
-      const updated = await doTransition(execId, "STARTED")
-      if (updated) {
-        setExecution(updated)
-        onTransitionSuccess?.(updated)
-      } else {
-        // 409 — conflict; refetch already called inside doTransition
-        setError("Görev oluşturuldu ama başlatılamadı — durum değişti")
-      }
-    } catch (e: any) {
-      // POST veya PATCH başarısız — mevcut durumu yenile
-      await refetch()
-      setError(e.message || "Görev oluşturuldu ama başlatılamadı")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // ── Diğer geçişler ────────────────────────────────────────────────────────
-
-  async function handleTransition(
-    toStatus: ExecutionStatus,
-    extra?: { cannotStartReason?: string; failureDescription?: string; materialLossCost?: number; mtul?: number },
-  ) {
-    if (!execution?.id) return
-    setLoading(true)
-    setError(null)
-    setConflict(false)
-
-    try {
-      const updated = await doTransition(execution.id, toStatus, extra)
-      if (updated) {
-        setExecution(updated)
-        onTransitionSuccess?.(updated)
-      }
-    } catch (e: any) {
-      setError(e.message || "İşlem başarısız")
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // ── CANNOT_START: UI validation + reset, then delegate to hook ────────────
   async function handleCannotStart() {
     if (!cannotReason) return
     const meta = FAILURE_REASONS.find((r) => r.value === cannotReason)
     if (meta?.requiresDetail && (!materialLossCost || Number(materialLossCost) < 0)) return
     setShowReasonPicker(false)
-    await handleTransition("CANNOT_START", {
-      cannotStartReason: cannotReason,
+    await execHandleCannotStart({
+      cannotReason,
       ...(meta?.requiresDetail ? {
         failureDescription: failureDescription || undefined,
         materialLossCost: Number(materialLossCost),
@@ -294,13 +167,13 @@ export default function ExecutionControlPanel({
   // ── Render ────────────────────────────────────────────────────────────────
 
   const status     = execution?.status ?? null
-  const isTerminal = status !== null && TERMINAL.includes(status)
+  const isTerminal = status !== null && TERMINAL_STATUSES.includes(status)
   const phaseLabel = phaseType ? PHASE_LABELS[phaseType] ?? phaseType : "Aşama"
 
-  const visibleReasons = getReasonsForPhase(phaseType)
-  const selectedReasonMeta = FAILURE_REASONS.find((r) => r.value === cannotReason)
-  const needsDetail = selectedReasonMeta?.requiresDetail ?? false
-  const detailValid = !needsDetail || (materialLossCost !== "" && Number(materialLossCost) >= 0)
+  const visibleReasons      = getReasonsForPhase(phaseType)
+  const selectedReasonMeta  = FAILURE_REASONS.find((r) => r.value === cannotReason)
+  const needsDetail         = selectedReasonMeta?.requiresDetail ?? false
+  const detailValid         = !needsDetail || (materialLossCost !== "" && Number(materialLossCost) >= 0)
 
   // İlk yükleme
   if (fetching) {
