@@ -282,7 +282,7 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
           m.soft,
           draggingTaskId === task.id ? "scale-[0.98] opacity-60" : "",
           delayed ? "ring-1 ring-red-500/50" : "",
-          task.completed ? "opacity-60" : "",
+          task.completed ? "opacity-60 ring-1 ring-green-500/30" : "",
         ].join(" ")}
       >
         <div className="flex items-start gap-3">
@@ -299,12 +299,17 @@ export function PremiumWorkCalendar({ initialSchedules = [] }: PremiumWorkCalend
               <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${m.bg} ${m.text}`}>
                 {m.label.toUpperCase()}
               </span>
-              {task.executionStatus === "STARTED" && (
+              {task.completed && (
+                <span className="rounded-md bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-400">
+                  ✓ TAMAMLANDI
+                </span>
+              )}
+              {!task.completed && task.executionStatus === "STARTED" && (
                 <span className="rounded-md bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-400">
                   ÇALIŞIYOR
                 </span>
               )}
-              {task.executionStatus === "PAUSED" && (
+              {!task.completed && task.executionStatus === "PAUSED" && (
                 <span className="rounded-md bg-yellow-500/15 px-2 py-0.5 text-[10px] font-bold text-yellow-400">
                   DURAKLADI
                 </span>
