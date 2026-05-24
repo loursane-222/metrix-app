@@ -183,13 +183,29 @@ export async function transitionExecution(input: TransitionInput) {
 
   const now = new Date()
 
+  // ── Pause accumulation — BEFORE switch so COMPLETED sees the updated value ─
+  // Runs whenever leaving PAUSED state (→ STARTED, COMPLETED, CANCELLED).
+  let effectivePauseMinutes = execution.pauseMinutes ?? 0
+  if (execution.status === "PAUSED") {
+    const lastPause = await prisma.phaseExecutionEvent.findFirst({
+      where: { phaseExecutionId: executionId, eventType: "PAUSED" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    })
+    if (lastPause) {
+      effectivePauseMinutes += Math.max(
+        0,
+        Math.round((now.getTime() - lastPause.createdAt.getTime()) / 60_000),
+      )
+    }
+  }
+
   // ── Status'a göre alan güncellemeleri ────────────────────────────────────
   const update: Record<string, unknown> = { status: toStatus }
+  if (execution.status === "PAUSED") update.pauseMinutes = effectivePauseMinutes
 
   switch (toStatus) {
     case "STARTED":
-      // İlk başlatma — PAUSED'dan RESUMED da aynı path'e gelir ama
-      // actualStartedAt sıfırlanmaz (ilk anı korur).
       if (!execution.actualStartedAt) {
         update.actualStartedAt = now
       }
@@ -197,20 +213,10 @@ export async function transitionExecution(input: TransitionInput) {
 
     case "COMPLETED":
       update.actualEndedAt = now
-      // TODO(Faz4C): SchedulePhase.isCompleted ile senkronizasyon.
-      // Bu execution COMPLETED olduğunda ilgili SchedulePhase.isCompleted = true
-      // yapılmalı. Şu an iki sistem bağımsız (isCompleted = manual toggle,
-      // execution.status = execution engine). KPI tutarsızlığını önlemek için
-      // burada `prisma.schedulePhase.update({ where: { id: execution.schedulePhaseId }, data: { isCompleted: true } })`
-      // transaction içine alınmalı — Faz4C kapsamında yapılacak.
-      //
-      // actualMinutes: cache alanı, source-of-truth değil.
-      // event'lerden recompute edilebilir; şimdilik basit hesap.
       if (execution.actualStartedAt) {
         const elapsedMs = now.getTime() - execution.actualStartedAt.getTime()
         const elapsedMin = Math.round(elapsedMs / 60_000)
-        const pauseMin = execution.pauseMinutes ?? 0
-        update.actualMinutes = Math.max(0, elapsedMin - pauseMin)
+        update.actualMinutes = Math.max(0, elapsedMin - effectivePauseMinutes)
       }
       if (mtul != null) update.mtul = mtul
       break
@@ -224,23 +230,6 @@ export async function transitionExecution(input: TransitionInput) {
     case "PAUSED":
     case "CANCELLED":
       break
-  }
-
-  // RESUMED: PAUSED → STARTED geçişinde son PAUSED event'inden bu yana geçen
-  // süreyi pauseMinutes'a ekle. Event log immutable olduğu için güvenli okuma.
-  if (toStatus === "STARTED" && execution.status === "PAUSED") {
-    const lastPause = await prisma.phaseExecutionEvent.findFirst({
-      where: { phaseExecutionId: executionId, eventType: "PAUSED" },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    })
-    if (lastPause) {
-      const addedMin = Math.max(
-        0,
-        Math.round((now.getTime() - lastPause.createdAt.getTime()) / 60_000),
-      )
-      update.pauseMinutes = (execution.pauseMinutes ?? 0) + addedMin
-    }
   }
 
   const eventType = eventTypeForTransition(execution.status, toStatus)
@@ -281,18 +270,22 @@ export async function transitionExecution(input: TransitionInput) {
       },
     })
 
-    // SchedulePhase.isCompleted sync — COMPLETED execution ile KPI tutarlılığı.
-    // TODO(future): unified completion source of truth —
-    // togglePhaseCompletion ve execution COMPLETED tek yola indirgenmeli.
     if (toStatus === "COMPLETED") {
       await tx.schedulePhase.update({
         where: { id: execution.schedulePhaseId },
-        data: {
-          isCompleted: true,
-          completedAt: now,
-          completedBy: personelId ?? null,
-        },
+        data: { isCompleted: true, completedAt: now, completedBy: personelId ?? null },
       })
+      // MONTAJ tamamlandığında işi montaj_tamamlandi yap (togglePhaseCompletion ile tutarlı).
+      const phaseInfo = await tx.schedulePhase.findUnique({
+        where: { id: execution.schedulePhaseId },
+        select: { phase: true, workSchedule: { select: { isId: true } } },
+      })
+      if (phaseInfo?.phase === "MONTAJ") {
+        await tx.is.update({
+          where: { id: phaseInfo.workSchedule.isId },
+          data: { durum: "montaj_tamamlandi" },
+        })
+      }
     }
 
     return tx.phaseExecution.findUniqueOrThrow({ where: { id: executionId } })

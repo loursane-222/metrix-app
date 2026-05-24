@@ -63,12 +63,14 @@ export interface UseExecutionReturn {
 export function useExecution({
   schedulePhaseId,
   onTransitionSuccess,
+  skip = false,
 }: {
   schedulePhaseId: string
   onTransitionSuccess?: (execution: ExecutionData) => void
+  skip?: boolean
 }): UseExecutionReturn {
   const [execution, setExecution] = useState<ExecutionData | null>(null)
-  const [fetching, setFetching]   = useState(true)
+  const [fetching, setFetching]   = useState(!skip)
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState<string | null>(null)
   const [conflict, setConflict]   = useState(false)
@@ -76,6 +78,7 @@ export function useExecution({
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   const refetch = useCallback(async () => {
+    if (skip) return
     setFetching(true)
     try {
       const res  = await fetch(

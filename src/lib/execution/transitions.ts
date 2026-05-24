@@ -7,7 +7,7 @@ import type { PhaseExecutionStatus } from "@prisma/client"
 export const ALLOWED_TRANSITIONS: Record<PhaseExecutionStatus, PhaseExecutionStatus[]> = {
   PLANNED:              ["STARTED", "CANNOT_START", "CANCELLED"],
   STARTED:              ["PAUSED", "COMPLETED", "CANNOT_START"],
-  PAUSED:               ["STARTED", "CANCELLED"],
+  PAUSED:               ["STARTED", "COMPLETED", "CANCELLED"],
   CANNOT_START:         ["STARTED", "CANCELLED"],
   COMPLETED:            [],
   CANCELLED:            [],

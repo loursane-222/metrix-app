@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
-import { togglePhaseCompletion } from "@/app/actions/schedule";
 import ExecutionControlPanel from "@/components/execution/ExecutionControlPanel";
+import { useExecution } from "@/hooks/useExecution";
 
 dayjs.locale("tr");
 
@@ -94,6 +94,15 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
   const [olcuPhotoUrl, setOlcuPhotoUrl] = useState<string>(phaseRow?.photoUrl || "");
   const [olcuPhotoUploading, setOlcuPhotoUploading] = useState(false);
   const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
+
+  // ── Execution hook — shared with ECP via controlled prop ──────────────────
+  const exec = useExecution({
+    schedulePhaseId: task?.id ?? "",
+    skip: !task?.id,
+    onTransitionSuccess: (updated) => {
+      if (updated.status === "COMPLETED" || updated.status === "CANCELLED") onUpdated();
+    },
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputChangeRef = useRef<HTMLInputElement>(null);
 
@@ -156,23 +165,6 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
       onUpdated();
     } catch (e: any) {
       alert(e?.message || "Görev güncellenemedi");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function completePhase() {
-    if (!phaseRow?.id) return;
-    setSaving(true);
-    try {
-      await togglePhaseCompletion({
-        schedulePhaseId: phaseRow.id,
-        isCompleted: true,
-        ...((phase === "OLCU" || phase === "MONTAJ") && olcuPhotoUrl ? { photoUrl: olcuPhotoUrl } : {}),
-      });
-      onUpdated();
-    } catch (e: any) {
-      alert(e?.message || "Bu görevi tamamlandı yapma yetkiniz olmayabilir.");
     } finally {
       setSaving(false);
     }
@@ -556,11 +548,8 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
                   phaseType={phase as "OLCU" | "IMALAT" | "MONTAJ"}
                   readOnly={phaseRow?.isCompleted ?? task?.completed ?? false}
                   completedAt={phaseRow?.completedAt}
-                  onTransitionSuccess={(execution) => {
-                    if (execution.status === "COMPLETED" || execution.status === "CANCELLED") {
-                      onUpdated()
-                    }
-                  }}
+                  controlled={exec}
+                  hideActions={true}
                 />
               </div>
             )}
@@ -585,21 +574,77 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
               </button>
             )}
 
-            {!editMode && (
-              <button
-                onClick={completePhase}
-                disabled={saving || phaseRow?.isCompleted}
-                className="w-full rounded-2xl bg-emerald-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-emerald-900/30 hover:bg-emerald-500 disabled:opacity-50"
-              >
-                {phaseRow?.isCompleted
-                  ? "Zaten Tamamlandı"
-                  : saving
-                  ? "İşleniyor..."
-                  : (phase === "OLCU" || phase === "MONTAJ") && !olcuPhotoUrl
-                  ? "Tamamlandı (Fotoğrafsız)"
-                  : "Tamamlandı"}
-              </button>
-            )}
+            {!editMode && task?.id && (() => {
+              const execStatus = exec.execution?.status ?? null;
+              const busy = exec.loading || exec.fetching;
+              const isCompleted = !!(phaseRow?.isCompleted || execStatus === "COMPLETED");
+
+              if (isCompleted) return (
+                <button disabled className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white opacity-50">
+                  Tamamlandı
+                </button>
+              );
+              if (execStatus === "CANCELLED") return (
+                <button disabled className="w-full rounded-2xl border border-zinc-700 bg-zinc-800/50 px-5 py-4 text-base font-black text-zinc-400 opacity-50">
+                  İptal Edildi
+                </button>
+              );
+              if (execStatus === null || execStatus === "PLANNED") return (
+                <button
+                  onClick={exec.handleBasla}
+                  disabled={busy}
+                  className="w-full rounded-2xl bg-emerald-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-emerald-900/30 hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {busy ? "İşleniyor..." : "Başlat"}
+                </button>
+              );
+              if (execStatus === "CANNOT_START") return (
+                <button
+                  onClick={exec.handleBasla}
+                  disabled={busy}
+                  className="w-full rounded-2xl bg-emerald-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-emerald-900/30 hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {busy ? "İşleniyor..." : "Yeniden Başlat"}
+                </button>
+              );
+              if (execStatus === "STARTED") return (
+                <div className="flex w-full gap-2">
+                  <button
+                    onClick={() => exec.handleTransition("PAUSED")}
+                    disabled={busy}
+                    className="flex-1 rounded-2xl border border-amber-500/30 bg-amber-500/15 px-5 py-4 text-base font-black text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+                  >
+                    {busy ? "..." : "Duraklat"}
+                  </button>
+                  <button
+                    onClick={() => exec.handleTransition("COMPLETED")}
+                    disabled={busy}
+                    className="flex-1 rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white hover:bg-blue-500 disabled:opacity-50"
+                  >
+                    {busy ? "..." : "Tamamla"}
+                  </button>
+                </div>
+              );
+              if (execStatus === "PAUSED") return (
+                <div className="flex w-full gap-2">
+                  <button
+                    onClick={() => exec.handleTransition("STARTED")}
+                    disabled={busy}
+                    className="flex-1 rounded-2xl bg-emerald-600 px-5 py-4 text-base font-black text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {busy ? "..." : "Devam Et"}
+                  </button>
+                  <button
+                    onClick={() => exec.handleTransition("COMPLETED")}
+                    disabled={busy}
+                    className="flex-1 rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white hover:bg-blue-500 disabled:opacity-50"
+                  >
+                    {busy ? "..." : "Tamamla"}
+                  </button>
+                </div>
+              );
+              return null;
+            })()}
           </div>
         </div>
       </div>

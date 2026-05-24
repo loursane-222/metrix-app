@@ -9,7 +9,7 @@ export type { ExecutionStatus, ExecutionData } from "@/hooks/useExecution"
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
-import type { ExecutionData } from "@/hooks/useExecution"
+import type { ExecutionData, UseExecutionReturn } from "@/hooks/useExecution"
 
 export interface ExecutionControlPanelProps {
   schedulePhaseId: string
@@ -17,6 +17,8 @@ export interface ExecutionControlPanelProps {
   readOnly?: boolean
   completedAt?: string | Date | null
   onTransitionSuccess?: (execution: ExecutionData) => void
+  controlled?: UseExecutionReturn
+  hideActions?: boolean
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -118,8 +120,11 @@ export default function ExecutionControlPanel({
   readOnly = false,
   completedAt,
   onTransitionSuccess,
+  controlled,
+  hideActions = false,
 }: ExecutionControlPanelProps) {
-  // ── Execution state via hook ───────────────────────────────────────────────
+  // ── Execution state: parent-controlled or own hook ─────────────────────────
+  const ownHook = useExecution({ schedulePhaseId, onTransitionSuccess, skip: !!controlled })
   const {
     execution,
     fetching,
@@ -130,7 +135,7 @@ export default function ExecutionControlPanel({
     handleBasla,
     handleTransition,
     handleCannotStart: execHandleCannotStart,
-  } = useExecution({ schedulePhaseId, onTransitionSuccess })
+  } = controlled ?? ownHook
 
   // ── UI-only state (reason picker + timeline collapse) ─────────────────────
   const [showReasonPicker, setShowReasonPicker]     = useState(false)
@@ -335,8 +340,8 @@ export default function ExecutionControlPanel({
 
         <div className="flex flex-col gap-2">
 
-          {/* BAŞLA — null / PLANNED / CANNOT_START */}
-          {(status === null || status === "PLANNED" || status === "CANNOT_START") && (
+          {/* BAŞLA — null / PLANNED / CANNOT_START (footer varsa gizlenir) */}
+          {!hideActions && (status === null || status === "PLANNED" || status === "CANNOT_START") && (
             <ActionBtn
               label={status === "CANNOT_START" ? "Yeniden Dene" : "Başla"}
               variant="emerald"
@@ -346,7 +351,7 @@ export default function ExecutionControlPanel({
           )}
 
           {/* DEVAM ET — PAUSED */}
-          {status === "PAUSED" && (
+          {!hideActions && status === "PAUSED" && (
             <ActionBtn
               label="Devam Et"
               variant="emerald"
@@ -356,7 +361,7 @@ export default function ExecutionControlPanel({
           )}
 
           {/* DURAKLAT — STARTED */}
-          {status === "STARTED" && (
+          {!hideActions && status === "STARTED" && (
             <ActionBtn
               label="Duraklat"
               variant="amber"
@@ -366,7 +371,7 @@ export default function ExecutionControlPanel({
           )}
 
           {/* TAMAMLA — STARTED */}
-          {status === "STARTED" && (
+          {!hideActions && status === "STARTED" && (
             <ActionBtn
               label="Tamamla"
               variant="blue"
@@ -375,7 +380,7 @@ export default function ExecutionControlPanel({
             />
           )}
 
-          {/* BAŞLANAMADI — sadece execution varken: PLANNED / STARTED */}
+          {/* BAŞLANAMADI — scroll içinde kalır, hideActions'dan etkilenmez */}
           {(status === "PLANNED" || status === "STARTED") && (
             <ActionBtn
               label="Başlanamadı"
