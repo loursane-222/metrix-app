@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
+import TaskDetailModal from "@/components/schedule/TaskDetailModal";
 
 // ─── Live Ops types ───────────────────────────────────────────────────────────
 type RiskState = "NO_PLAN" | "NORMAL" | "OVERRUN" | "CRITICAL" | "STALE";
@@ -58,7 +59,7 @@ const RISK_META: Record<RiskState, { label: string; bar: string; text: string; b
 // ─── Live Ops card ────────────────────────────────────────────────────────────
 // Client-side ticker: server'dan gelen elapsedMinutes'a dakika başı +1 ekler.
 // Poll her 10s'de değeri senkronize eder.
-function LiveCard({ item }: { item: AktifEkipItem }) {
+function LiveCard({ item, onClick }: { item: AktifEkipItem; onClick: () => void }) {
   const [mins, setMins] = useState(item.elapsedMinutes);
 
   useEffect(() => {
@@ -103,9 +104,10 @@ function LiveCard({ item }: { item: AktifEkipItem }) {
     "text-white";
 
   return (
-    <div
+    <button
+      onClick={onClick}
       style={{ scrollSnapAlign: "start", minWidth: 152 }}
-      className="flex-shrink-0 rounded-2xl border border-white/10 bg-[#0c1322] p-3"
+      className="flex-shrink-0 rounded-2xl border border-white/10 bg-[#0c1322] p-3 cursor-pointer text-left transition-colors hover:border-white/20 hover:bg-[#111c30] active:scale-[0.98]"
     >
       {/* Phase badge + status dot */}
       <div className="mb-2 flex items-center justify-between gap-1">
@@ -170,7 +172,7 @@ function LiveCard({ item }: { item: AktifEkipItem }) {
       {risk === "NO_PLAN" && (
         <p className={`mt-1 text-[9px] font-semibold ${meta.text}`}>Plan yok</p>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -316,6 +318,7 @@ export default function DashboardPage() {
     blockedItems: BlockedItem[];
     toplamBlocked: number;
   } | null>(null);
+  const [liveTask, setLiveTask] = useState<any | null>(null);
 
   const lastAkisIdRef = useRef<string | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
@@ -520,7 +523,11 @@ export default function DashboardPage() {
               style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
             >
               {aktifEkip.map((e) => (
-                <LiveCard key={e.execId} item={e} />
+                <LiveCard
+                  key={e.execId}
+                  item={e}
+                  onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
+                />
               ))}
               {/* Sağ tarafta hafif fade — peek hissi */}
               <div className="flex-shrink-0" style={{ minWidth: 8 }} />
@@ -556,9 +563,10 @@ export default function DashboardPage() {
                   : `${item.elapsedBlockedMinutes} dk`;
 
                 return (
-                  <div
+                  <button
                     key={item.execId}
-                    className="flex items-center gap-3 rounded-2xl border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5"
+                    onClick={() => setLiveTask({ id: item.phaseId, phase: item.phaseType, title: item.musteriAdi, subtitle: item.urunAdi, completed: false, schedule: {} })}
+                    className="flex w-full items-center gap-3 rounded-2xl border border-red-500/15 bg-red-500/[0.04] px-3 py-2.5 cursor-pointer text-left transition-colors hover:border-red-500/25 hover:bg-red-500/[0.07] active:scale-[0.98]"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -580,7 +588,7 @@ export default function DashboardPage() {
                       <p className="text-[11px] font-bold tabular-nums text-red-300">{blockedHours}</p>
                       <p className="text-[9px] text-red-500/50">takılı</p>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -844,6 +852,19 @@ export default function DashboardPage() {
         </div>
 
       </div>
+
+      {liveTask && (
+        <TaskDetailModal
+          task={liveTask}
+          canEdit={false}
+          onClose={() => { setLiveTask(null); fetchLiveOpsRef.current?.(); }}
+          onUpdated={() => {
+            setLiveTask(null);
+            fetchLiveOpsRef.current?.();
+            fetchDashboardRef.current?.();
+          }}
+        />
+      )}
     </main>
   );
 }

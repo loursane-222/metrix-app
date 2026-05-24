@@ -69,7 +69,7 @@ function PlakaLayoutPreview({ job }: { job: any }) {
   );
 }
 
-export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
+export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = true }: any) {
   const phase = task?.phase;
   const meta = PHASE_META[phase] || PHASE_META.OLCU;
   const schedule = task?.schedule || {};
@@ -557,14 +557,16 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
 
           {/* Footer */}
           <div className="flex shrink-0 flex-col gap-3 border-t border-white/10 p-5 sm:flex-row">
-            <button
-              onClick={() => setEditMode((v) => !v)}
-              className="w-full rounded-2xl bg-white/10 px-5 py-4 text-base font-black hover:bg-white/15"
-            >
-              {editMode ? "Düzenlemeyi Kapat" : "Düzenle"}
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setEditMode((v) => !v)}
+                className="w-full rounded-2xl bg-white/10 px-5 py-4 text-base font-black hover:bg-white/15"
+              >
+                {editMode ? "Düzenlemeyi Kapat" : "Düzenle"}
+              </button>
+            )}
 
-            {editMode && (
+            {canEdit && editMode && (
               <button
                 onClick={saveFullEdit}
                 disabled={saving || !plannedDate}
