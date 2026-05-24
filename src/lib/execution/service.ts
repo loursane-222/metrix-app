@@ -4,17 +4,46 @@ import { sseEmitter } from "@/lib/sseEmitter"
 import { logActivity } from "@/lib/activityLogger"
 import { canTransition, eventTypeForTransition } from "./transitions"
 
-// ─── Elapsed time helper ──────────────────────────────────────────────────────
-// Server-side hesap: actualStartedAt'den şimdiye kadar geçen süre,
-// birikmiş pause dakikaları düşülmüş halde.
+// ─── Working-hours constants (Istanbul UTC+3, fixed shift) ────────────────────
+const WORK_TZ_OFFSET_MIN = 180                                   // UTC+3
+const WORK_DAY_MIN = 1440
+const WORK_WINDOWS: [number, number][] = [[480, 720], [780, 1080]] // 08-12, 13-18
+
+// Segment-based (day-by-day, not minute-by-minute) work-calendar minutes.
+// Covers Pazartesi–Cuma, 08:00–12:00 and 13:00–18:00 (UTC+3, fixed).
+// pauseMinutes subtracted at the end (wall-clock pause; typically short/in-shift).
+export function computeWorkMinutes(
+  startAt: Date,
+  endAt: Date,
+  pauseMinutes = 0,
+): number {
+  if (endAt <= startAt) return 0
+  const toLocal = (d: Date) => Math.floor(d.getTime() / 60_000) + WORK_TZ_OFFSET_MIN
+  const s = toLocal(startAt)
+  const e = toLocal(endAt)
+  const startDay = Math.floor(s / WORK_DAY_MIN) * WORK_DAY_MIN
+  const endDay   = Math.floor(e / WORK_DAY_MIN) * WORK_DAY_MIN
+  let work = 0
+  for (let day = startDay; day <= endDay; day += WORK_DAY_MIN) {
+    // epoch local-day 0 = Jan 1 1970 UTC+3 = Thursday (dow 4)
+    const dow = (day / WORK_DAY_MIN + 4) % 7  // 0=Sun, 1=Mon … 6=Sat
+    if (dow === 0 || dow === 6) continue
+    for (const [wS, wE] of WORK_WINDOWS) {
+      const from = Math.max(day + wS, s)
+      const to   = Math.min(day + wE, e)
+      if (to > from) work += to - from
+    }
+  }
+  return Math.max(0, work - pauseMinutes)
+}
+
+// Elapsed work minutes for an active execution (live display + risk state).
 export function computeElapsedMinutes(
   actualStartedAt: Date | null | undefined,
   pauseMinutes: number | null | undefined,
 ): number {
   if (!actualStartedAt) return 0
-  const elapsedMs = Date.now() - new Date(actualStartedAt).getTime()
-  const pauseMs = (pauseMinutes ?? 0) * 60_000
-  return Math.max(0, Math.round((elapsedMs - pauseMs) / 60_000))
+  return computeWorkMinutes(new Date(actualStartedAt), new Date(), pauseMinutes ?? 0)
 }
 
 // ─── Risk state helpers ───────────────────────────────────────────────────────
@@ -25,7 +54,7 @@ export function computeRiskState(
   elapsedMinutes: number,
   expectedMinutes: number | null | undefined,
 ): RiskState {
-  if (elapsedMinutes > 1440) return "STALE"
+  if (elapsedMinutes > 600) return "STALE"
   if (!expectedMinutes || expectedMinutes <= 0) return "NO_PLAN"
   const ratio = elapsedMinutes / expectedMinutes
   if (ratio <= 1.0) return "NORMAL"
@@ -214,9 +243,7 @@ export async function transitionExecution(input: TransitionInput) {
     case "COMPLETED":
       update.actualEndedAt = now
       if (execution.actualStartedAt) {
-        const elapsedMs = now.getTime() - execution.actualStartedAt.getTime()
-        const elapsedMin = Math.round(elapsedMs / 60_000)
-        update.actualMinutes = Math.max(0, elapsedMin - effectivePauseMinutes)
+        update.actualMinutes = computeWorkMinutes(execution.actualStartedAt, now, effectivePauseMinutes)
       }
       if (mtul != null) update.mtul = mtul
       break

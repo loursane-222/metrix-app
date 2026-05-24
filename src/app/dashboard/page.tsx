@@ -57,20 +57,13 @@ const RISK_META: Record<RiskState, { label: string; bar: string; text: string; b
 };
 
 // ─── Live Ops card ────────────────────────────────────────────────────────────
-// Client-side ticker: server'dan gelen elapsedMinutes'a dakika başı +1 ekler.
-// Poll her 10s'de değeri senkronize eder.
+// Server-computed work-calendar elapsed. Poll (10s) keeps this current.
 function LiveCard({ item, onClick }: { item: AktifEkipItem; onClick: () => void }) {
   const [mins, setMins] = useState(item.elapsedMinutes);
 
   useEffect(() => {
     setMins(item.elapsedMinutes);
   }, [item.elapsedMinutes]);
-
-  useEffect(() => {
-    if (item.status !== "STARTED") return;
-    const id = setInterval(() => setMins((m) => m + 1), 60_000);
-    return () => clearInterval(id);
-  }, [item.execId, item.status]);
 
   const phaseLabel =
     item.phaseType === "IMALAT" ? "İmalat" :
