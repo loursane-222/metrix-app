@@ -31,6 +31,7 @@ export interface ExecutionControlPanelProps {
   schedulePhaseId: string
   phaseType?: "OLCU" | "IMALAT" | "MONTAJ"
   readOnly?: boolean
+  completedAt?: string | Date | null
   onTransitionSuccess?: (execution: ExecutionData) => void
 }
 
@@ -132,6 +133,7 @@ export default function ExecutionControlPanel({
   schedulePhaseId,
   phaseType,
   readOnly = false,
+  completedAt,
   onTransitionSuccess,
 }: ExecutionControlPanelProps) {
   const [execution, setExecution] = useState<ExecutionData | null>(null)
@@ -439,9 +441,20 @@ export default function ExecutionControlPanel({
         </p>
       )}
 
-      {/* Read-only, no execution */}
-      {readOnly && !status && !showReasonPicker && (
-        <p className="text-sm text-slate-500">Henüz operasyon başlatılmadı</p>
+      {/* Read-only, no execution — manuel tamamlama fallback */}
+      {readOnly && !status && !fetching && !showReasonPicker && (
+        <div className="space-y-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+          <p className="text-sm font-bold text-slate-300">Manuel olarak tamamlandı</p>
+          <p className="text-xs text-slate-500">Operasyon başlat/durdur kaydı bulunmuyor.</p>
+          {completedAt && (
+            <p className="text-xs text-slate-600">
+              {new Date(completedAt).toLocaleString("tr-TR", {
+                day: "numeric", month: "long", year: "numeric",
+                hour: "2-digit", minute: "2-digit",
+              })}
+            </p>
+          )}
+        </div>
       )}
 
       {/* Action buttons — non-terminal, non-readonly, reason picker kapalı */}

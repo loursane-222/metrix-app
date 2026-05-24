@@ -548,12 +548,14 @@ export default function TaskDetailModal({ task, onClose, onUpdated }: any) {
               </div>
             </div>
 
-            {/* Execution Panel — body scroll içinde, grid altında */}
-            {task?.id && !editMode && !(phaseRow?.isCompleted ?? task?.completed) && (
+            {/* Execution Panel — tamamlanmış fazlarda da göster (timeline + fallback) */}
+            {task?.id && !editMode && (
               <div className="mt-4">
                 <ExecutionControlPanel
                   schedulePhaseId={task.id}
                   phaseType={phase as "OLCU" | "IMALAT" | "MONTAJ"}
+                  readOnly={phaseRow?.isCompleted ?? task?.completed ?? false}
+                  completedAt={phaseRow?.completedAt}
                   onTransitionSuccess={(execution) => {
                     if (execution.status === "COMPLETED" || execution.status === "CANCELLED") {
                       onUpdated()
