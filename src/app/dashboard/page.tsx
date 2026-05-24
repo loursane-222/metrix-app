@@ -444,7 +444,7 @@ export default function DashboardPage() {
   if (!data && !error) {
     return (
       <main className="min-h-screen bg-[#030712] px-3 pb-tab-bar pt-0 md:px-6 md:pb-8 md:pt-0">
-        <div className="mx-auto max-w-2xl">
+        <div className="mx-auto max-w-4xl">
           {/* Header skeleton */}
           <div className="-mx-3 flex items-center justify-between border-b border-white/[0.06] px-3 py-3 md:-mx-6 md:px-6 md:py-4">
             <div className="space-y-1.5">
@@ -506,7 +506,7 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-[#030712] px-3 pb-tab-bar pt-0 md:px-6 md:pb-8 md:pt-0">
       <InAppToast />
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-4xl">
 
         <div className="sticky top-0 z-30 -mx-3 flex items-center justify-between border-b border-white/[0.06] bg-[#030712]/90 px-3 py-3 backdrop-blur-md md:-mx-6 md:px-6 md:py-4">
           <div>
