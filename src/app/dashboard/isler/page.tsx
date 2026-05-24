@@ -282,6 +282,15 @@ export default function IslerPage() {
     return durum || 'Belirsiz'
   }
 
+  function durumKisaEtiket(durum?: string) {
+    if (durum === 'onaylandi') return 'Onaylı'
+    if (durum === 'montaj_tamamlandi') return 'Montaj'
+    if (durum === 'kaybedildi') return 'Kayıp'
+    if (durum === 'teklif_verildi') return 'Bekliyor'
+    if (durum === 'program_bekliyor') return 'Program'
+    return 'Belirsiz'
+  }
+
   async function isSil(id: string) {
     if (!confirm('Bu işi silmek istediğinize emin misiniz?')) return
     await fetch(`/api/isler?id=${id}`, { method: 'DELETE' })
@@ -452,9 +461,9 @@ export default function IslerPage() {
                         )}
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <p className="text-sm text-slate-500">{paraGoster(Number(is.satisFiyati || 0))}</p>
+                        <p className="text-sm font-semibold text-slate-200">{paraGoster(Number(is.satisFiyati || 0))}</p>
                         {is.createdAt && (
-                          <p className="text-[10px] text-slate-600">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>
+                          <p className="text-[11px] text-slate-500">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>
                         )}
                         {(() => {
                           const t = teklifTakipDurumu(is)
@@ -468,8 +477,9 @@ export default function IslerPage() {
                         })()}
                       </div>
                     </div>
-                    <span className={`shrink-0 rounded-full border px-3 py-1 text-xs ${durumRenk(is.durum)}`}>
-                      {durumEtiket(is.durum)}
+                    <span className={`flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium ${durumRenk(is.durum)}`}>
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+                      {durumKisaEtiket(is.durum)}
                     </span>
                   </div>
                 </button>
@@ -675,13 +685,13 @@ export default function IslerPage() {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className={`h-fit rounded-full border px-2 py-1 text-[10px] ${durumRenk(is.durum)}`}>{durumEtiket(is.durum)}</span>
+                  <span className={`flex h-fit shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium ${durumRenk(is.durum)}`}><span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />{durumKisaEtiket(is.durum)}</span>
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-xs text-slate-500">{paraGoster(Number(is.satisFiyati || 0))}</p>
+                <p className="text-xs font-semibold text-slate-200">{paraGoster(Number(is.satisFiyati || 0))}</p>
                 <div className="flex items-center gap-2">
-                  {is.createdAt && <p className="text-[10px] text-slate-700">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>}
+                  {is.createdAt && <p className="text-[11px] text-slate-500">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>}
                   {(() => {
                     const t = teklifTakipDurumu(is)
                     if (t.skor === 0 && t.seviye === "bekle") return null
