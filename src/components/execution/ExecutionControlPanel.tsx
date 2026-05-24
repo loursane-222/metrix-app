@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import ExecutionTimeline, { type TimelineEvent } from "./ExecutionTimeline"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ interface ExecutionData {
   failureDescription: string | null
   materialLossCost: string | null  // Decimal → JSON string
   estimatedMinutes: number | null
+  events?: TimelineEvent[]
 }
 
 export interface ExecutionControlPanelProps {
@@ -141,6 +143,7 @@ export default function ExecutionControlPanel({
   const [cannotReason, setCannotReason]             = useState("")
   const [failureDescription, setFailureDescription] = useState("")
   const [materialLossCost, setMaterialLossCost]     = useState("")
+  const [timelineOpen, setTimelineOpen]             = useState(false)
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
@@ -166,6 +169,13 @@ export default function ExecutionControlPanel({
 
   // Modal her açıldığında yeniden fetch: schedulePhaseId değiştiğinde
   useEffect(() => { refetch() }, [refetch])
+
+  // Terminal durumlarda timeline default açık
+  useEffect(() => {
+    if (execution) {
+      setTimelineOpen(TERMINAL.includes(execution.status))
+    }
+  }, [execution?.status])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -507,6 +517,40 @@ export default function ExecutionControlPanel({
               Maliyet etkisi: ₺{Number(execution.materialLossCost).toLocaleString("tr-TR")}
             </p>
           )}
+        </div>
+      )}
+
+      {/* ── Operasyon Geçmişi ────────────────────────────────────────────────── */}
+      {execution && (execution.events?.length ?? 0) > 0 && (
+        <div className="mt-4 border-t border-white/[0.06] pt-4">
+          <button
+            onClick={() => setTimelineOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 text-left"
+          >
+            <span className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              Operasyon Geçmişi
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[11px] font-bold text-slate-500">
+                {execution.events?.length ?? 0}
+              </span>
+              <span
+                className="text-slate-600 transition-transform duration-200"
+                style={{ transform: timelineOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+              >
+                ▾
+              </span>
+            </div>
+          </button>
+
+          <div
+            className="overflow-hidden transition-all duration-200"
+            style={{ maxHeight: timelineOpen ? 9999 : 0, opacity: timelineOpen ? 1 : 0 }}
+          >
+            <div className="pt-4">
+              <ExecutionTimeline events={execution.events ?? []} />
+            </div>
+          </div>
         </div>
       )}
 
