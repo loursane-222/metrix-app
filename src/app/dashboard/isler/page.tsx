@@ -430,32 +430,33 @@ export default function IslerPage() {
                   )}
                 </div>
               )}
-              {filtreliIsler.map((is: any) => (
+              {filtreliIsler.map((is: any) => {
+                const faz = aktifFazBilgisi(is.id)
+                const hasFazSignal = (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) || !!faz
+                const takip = teklifTakipDurumu(is)
+                const hasTakipSignal = !(takip.skor === 0 && takip.seviye === "bekle")
+                const showTas = !!is.tasDurumu && !hasFazSignal && !hasTakipSignal
+                return (
                 <SwipeToDelete key={is.id} onDelete={() => isSil(is.id)}>
                 <button onClick={() => { setAktifIs(is); setMobileView('detail') }}
                   className="block w-full border-b border-slate-800 px-4 py-3.5 text-left active:bg-[#111827]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-base font-black">{is.musteriAdi}</p>
-                      {(() => {
-                        const faz = aktifFazBilgisi(is.id);
-                        if (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) return (
-                          <div onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
-                            className="mt-1 flex items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[11px] font-semibold text-orange-300 cursor-pointer">
-                            ⚠ Program Bekliyor
-                          </div>
-                        );
-                        if (!faz) return null;
-                        return (
-                          <div className={`mt-1 flex w-fit items-center rounded-lg border px-2 py-0.5 text-[10px] font-medium ${faz.done ? 'border-teal-500/20 bg-teal-500/10 text-teal-300' : 'border-blue-500/20 bg-blue-500/10 text-blue-300'}`}>
-                            {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
-                          </div>
-                        );
-                      })()}
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                      {is.durum === 'onaylandi' && !scheduleMap[is.id]?.length ? (
+                        <div onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
+                          className="mt-1 flex w-fit items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[11px] font-semibold text-orange-300 cursor-pointer">
+                          ⚠ Program Bekliyor
+                        </div>
+                      ) : faz ? (
+                        <div className={`mt-1 flex w-fit items-center rounded-lg border px-2 py-0.5 text-[10px] font-medium ${faz.done ? 'border-teal-500/20 bg-teal-500/10 text-teal-300' : 'border-blue-500/20 bg-blue-500/10 text-blue-300'}`}>
+                          {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
+                        </div>
+                      ) : null}
+                      <div className="mt-1 flex items-center gap-2">
                         <p className="truncate text-sm text-slate-400">{is.urunAdi}</p>
-                        {is.tasDurumu && (
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${is.tasDurumu === 'alinacak' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'}`}>
+                        {showTas && (
+                          <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] ${is.tasDurumu === 'alinacak' ? 'border-amber-500/20 bg-amber-500/[0.06] text-slate-400' : 'border-white/[0.06] bg-white/[0.03] text-slate-500'}`}>
                             {is.tasDurumu === 'alinacak' ? 'Taş alınacak' : 'Stokta'}
                           </span>
                         )}
@@ -465,16 +466,12 @@ export default function IslerPage() {
                         {is.createdAt && (
                           <p className="text-[11px] text-slate-500">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>
                         )}
-                        {(() => {
-                          const t = teklifTakipDurumu(is)
-                          if (t.skor === 0 && t.seviye === "bekle") return null
-                          return (
-                            <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                              style={{ color: t.barColor, borderColor: t.barColor + "44", background: t.barColor + "15" }}>
-                              {t.etiket}
-                            </span>
-                          )
-                        })()}
+                        {hasTakipSignal && (
+                          <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                            style={{ color: takip.barColor, borderColor: takip.barColor + "44", background: takip.barColor + "15" }}>
+                            {takip.etiket}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <span className={`flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium ${durumRenk(is.durum)}`}>
@@ -484,7 +481,8 @@ export default function IslerPage() {
                   </div>
                 </button>
                 </SwipeToDelete>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
@@ -653,32 +651,33 @@ export default function IslerPage() {
               )}
             </div>
           )}
-          {filtreliIsler.map((is) => (
+          {filtreliIsler.map((is) => {
+            const faz = aktifFazBilgisi(is.id)
+            const hasFazSignal = (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) || !!faz
+            const takip = teklifTakipDurumu(is)
+            const hasTakipSignal = !(takip.skor === 0 && takip.seviye === "bekle")
+            const showTas = !!is.tasDurumu && !hasFazSignal && !hasTakipSignal
+            return (
             <div key={is.id} onClick={() => setAktifIs(is)}
               className={`group relative border-b border-l-2 border-slate-800 p-4 cursor-pointer hover:bg-[#111827] transition-colors ${aktifIs?.id === is.id ? 'bg-[#111827] border-l-blue-400/70' : 'border-l-transparent'}`}>
 
               <div className="flex justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-slate-100">{is.musteriAdi}</p>
-                  {(() => {
-                    const faz = aktifFazBilgisi(is.id);
-                    if (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) return (
-                      <button onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
-                        className="mt-0.5 flex items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-semibold text-orange-300">
-                        ⚠ Program Bekliyor
-                      </button>
-                    );
-                    if (!faz) return null;
-                    return (
-                      <div className={`mt-0.5 flex w-fit items-center rounded-lg border px-2 py-0.5 text-[10px] font-medium ${faz.done ? 'border-teal-500/20 bg-teal-500/10 text-teal-300' : 'border-blue-500/20 bg-blue-500/10 text-blue-300'}`}>
-                        {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
-                      </div>
-                    );
-                  })()}
+                  {is.durum === 'onaylandi' && !scheduleMap[is.id]?.length ? (
+                    <button onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
+                      className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-semibold text-orange-300">
+                      ⚠ Program Bekliyor
+                    </button>
+                  ) : faz ? (
+                    <div className={`mt-0.5 flex w-fit items-center rounded-lg border px-2 py-0.5 text-[10px] font-medium ${faz.done ? 'border-teal-500/20 bg-teal-500/10 text-teal-300' : 'border-blue-500/20 bg-blue-500/10 text-blue-300'}`}>
+                      {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
+                    </div>
+                  ) : null}
                   <div className="mt-1 flex items-center gap-2">
                     <p className="text-xs text-slate-400">{is.urunAdi}</p>
-                    {is.tasDurumu && (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${is.tasDurumu === 'alinacak' ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'}`}>
+                    {showTas && (
+                      <span className={`rounded-md border px-2 py-0.5 text-[10px] ${is.tasDurumu === 'alinacak' ? 'border-amber-500/20 bg-amber-500/[0.06] text-slate-400' : 'border-white/[0.06] bg-white/[0.03] text-slate-500'}`}>
                         {is.tasDurumu === 'alinacak' ? 'Taş alınacak' : 'Stokta'}
                       </span>
                     )}
@@ -692,16 +691,12 @@ export default function IslerPage() {
                 <p className="text-xs font-semibold text-slate-200">{paraGoster(Number(is.satisFiyati || 0))}</p>
                 <div className="flex items-center gap-2">
                   {is.createdAt && <p className="text-[11px] text-slate-500">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>}
-                  {(() => {
-                    const t = teklifTakipDurumu(is)
-                    if (t.skor === 0 && t.seviye === "bekle") return null
-                    return (
-                      <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                        style={{ color: t.barColor, borderColor: t.barColor + "44", background: t.barColor + "15" }}>
-                        {t.etiket}
-                      </span>
-                    )
-                  })()}
+                  {hasTakipSignal && (
+                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                      style={{ color: takip.barColor, borderColor: takip.barColor + "44", background: takip.barColor + "15" }}>
+                      {takip.etiket}
+                    </span>
+                  )}
                   <button onClick={e => { e.stopPropagation(); isSil(is.id); }}
                     className="hidden group-hover:flex items-center gap-1 rounded-lg bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/25 transition">
                     🗑 Sil
@@ -709,7 +704,8 @@ export default function IslerPage() {
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
