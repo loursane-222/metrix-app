@@ -34,27 +34,25 @@ async function pushToAtolye(atolyeId: string, message: string) {
     if (allTokens.length === 0) return;
 
     const payload = JSON.stringify({
-      notification: {
-        title: "Metrix",
-        body: message,
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-      },
-      data: { actionUrl: "/dashboard" },
+      title: "Metrix",
+      body: message,
+      url: "/dashboard",
     });
 
     await Promise.allSettled(
-      allTokens.map(async (token) => {
+      allTokens.map(async (raw) => {
         try {
-          // PushToken formatını parse et
-          const parsed = JSON.parse(token);
+          const sub = JSON.parse(raw) as {
+            endpoint: string;
+            keys: { p256dh: string; auth: string };
+          };
+          if (!sub?.endpoint || !sub?.keys?.p256dh) return; // skip old FCM tokens
           await webpush.sendNotification(
-            { endpoint: parsed.endpoint, keys: { p256dh: parsed.p256dh, auth: parsed.auth } },
+            { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
             payload
           );
         } catch {
-          // Token formatı farklıysa direkt dene
-          await webpush.sendNotification({ endpoint: token, keys: { p256dh: "", auth: "" } }, payload).catch(() => {});
+          // skip invalid or expired subscriptions
         }
       })
     );

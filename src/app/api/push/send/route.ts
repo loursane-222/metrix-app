@@ -7,17 +7,10 @@ export async function POST(req: Request) {
     const privateKey = process.env.WEB_PUSH_PRIVATE_KEY;
 
     if (!publicKey || !privateKey) {
-      return Response.json(
-        { error: "Web push anahtarları eksik." },
-        { status: 500 }
-      );
+      return Response.json({ error: "VAPID anahtarları eksik." }, { status: 500 });
     }
 
-    webpush.setVapidDetails(
-      "mailto:info@metrixtezgah.com",
-      publicKey,
-      privateKey
-    );
+    webpush.setVapidDetails("mailto:info@metrixtezgah.com", publicKey, privateKey);
 
     const { title, body, userIds } = await req.json();
 
@@ -29,12 +22,24 @@ export async function POST(req: Request) {
       where: { userId: { in: userIds } },
     });
 
-    const payload = JSON.stringify({
-      notification: { title, body },
-    });
+    const payload = JSON.stringify({ title, body, url: "/dashboard" });
 
     await Promise.allSettled(
-      tokens.map((t) => webpush.sendNotification(t.token, payload))
+      tokens.map(async (t) => {
+        try {
+          const sub = JSON.parse(t.token) as {
+            endpoint: string;
+            keys: { p256dh: string; auth: string };
+          };
+          if (!sub?.endpoint || !sub?.keys?.p256dh) return;
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
+            payload
+          );
+        } catch {
+          // skip expired/invalid subscriptions
+        }
+      })
     );
 
     return Response.json({ ok: true, sent: tokens.length });

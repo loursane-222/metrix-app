@@ -7,26 +7,38 @@ export async function POST(req: Request) {
     const privateKey = process.env.WEB_PUSH_PRIVATE_KEY;
 
     if (!publicKey || !privateKey) {
-      return NextResponse.json({ error: "Web push anahtarları eksik." }, { status: 500 });
+      return NextResponse.json({ error: "VAPID anahtarları eksik." }, { status: 500 });
     }
 
     webpush.setVapidDetails("mailto:info@metrixtezgah.com", publicKey, privateKey);
 
-    const { title, body, tokens } = await req.json();
+    const { title, body, subscriptions } = await req.json();
 
-    if (!title || !body || !Array.isArray(tokens)) {
+    if (!title || !body || !Array.isArray(subscriptions)) {
       return NextResponse.json({ error: "Eksik veri." }, { status: 400 });
     }
 
-    const payload = JSON.stringify({ notification: { title, body } });
+    const payload = JSON.stringify({ title, body, url: "/dashboard" });
 
     await Promise.allSettled(
-      tokens.map((token: string) =>
-        webpush.sendNotification({ endpoint: token, keys: { p256dh: "", auth: "" } } as any, payload)
-      )
+      subscriptions.map(async (raw: string) => {
+        try {
+          const sub = JSON.parse(raw) as {
+            endpoint: string;
+            keys: { p256dh: string; auth: string };
+          };
+          if (!sub?.endpoint || !sub?.keys?.p256dh) return;
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
+            payload
+          );
+        } catch {
+          // skip expired/invalid subscriptions
+        }
+      })
     );
 
-    return NextResponse.json({ ok: true, sent: tokens.length });
+    return NextResponse.json({ ok: true, sent: subscriptions.length });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
