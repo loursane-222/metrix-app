@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose'
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
 
-  // Static asset'ler serbest
+  // Static asset'ler + service worker'lar serbest
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
@@ -13,7 +13,9 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/images') ||
     pathname.startsWith('/apple-icon') ||
     pathname.startsWith('/icon.') ||
-    pathname === '/manifest.webmanifest'
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/sw.js' ||
+    pathname === '/firebase-messaging-sw.js'
   ) {
     return NextResponse.next()
   }

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DailyPlanPopup from "@/components/dashboard/DailyPlanPopup";
-import PushPermission from "@/components/push/PushPermission";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
 
 export default function DashboardLayout({
@@ -101,7 +100,6 @@ export default function DashboardLayout({
         style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}>
         <div className="min-h-[100dvh] w-full md:[padding-bottom:0]" id="dashboard-inner">
           <DailyPlanPopup />
-          <PushPermission />
           {children}
         </div>
       </main>
