@@ -16,7 +16,8 @@ function tl(v: number) {
 }
 function uid() { return Math.random().toString(36).slice(2, 8); }
 
-const TASLAK_KEY = "metrix_yeni_is_v4_taslak";
+const TASLAK_KEY = "metrix_yeni_is_v3_taslak";
+const TASLAK_KEY_LEGACY = "metrix_yeni_is_v4_taslak";
 
 // ─── Tipler ───────────────────────────────────────────────────────────────────
 type Adim = "musteri" | "olculer" | "fiyat";
@@ -213,7 +214,10 @@ function hesapla(form: FormState, makineler: any[]) {
     + pahlamaDk  * makineMaliyet(form.pahlamaMakineId)
     + kesim45Dk  * makineMaliyet(form.kesim45MakineId);
 
-  const toplamMaliyet = malzemeMaliyeti + iscilikMaliyeti;
+  const eviyeMaliyet  = n(form.eviyes)  * 200 * makineMaliyet(form.tezgahMakineId);
+  const ocakMaliyet   = n(form.ocaklar) * 150 * makineMaliyet(form.tezgahMakineId);
+  const prizMaliyet   = n(form.prizler)  * 50  * makineMaliyet(form.tezgahMakineId);
+  const toplamMaliyet = malzemeMaliyeti + iscilikMaliyeti + eviyeMaliyet + ocakMaliyet + prizMaliyet;
 
   // Satış fiyatı
   let satisFiyati = 0;
@@ -234,15 +238,11 @@ function hesapla(form: FormState, makineler: any[]) {
   const karYuzde = toplamMaliyet > 0 ? (kar / toplamMaliyet) * 100 : 0;
   const birimFiyat = toplamMtul > 0 ? satisFiyati / toplamMtul : 0;
 
-  // Ek işler maliyeti tahmini (bilgi amaçlı)
-  const eviyeMaliyet  = n(form.eviyes)  * 200 * makineMaliyet(form.tezgahMakineId);
-  const ocakMaliyet   = n(form.ocaklar) * 150 * makineMaliyet(form.tezgahMakineId);
-
   return {
     toplamMtul, toplamOnAlinMtul, toplamParcaAlani, plakaSayisi,
     plakaFiyatiTl, malzemeMaliyeti, iscilikMaliyeti, toplamMaliyet,
     satisFiyati, kar, karYuzde, birimFiyat, toplamDakika,
-    eviyeMaliyet, ocakMaliyet,
+    eviyeMaliyet, ocakMaliyet, prizMaliyet,
   };
 }
 
@@ -291,7 +291,6 @@ export default function YeniIsV3Page() {
   const [yeniMusteri, setYeniMusteri]       = useState(false);
   const [taslakKaydedildi, setTaslakKaydedildi] = useState(false);
   const [gelismisAcik, setGelismisAcik]     = useState(false);
-  const [fiyatPanelAcik, setFiyatPanelAcik] = useState(false);
   const [plakaHesaplaniyor, setPlakaHesaplaniyor] = useState(false);
   const [plakaSlabs, setPlakaSlabs]         = useState<any[]>([]);
   const [plakaPlakaSayisi, setPlakaPlakaSayisi] = useState(0);
@@ -383,7 +382,7 @@ export default function YeniIsV3Page() {
         return;
       }
       if (url.searchParams.get("fresh") === "1") { localStorage.removeItem(TASLAK_KEY); return; }
-      const ham = localStorage.getItem(TASLAK_KEY);
+      const ham = localStorage.getItem(TASLAK_KEY) || localStorage.getItem(TASLAK_KEY_LEGACY);
       if (ham) {
         const t = JSON.parse(ham);
         if (t?.musteriAdi || t?.urunAdi) setForm((p) => ({ ...p, ...t }));
@@ -816,7 +815,6 @@ export default function YeniIsV3Page() {
       {/* Sidebar — masaüstü */}
       <aside className="desktop-sidebar" style={{ width: "210px", borderRight: "1px solid #1f2937", display: "flex", flexDirection: "column", flexShrink: 0, background: "#030712" }}>
         <div style={{ padding: "22px 18px", borderBottom: "1px solid #1f2937" }}>
-          <p style={{ fontSize: "10px", letterSpacing: "0.25em", color: "#4b5563", textTransform: "uppercase", marginBottom: "4px" }}>Metrix</p>
           <h1 style={{ fontSize: "19px", fontWeight: 900 }}>Yeni İş</h1>
           {taslakKaydedildi && <p style={{ fontSize: "10px", color: "#4b5563", marginTop: "4px" }}>Taslak ✓</p>}
         </div>
@@ -1498,7 +1496,7 @@ export default function YeniIsV3Page() {
 
         {/* Mobil alt çubuk */}
         <div className="mobile-only" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 1200, padding: "10px 16px", paddingBottom: "calc(env(safe-area-inset-bottom) + 10px)", background: "rgba(3,7,18,0.97)", backdropFilter: "blur(16px)", borderTop: "1px solid #1f2937", display: "flex", gap: "10px" }}>
-          <button onClick={() => onceki ? setAktifAdim(onceki) : router.push("/dashboard/isler")} style={{ padding: "13px 18px", background: "#0d1117", border: "1px solid #374151", borderRadius: "13px", color: "#d1d5db", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+          <button onClick={() => onceki ? setAktifAdim(onceki) : router.push("/dashboard/isler")} style={{ padding: "13px 12px", background: "#0d1117", border: "1px solid #374151", borderRadius: "13px", color: "#d1d5db", fontSize: "14px", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
             {onceki ? "← Geri" : "← Dön"}
           </button>
           {sonraki ? (
@@ -1551,8 +1549,6 @@ export default function YeniIsV3Page() {
       {/* Plaka modal */}
       {plakaAcik && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setPlakaAcik(false)}>
-          {/* Sabit kapat butonu — her zaman görünür */}
-          <button onClick={() => setPlakaAcik(false)} style={{ position: "fixed", top: "16px", right: "16px", zIndex: 9999, padding: "10px 20px", background: "#ef4444", border: "none", borderRadius: "12px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: "pointer", boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}>✕ Kapat</button>
           <div className="plaka-v2-fix" style={{ height: "100dvh", width: "100%", overflowY: "auto", background: "#030712", padding: "16px", paddingTop: "60px", paddingBottom: "calc(120px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ position: "sticky", top: 0, zIndex: 30, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1f2937", paddingBottom: "12px", marginBottom: "16px", background: "rgba(3,7,18,0.97)", backdropFilter: "blur(20px)", paddingTop: "8px" }}>
               <div>
