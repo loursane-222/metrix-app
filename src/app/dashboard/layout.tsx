@@ -96,7 +96,7 @@ export default function DashboardLayout({
     <div className="min-h-[100dvh] bg-[#0B1120] overflow-x-hidden">
       <InAppToast />
       <Sidebar />
-      <main className="min-h-[100dvh] md:ml-72 md:h-screen md:overflow-hidden bg-[#0B1120] overflow-x-hidden" id="dashboard-main"
+      <main className="min-h-[100dvh] md:ml-72 bg-[#0B1120] overflow-x-hidden" id="dashboard-main"
         style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}>
         <div className="min-h-[100dvh] w-full md:[padding-bottom:0]" id="dashboard-inner">
           <DailyPlanPopup />
