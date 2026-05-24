@@ -818,29 +818,17 @@ export default function YeniIsV3Page() {
           <h1 style={{ fontSize: "19px", fontWeight: 900 }}>Yeni İş</h1>
           {taslakKaydedildi && <p style={{ fontSize: "10px", color: "#4b5563", marginTop: "4px" }}>Taslak ✓</p>}
         </div>
-        <nav style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "6px" }}>
-          {adimlar.map((a, i) => {
-            const tam = i < aktifIdx; const aktif = a.id === aktifAdim;
-            return (
-              <button key={a.id} onClick={() => setAktifAdim(a.id)} style={{ width: "100%", textAlign: "left", padding: "11px 13px", borderRadius: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "9px", fontSize: "13px", fontWeight: 600, transition: "all .15s", background: aktif ? "#10b981" : tam ? "rgba(16,185,129,0.08)" : "#0d1117", border: aktif ? "1px solid #10b981" : tam ? "1px solid rgba(16,185,129,0.25)" : "1px solid #1f2937", color: aktif ? "#fff" : tam ? "#6ee7b7" : "#9ca3af" }}>
-                <span style={{ width: "22px", height: "22px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 900, flexShrink: 0, background: aktif ? "rgba(255,255,255,0.2)" : tam ? "#10b981" : "#1f2937", color: "#fff" }}>{tam ? "✓" : i + 1}</span>
-                {a.label}
-              </button>
-            );
-          })}
-          <button onClick={() => setAiMode(true)} style={{ width: "100%", textAlign: "left", padding: "11px 13px", borderRadius: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "9px", background: "transparent", border: "1px solid rgba(16,185,129,0.2)", color: "#6ee7b7", fontSize: "13px", fontWeight: 600 }}>
-            <span>✨</span> AI Modu
-          </button>
-        </nav>
         {/* Canlı özet */}
         <div style={{ marginTop: "auto", padding: "14px", borderTop: "1px solid #1f2937" }}>
           <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.2em", color: "#4b5563", marginBottom: "8px" }}>Canlı Özet</p>
           {[
-            { l: "Teklif",  v: tl(hesap.satisFiyati), c: "#10b981" },
-            { l: "Maliyet", v: tl(hesap.toplamMaliyet), c: "#f9fafb" },
-            { l: "Kâr",    v: tl(hesap.kar),           c: "#fbbf24" },
-            { l: "Mtül",   v: hesap.toplamMtul.toFixed(2), c: "#f9fafb" },
-            { l: "Plaka",  v: hesap.plakaSayisi + " ad", c: "#f9fafb" },
+            { l: "Teklif",  v: hesap.satisFiyati  > 0 ? tl(hesap.satisFiyati)                  : "—", c: "#10b981" },
+            { l: "Maliyet", v: hesap.toplamMaliyet > 0 ? tl(hesap.toplamMaliyet)                 : "—", c: "#f9fafb" },
+            { l: "Kâr",    v: hesap.kar           > 0 ? tl(hesap.kar)                           : "—", c: "#fbbf24" },
+            { l: "Kâr %",  v: hesap.toplamMaliyet > 0 ? `%${hesap.karYuzde.toFixed(1)}`         : "—",
+              c: hesap.toplamMaliyet === 0 ? "#6b7280" : hesap.karYuzde >= 60 ? "#6ee7b7" : hesap.karYuzde >= 35 ? "#93c5fd" : hesap.karYuzde >= 20 ? "#fbbf24" : "#f87171" },
+            { l: "Mtül",   v: hesap.toplamMtul    > 0 ? `${hesap.toplamMtul.toFixed(2)} mtül`   : "—", c: "#f9fafb" },
+            { l: "Plaka",  v: hesap.plakaSayisi   > 0 ? `${hesap.plakaSayisi} adet`             : "—", c: "#f9fafb" },
           ].map((s) => (
             <div key={s.l} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #0d1117" }}>
               <span style={{ fontSize: "11px", color: "#6b7280" }}>{s.l}</span>
