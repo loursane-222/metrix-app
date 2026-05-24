@@ -3,6 +3,7 @@
 import dayjs from "dayjs"
 import relativeTime from "dayjs/plugin/relativeTime"
 import "dayjs/locale/tr"
+import { DarkBadge, type BadgeTone } from "@/components/ui/DarkBadge"
 
 dayjs.extend(relativeTime)
 dayjs.locale("tr")
@@ -36,67 +37,67 @@ interface EventConfig {
   dotColor: string
   lineColor: string
   textColor: string
-  badgeClass: string
+  badgeTone: BadgeTone
 }
 
 const EVENT_CONFIG: Record<string, EventConfig> = {
   CREATED: {
-    label:      "Operasyon oluşturuldu",
-    dotColor:   "bg-slate-500",
-    lineColor:  "bg-slate-700",
-    textColor:  "text-slate-400",
-    badgeClass: "border-slate-700 bg-slate-800/50 text-slate-400",
+    label:     "Operasyon oluşturuldu",
+    dotColor:  "bg-slate-500",
+    lineColor: "bg-slate-700",
+    textColor: "text-slate-400",
+    badgeTone: "slate",
   },
   STARTED: {
-    label:      "Başlatıldı",
-    dotColor:   "bg-emerald-500",
-    lineColor:  "bg-emerald-900/60",
-    textColor:  "text-emerald-300",
-    badgeClass: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+    label:     "Başlatıldı",
+    dotColor:  "bg-emerald-500",
+    lineColor: "bg-emerald-900/60",
+    textColor: "text-emerald-300",
+    badgeTone: "emerald",
   },
   PAUSED: {
-    label:      "Duraklatıldı",
-    dotColor:   "bg-amber-500",
-    lineColor:  "bg-amber-900/60",
-    textColor:  "text-amber-300",
-    badgeClass: "border-amber-500/40 bg-amber-500/15 text-amber-300",
+    label:     "Duraklatıldı",
+    dotColor:  "bg-amber-500",
+    lineColor: "bg-amber-900/60",
+    textColor: "text-amber-300",
+    badgeTone: "amber",
   },
   RESUMED: {
-    label:      "Devam edildi",
-    dotColor:   "bg-emerald-500",
-    lineColor:  "bg-emerald-900/60",
-    textColor:  "text-emerald-300",
-    badgeClass: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+    label:     "Devam edildi",
+    dotColor:  "bg-emerald-500",
+    lineColor: "bg-emerald-900/60",
+    textColor: "text-emerald-300",
+    badgeTone: "emerald",
   },
   COMPLETED: {
-    label:      "Tamamlandı",
-    dotColor:   "bg-blue-500",
-    lineColor:  "bg-blue-900/60",
-    textColor:  "text-blue-300",
-    badgeClass: "border-blue-500/40 bg-blue-500/15 text-blue-300",
+    label:     "Tamamlandı",
+    dotColor:  "bg-blue-500",
+    lineColor: "bg-blue-900/60",
+    textColor: "text-blue-300",
+    badgeTone: "blue",
   },
   CANNOT_START: {
-    label:      "Başlanamadı",
-    dotColor:   "bg-red-500",
-    lineColor:  "bg-red-900/60",
-    textColor:  "text-red-300",
-    badgeClass: "border-red-500/40 bg-red-500/15 text-red-300",
+    label:     "Başlanamadı",
+    dotColor:  "bg-red-500",
+    lineColor: "bg-red-900/60",
+    textColor: "text-red-300",
+    badgeTone: "red",
   },
   CANCELLED: {
-    label:      "İptal edildi",
-    dotColor:   "bg-zinc-600",
-    lineColor:  "bg-zinc-800",
-    textColor:  "text-zinc-500",
-    badgeClass: "border-zinc-700 bg-zinc-800/50 text-zinc-500",
+    label:     "İptal edildi",
+    dotColor:  "bg-zinc-600",
+    lineColor: "bg-zinc-800",
+    textColor: "text-zinc-500",
+    badgeTone: "slate",
   },
 }
 
 const FALLBACK_CONFIG: EventConfig = {
-  label:      "Güncellendi",
-  dotColor:   "bg-slate-600",
-  lineColor:  "bg-slate-800",
-  textColor:  "text-slate-400",
-  badgeClass: "border-slate-700 bg-slate-800/50 text-slate-400",
+  label:     "Güncellendi",
+  dotColor:  "bg-slate-600",
+  lineColor: "bg-slate-800",
+  textColor: "text-slate-400",
+  badgeTone: "slate",
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -186,9 +187,9 @@ function EventRow({
       <div className={`pb-4 ${isLast ? "" : ""}`}>
         {/* Badge + time */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${cfg.badgeClass}`}>
+          <DarkBadge tone={cfg.badgeTone} size="sm">
             {cfg.label}
-          </span>
+          </DarkBadge>
           <span className="text-[11px] text-slate-600" title={absolute}>
             {relative}
           </span>

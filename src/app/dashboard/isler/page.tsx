@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 import { PlakaPlanlayiciV2 } from '@/components/plaka-planlayici/PlakaPlanlayiciV2'
 import UretimPlaniModal from '@/components/schedule/UretimPlaniModal'
+import { DarkBadge, type BadgeTone } from '@/components/ui/DarkBadge'
 
 function whatsappTeklifGonder(is: any) {
   if (!is?.musteriTelefonu) { alert("Müşteri telefon numarası yok."); return; }
@@ -291,6 +292,13 @@ export default function IslerPage() {
     return 'Belirsiz'
   }
 
+  function durumTone(durum?: string): BadgeTone {
+    if (durum === 'onaylandi') return 'emerald'
+    if (durum === 'montaj_tamamlandi') return 'teal'
+    if (durum === 'kaybedildi') return 'red'
+    return 'amber'
+  }
+
   async function isSil(id: string) {
     if (!confirm('Bu işi silmek istediğinize emin misiniz?')) return
     await fetch(`/api/isler?id=${id}`, { method: 'DELETE' })
@@ -351,9 +359,9 @@ export default function IslerPage() {
   function TasBadge({ durum }: { durum?: string }) {
     if (!durum) return null
     return (
-      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${durum === 'alinacak' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
+      <DarkBadge tone={durum === 'alinacak' ? 'amber' : 'emerald'}>
         {durum === 'alinacak' ? 'Taş Alınacak' : 'Taş Stokta'}
-      </span>
+      </DarkBadge>
     )
   }
 
@@ -449,9 +457,9 @@ export default function IslerPage() {
                           ⚠ Program Bekliyor
                         </div>
                       ) : faz ? (
-                        <div className={`mt-1 flex w-fit items-center rounded-lg border px-2 py-0.5 text-[10px] font-medium ${faz.done ? 'border-teal-500/20 bg-teal-500/10 text-teal-300' : 'border-blue-500/20 bg-blue-500/10 text-blue-300'}`}>
+                        <DarkBadge tone={faz.done ? 'teal' : 'blue'} shape="soft" className="mt-1 w-fit">
                           {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
-                        </div>
+                        </DarkBadge>
                       ) : null}
                       <div className="mt-1 flex items-center gap-2">
                         <p className="truncate text-sm text-slate-400">{is.urunAdi}</p>
@@ -474,10 +482,9 @@ export default function IslerPage() {
                         )}
                       </div>
                     </div>
-                    <span className={`flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium ${durumRenk(is.durum)}`}>
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+                    <DarkBadge tone={durumTone(is.durum)} dot shape="soft" size="sm">
                       {durumKisaEtiket(is.durum)}
-                    </span>
+                    </DarkBadge>
                   </div>
                 </button>
                 </SwipeToDelete>
@@ -509,9 +516,9 @@ export default function IslerPage() {
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <p className="text-base text-slate-400">{aktifIs.urunAdi}</p>
                     {aktifIs.tasDurumu && (
-                      <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${aktifIs.tasDurumu === 'alinacak' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
+                      <DarkBadge tone={aktifIs.tasDurumu === 'alinacak' ? 'amber' : 'emerald'}>
                         {aktifIs.tasDurumu === 'alinacak' ? 'Taş alınacak' : 'Stokta'}
-                      </span>
+                      </DarkBadge>
                     )}
                   </div>
                 </div>
@@ -521,9 +528,9 @@ export default function IslerPage() {
                     className={`rounded-full border px-3 py-1 text-xs cursor-pointer hover:opacity-80 transition ${durumRenk(aktifIs.durum)}`}>
                     {durumEtiket(aktifIs.durum)} ▾
                   </button>
-                  <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-300">
+                  <DarkBadge tone="purple">
                     v{Number(aktifIs.versiyon || 1)}
-                  </span>
+                  </DarkBadge>
                 </div>
               </div>
 
@@ -670,9 +677,9 @@ export default function IslerPage() {
                       ⚠ Program Bekliyor
                     </button>
                   ) : faz ? (
-                    <div className={`mt-0.5 flex w-fit items-center rounded-lg border px-2 py-0.5 text-[10px] font-medium ${faz.done ? 'border-teal-500/20 bg-teal-500/10 text-teal-300' : 'border-blue-500/20 bg-blue-500/10 text-blue-300'}`}>
+                    <DarkBadge tone={faz.done ? 'teal' : 'blue'} shape="soft" className="mt-0.5 w-fit">
                       {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
-                    </div>
+                    </DarkBadge>
                   ) : null}
                   <div className="mt-1 flex items-center gap-2">
                     <p className="text-xs text-slate-400">{is.urunAdi}</p>
@@ -684,7 +691,9 @@ export default function IslerPage() {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className={`flex h-fit shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium ${durumRenk(is.durum)}`}><span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />{durumKisaEtiket(is.durum)}</span>
+                  <DarkBadge tone={durumTone(is.durum)} dot shape="soft" size="sm" className="h-fit">
+                  {durumKisaEtiket(is.durum)}
+                </DarkBadge>
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
@@ -719,7 +728,7 @@ export default function IslerPage() {
                 <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Seçili İş</p>
                 <div className="mt-2 flex items-center gap-3">
                   <h2 className="text-xl md:text-2xl leading-tight">{aktifIs.musteriAdi}</h2>
-                  <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-300">v{Number(aktifIs.versiyon || 1)}</span>
+                  <DarkBadge tone="purple">v{Number(aktifIs.versiyon || 1)}</DarkBadge>
                 </div>
                 <div className="mt-2 flex items-center gap-3">
                   <p className="text-slate-400 text-sm">{aktifIs.urunAdi}</p>
