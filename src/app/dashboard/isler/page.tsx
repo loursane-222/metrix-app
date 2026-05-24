@@ -319,6 +319,26 @@ export default function IslerPage() {
 
   const aktifFiltreCount = (durumFiltre !== "tumu" ? 1 : 0) + (zamanFiltre !== "tumu" ? 1 : 0)
 
+  const previewResultCount = useMemo(() => {
+    let liste = isler
+    if (draftDurum !== "tumu") {
+      if (draftDurum === "program_bekliyor") {
+        liste = liste.filter((item: any) => item.durum === "onaylandi" && !item.hasPlan)
+      } else {
+        liste = liste.filter((item: any) => item.durum === draftDurum)
+      }
+    }
+    if (draftZaman !== "tumu") {
+      const simdi = Date.now()
+      const sinir = draftZaman === "hafta" ? 7 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000
+      liste = liste.filter((item: any) => {
+        const t = item.createdAt ? new Date(item.createdAt).getTime() : 0
+        return simdi - t <= sinir
+      })
+    }
+    return liste.length
+  }, [isler, draftDurum, draftZaman])
+
   function TasBadge({ durum }: { durum?: string }) {
     if (!durum) return null
     return (
@@ -828,7 +848,7 @@ export default function IslerPage() {
                 </button>
                 <button onClick={() => { setDurumFiltre(draftDurum); setZamanFiltre(draftZaman); setFilterSheetAcik(false); }}
                   className="rounded-xl bg-blue-600 py-3.5 text-sm font-semibold text-white">
-                  Uygula{(draftDurum !== "tumu" || draftZaman !== "tumu") ? ` (${(draftDurum !== "tumu" ? 1 : 0) + (draftZaman !== "tumu" ? 1 : 0)})` : ""}
+                  Uygula ({previewResultCount})
                 </button>
               </div>
             </div>
