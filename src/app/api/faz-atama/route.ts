@@ -78,6 +78,13 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ hata: 'ID gerekli.' }, { status: 400 })
 
-  await prisma.fazAtama.delete({ where: { id } })
+  const result = await prisma.fazAtama.deleteMany({
+    where: {
+      id,
+      schedulePhase: { workSchedule: { is: { atolyeId } } },
+    },
+  })
+  if (result.count === 0)
+    return NextResponse.json({ hata: 'Bulunamadı veya yetki yok.' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }
