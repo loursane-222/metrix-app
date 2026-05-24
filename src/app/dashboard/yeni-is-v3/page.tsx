@@ -253,7 +253,7 @@ function defaultForm(): FormState {
     isTarihi: new Date().toISOString().slice(0, 10),
     urunAdi: "", isModeli: "tam", mutfakTipi: "duz",
     parcalar: defaultParcalar("duz"),
-    eviyes: "1", ocaklar: "1", prizler: "2",
+    eviyes: "0", ocaklar: "0", prizler: "0",
     pahlamaMtul: "", kesim45Mtul: "",
     plakaFiyati: "", plakaFiyatiEuro: "", kullanilanKur: "53",
     plakaEn: "160", plakaBoy: "320",
