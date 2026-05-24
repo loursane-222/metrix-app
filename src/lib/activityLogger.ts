@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { sseEmitter } from "./sseEmitter";
+import { pushToAtolye } from "./push/pushToAtolye";
 
 interface LogParams {
   atolyeId: string;
@@ -44,4 +45,11 @@ export async function logActivity(params: LogParams) {
   } catch (e) {
     console.error("logActivity error:", e);
   }
+
+  // Fire-and-forget Web Push — errors must not bubble to callers
+  void pushToAtolye(params.atolyeId, {
+    title: "Metrix",
+    body: params.message,
+    url: "/dashboard",
+  }).catch((e) => console.error("[push] unhandled:", e));
 }
