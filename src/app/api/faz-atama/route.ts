@@ -1,8 +1,13 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/activityLogger";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+
+const FAZ_LABEL: Record<string, string> = {
+  IMALAT: "imalat", MONTAJ: "montaj", OLCU: "ölçü", TAS_ALINACAK: "taş alınacak",
+}
 
 
 
@@ -39,6 +44,27 @@ export async function POST(req: NextRequest) {
     data: { schedulePhaseId, personelId },
     include: { personel: { select: { id: true, ad: true, soyad: true, gorevi: true } } }
   })
+
+  try {
+    const phaseCtx = await prisma.schedulePhase.findUnique({
+      where: { id: schedulePhaseId },
+      select: { phase: true, workSchedule: { select: { is: { select: { musteriAdi: true } } } } },
+    })
+    const adSoyad = `${atama.personel.ad}${atama.personel.soyad ? " " + atama.personel.soyad : ""}`.trim()
+    const musteriAdi = phaseCtx?.workSchedule?.is?.musteriAdi || "—"
+    const fazLabel = FAZ_LABEL[phaseCtx?.phase ?? ""] ?? "faz"
+    await logActivity({
+      atolyeId,
+      userId: auth.userId ?? undefined,
+      type: "program_personel_eklendi",
+      message: `${adSoyad} — ${musteriAdi} ${fazLabel} fazına atandı`,
+      refId: schedulePhaseId,
+      url: `/dashboard/is-programi?phaseId=${schedulePhaseId}`,
+    })
+  } catch {
+    // fire-and-forget — log hatası API response'u kırmasın
+  }
+
   return NextResponse.json({ atama })
 }
 
