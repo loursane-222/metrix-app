@@ -36,6 +36,19 @@ export async function POST(req: NextRequest) {
 
   const { schedulePhaseId, personelId } = await req.json()
 
+  const [phase, personel] = await Promise.all([
+    prisma.schedulePhase.findFirst({
+      where: { id: schedulePhaseId, workSchedule: { is: { atolyeId } } },
+      select: { id: true },
+    }),
+    prisma.personel.findFirst({
+      where: { id: personelId, atolyeId, aktif: true },
+      select: { id: true },
+    }),
+  ])
+  if (!phase || !personel)
+    return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 403 })
+
   // 5 kişi limiti
   const mevcut = await prisma.fazAtama.count({ where: { schedulePhaseId } })
   if (mevcut >= 5) return NextResponse.json({ hata: 'Bir faza en fazla 5 kişi atanabilir.' }, { status: 400 })
