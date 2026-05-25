@@ -18,6 +18,15 @@ function whatsappTeklifGonder(is: any) {
   window.open(`https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}`, "_blank");
 }
 
+function IsChip({ label, value, tone = "text-white" }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-1.5">
+      <p className="text-[9px] uppercase tracking-wider text-slate-500">{label}</p>
+      <p className={`text-xs font-semibold tabular-nums ${tone}`}>{value}</p>
+    </div>
+  )
+}
+
 export default function IslerPage() {
   const router = useRouter()
   const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
@@ -366,7 +375,7 @@ export default function IslerPage() {
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col md:flex-row bg-[#030712] text-white overflow-hidden">
+    <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#030712] text-white md:h-screen md:overflow-hidden md:flex md:flex-col">
 
       {/* MOBİL */}
       <div className="md:hidden flex h-full min-h-0 flex-col bg-[#030712] text-white">
@@ -592,32 +601,41 @@ export default function IslerPage() {
         )}
       </div>
 
-      {/* MASAÜSTÜ SOL — LİSTE */}
-      <div className="hidden md:flex md:w-[25%] border-r border-slate-800 flex-col">
-        <div className="p-5 border-b border-slate-800">
-          <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">İş Takibi</p>
-          <h1 className="text-xl mt-2">İşler</h1>
-          <div className="grid grid-cols-4 gap-2 mt-4">
-            <div className="bg-[#111827] rounded-lg p-2 text-center"><p className="text-[10px] text-slate-500">Toplam</p><p className="text-sm">{ozet.toplam}</p></div>
-            <div className="bg-[#111827] rounded-lg p-2 text-center"><p className="text-[10px] text-slate-500">Bek.</p><p className="text-sm text-amber-400">{ozet.bekleyen}</p></div>
-            <div className="bg-[#111827] rounded-lg p-2 text-center"><p className="text-[10px] text-slate-500">Onay</p><p className="text-sm text-emerald-400">{ozet.onaylanan}</p></div>
-            <div className="bg-[#111827] rounded-lg p-2 text-center"><p className="text-[10px] text-slate-500">Kayıp</p><p className="text-sm text-red-400">{ozet.kayip}</p></div>
-          </div>
+      {/* ── DESKTOP: TOP STRIP ──────────────────────────────────────────── */}
+      <div className="hidden md:flex shrink-0 items-center gap-2 border-b border-slate-800/60 px-4 py-2">
+        <div className="mr-3 min-w-0">
+          <p className="text-sm font-semibold leading-tight">İş Takibi</p>
+          <p className="text-[10px] leading-tight text-slate-500">İşler</p>
         </div>
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          <IsChip label="Toplam" value={`${ozet.toplam} iş`} />
+          <IsChip label="Bekleyen" value={`${ozet.bekleyen}`} tone="text-amber-300" />
+          <IsChip label="Onaylı" value={`${ozet.onaylanan}`} tone="text-emerald-300" />
+          <IsChip label="Montaj" value={`${ozet.montajTamamlandi}`} tone="text-teal-300" />
+          <IsChip label="Kayıp" value={`${ozet.kayip}`} tone="text-red-300" />
+          <IsChip label="Seçili" value={aktifIs ? aktifIs.musteriAdi : "Seçili yok"} />
+        </div>
+      </div>
 
-        <div className="border-b border-slate-800 p-3 flex flex-col gap-2">
-          {/* Arama */}
-          <div className="relative">
+      {/* ── DESKTOP: COCKPIT CANVAS ──────────────────────────────────────── */}
+      <div className="hidden md:grid md:flex-1 md:min-h-0 md:overflow-hidden md:grid-cols-[270px_minmax(0,1fr)] md:gap-3 md:p-3">
+
+        {/* Sol rail: arama + filtre + liste */}
+        <aside className="flex flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-4">
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-500">İş Takibi</p>
+          <h1 className="mt-2 text-2xl font-semibold">İşler</h1>
+
+          <div className="relative mt-4">
             <input value={isArama} onChange={(e) => setIsArama(e.target.value)} placeholder="İş ara..."
-              className="w-full rounded-xl border border-slate-800 bg-[#0B1120] px-4 py-3 pr-10 text-sm text-white outline-none placeholder:text-slate-600" />
+              className="w-full rounded-xl border border-slate-800 bg-[#111827] px-4 py-3 pr-10 text-sm text-white outline-none placeholder:text-slate-600" />
             {isArama && (
               <button onClick={() => setIsArama("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
             )}
           </div>
-          {/* Compact filter toolbar */}
-          <div className="flex flex-col gap-1.5">
+
+          <div className="mt-2 flex flex-col gap-1.5">
             <div className="flex items-center rounded-xl border border-white/[0.06] bg-white/[0.03] p-1">
               {[
                 { key: "tumu", label: "Tümü" },
@@ -646,175 +664,236 @@ export default function IslerPage() {
               ))}
             </div>
           </div>
-        </div>
 
-        <div className="overflow-y-auto flex-1">
-          {filtreliIsler.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
-              <p className="text-slate-500 text-sm">İş bulunamadı</p>
-              {(isArama || durumFiltre !== "tumu" || zamanFiltre !== "tumu") && (
-                <button onClick={() => { setIsArama(""); setDurumFiltre("tumu"); setZamanFiltre("tumu"); }}
-                  className="text-xs text-blue-400 underline">Filtreleri temizle</button>
-              )}
-            </div>
-          )}
-          {filtreliIsler.map((is) => {
-            const faz = aktifFazBilgisi(is.id)
-            const hasFazSignal = (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) || !!faz
-            const takip = teklifTakipDurumu(is)
-            const hasTakipSignal = !(takip.skor === 0 && takip.seviye === "bekle")
-            const showTas = !!is.tasDurumu && !hasFazSignal && !hasTakipSignal
-            return (
-            <div key={is.id} onClick={() => setAktifIs(is)}
-              className={`group relative border-b border-l-2 border-slate-800 p-4 cursor-pointer hover:bg-[#111827] transition-colors ${aktifIs?.id === is.id ? 'bg-[#111827] border-l-blue-400/70' : 'border-l-transparent'}`}>
-
-              <div className="flex justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold text-slate-100">{is.musteriAdi}</p>
-                  {is.durum === 'onaylandi' && !scheduleMap[is.id]?.length ? (
-                    <button onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
-                      className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-semibold text-orange-300">
-                      ⚠ Program Bekliyor
-                    </button>
-                  ) : faz ? (
-                    <DarkBadge tone={faz.done ? 'teal' : 'blue'} shape="soft" className="mt-0.5 w-fit">
-                      {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
-                    </DarkBadge>
-                  ) : null}
-                  <div className="mt-1 flex items-center gap-2">
-                    <p className="text-xs text-slate-400">{is.urunAdi}</p>
-                    {showTas && (
-                      <span className={`rounded-md border px-2 py-0.5 text-[10px] ${is.tasDurumu === 'alinacak' ? 'border-amber-500/20 bg-amber-500/[0.06] text-slate-400' : 'border-white/[0.06] bg-white/[0.03] text-slate-500'}`}>
-                        {is.tasDurumu === 'alinacak' ? 'Taş alınacak' : 'Stokta'}
-                      </span>
-                    )}
+          <div className="mt-3 flex-1 overflow-y-auto pr-1">
+            {filtreliIsler.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+                <p className="text-slate-500 text-sm">İş bulunamadı</p>
+                {(isArama || durumFiltre !== "tumu" || zamanFiltre !== "tumu") && (
+                  <button onClick={() => { setIsArama(""); setDurumFiltre("tumu"); setZamanFiltre("tumu"); }}
+                    className="text-xs text-blue-400 underline">Filtreleri temizle</button>
+                )}
+              </div>
+            )}
+            {filtreliIsler.map((is) => {
+              const faz = aktifFazBilgisi(is.id)
+              const hasFazSignal = (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) || !!faz
+              const takip = teklifTakipDurumu(is)
+              const hasTakipSignal = !(takip.skor === 0 && takip.seviye === "bekle")
+              const showTas = !!is.tasDurumu && !hasFazSignal && !hasTakipSignal
+              return (
+                <div key={is.id} onClick={() => setAktifIs(is)}
+                  className={`group relative border-b border-l-2 border-slate-800 p-4 cursor-pointer hover:bg-[#111827] transition-colors ${aktifIs?.id === is.id ? 'bg-[#111827] border-l-blue-400/70' : 'border-l-transparent'}`}>
+                  <div className="flex justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-100">{is.musteriAdi}</p>
+                      {is.durum === 'onaylandi' && !scheduleMap[is.id]?.length ? (
+                        <button onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
+                          className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-semibold text-orange-300">
+                          ⚠ Program Bekliyor
+                        </button>
+                      ) : faz ? (
+                        <DarkBadge tone={faz.done ? 'teal' : 'blue'} shape="soft" className="mt-0.5 w-fit">
+                          {faz.done ? '✓ Teslim' : `${faz.label}${faz.date ? ' · ' + faz.date : ''}`}
+                        </DarkBadge>
+                      ) : null}
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="truncate text-xs text-slate-400">{is.urunAdi}</p>
+                        {showTas && (
+                          <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] ${is.tasDurumu === 'alinacak' ? 'border-amber-500/20 bg-amber-500/[0.06] text-slate-400' : 'border-white/[0.06] bg-white/[0.03] text-slate-500'}`}>
+                            {is.tasDurumu === 'alinacak' ? 'Taş alınacak' : 'Stokta'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <DarkBadge tone={durumTone(is.durum)} dot shape="soft" size="sm" className="h-fit">
+                        {durumKisaEtiket(is.durum)}
+                      </DarkBadge>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-200">{paraGoster(Number(is.satisFiyati || 0))}</p>
+                    <div className="flex items-center gap-2">
+                      {is.createdAt && <p className="text-[11px] text-slate-500">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>}
+                      {hasTakipSignal && (
+                        <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                          style={{ color: takip.barColor, borderColor: takip.barColor + "44", background: takip.barColor + "15" }}>
+                          {takip.etiket}
+                        </span>
+                      )}
+                      <button onClick={e => { e.stopPropagation(); isSil(is.id); }}
+                        className="hidden group-hover:flex items-center gap-1 rounded-lg bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/25 transition">
+                        Sil
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <DarkBadge tone={durumTone(is.durum)} dot shape="soft" size="sm" className="h-fit">
-                  {durumKisaEtiket(is.durum)}
-                </DarkBadge>
-                </div>
+              )
+            })}
+          </div>
+        </aside>
+
+        {/* Sağ canvas: detay + geçici compact aksiyonlar */}
+        <main className="min-h-0 overflow-y-auto rounded-3xl border border-slate-800 bg-[#0B1120] p-5">
+          {!aktifIs ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center">
+                <p className="text-lg font-semibold text-slate-400">İş seçilmedi</p>
+                <p className="mt-1 text-sm text-slate-600">Sol listeden bir iş seçin</p>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-slate-200">{paraGoster(Number(is.satisFiyati || 0))}</p>
-                <div className="flex items-center gap-2">
-                  {is.createdAt && <p className="text-[11px] text-slate-500">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>}
-                  {hasTakipSignal && (
-                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                      style={{ color: takip.barColor, borderColor: takip.barColor + "44", background: takip.barColor + "15" }}>
-                      {takip.etiket}
-                    </span>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Seçili İş</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <h2 className="text-2xl leading-tight">{aktifIs.musteriAdi}</h2>
+                    <DarkBadge tone="purple">v{Number(aktifIs.versiyon || 1)}</DarkBadge>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <p className="text-slate-400 text-sm">{aktifIs.urunAdi}</p>
+                    <TasBadge durum={aktifIs.tasDurumu} />
+                  </div>
+                  {aktifIs.createdAt && (
+                    <p className="mt-1 text-xs text-slate-600">{new Date(aktifIs.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                   )}
-                  <button onClick={e => { e.stopPropagation(); isSil(is.id); }}
-                    className="hidden group-hover:flex items-center gap-1 rounded-lg bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/25 transition">
-                    🗑 Sil
+                </div>
+                <button onClick={() => setDurumDegistirAcik(true)}
+                  className={`rounded-full border px-3 py-1 text-xs cursor-pointer hover:opacity-80 transition ${durumRenk(aktifIs.durum)}`}>
+                  {durumEtiket(aktifIs.durum)} ▾
+                </button>
+              </div>
+
+              <div className="mt-5 grid grid-cols-4 gap-3">
+                <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Teklif Tutarı</p><p className="text-lg mt-2 text-emerald-400">{paraGoster(aktifSatis)}</p></div>
+                <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Maliyet</p><p className="text-lg mt-2">{paraGoster(aktifMaliyet)}</p></div>
+                <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Kâr</p><p className="text-lg mt-2 text-yellow-400">{paraGoster(aktifKar)}</p></div>
+                <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Kazanç</p><p className="text-lg mt-2 text-blue-400">%{aktifKarYuzde.toFixed(1)}</p></div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-[#111827] p-4">
+                {(() => {
+                  const takip = teklifTakipDurumu(aktifIs)
+                  return (
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Satış Takip Uyarısı</p>
+                        <p className={`mt-2 text-xl font-black ${takip.renk}`}>{takip.baslik}</p>
+                        <p className="mt-2 text-sm text-slate-400">{takip.metin}</p>
+                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Sıcaklık Skoru</p>
+                            <p className={`text-sm font-black ${takip.renk}`}>{takip.skor}/5 · {takip.etiket}</p>
+                          </div>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, takip.skor * 20))}%`, backgroundColor: takip.barColor }} />
+                          </div>
+                          <p className="mt-2 text-xs text-slate-400">Önerilen aksiyon: <b>{takip.aksiyon}</b></p>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">
+                          Görüntülenme: {Number(aktifIs.teklifGoruntulenmeSayisi || 0)} kez
+                          {aktifIs.teklifSonGoruntulenmeTarihi ? ` · Son bakış: ${new Date(aktifIs.teklifSonGoruntulenmeTarihi).toLocaleString("tr-TR")}` : " · Henüz açılmadı"}
+                        </p>
+                      </div>
+                      <button onClick={aktifTakipMesajiKopyala} className="shrink-0 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold hover:bg-slate-700">Akıllı Takip Mesajı Kopyala</button>
+                    </div>
+                  )
+                })()}
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-4">
+                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Taş / Ürün</p><p className="mt-2 text-sm">{aktifIs.urunAdi || '-'}</p><p className="mt-1 text-xs text-slate-500">{aktifIs.malzemeTipi || '-'}</p></div>
+                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Kaç Plaka Lazım?</p><p className="mt-2 text-xl">{Number(aktifIs.kullanilanPlakaSayisi || 0)} plaka</p><p className="mt-1 text-xs text-slate-500">{aktifIs.plakaGenislikCm || '-'} × {aktifIs.plakaUzunlukCm || '-'} cm</p></div>
+                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Taş Durumu</p><p className={`mt-2 text-lg ${aktifIs.tasDurumu === 'alinacak' ? 'text-amber-400' : aktifIs.tasDurumu ? 'text-emerald-400' : 'text-slate-400'}`}>{aktifIs.tasDurumu === 'alinacak' ? 'Taş Alınacak' : aktifIs.tasDurumu ? 'Taş Stokta' : 'Belirsiz'}</p></div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-4">
+                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Toplam Süre</p><p className="mt-2 text-xl">{Number(aktifIs.toplamSureDakika || 0).toFixed(0)} dk</p></div>
+                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Atölye İş Yükü</p><p className={`mt-2 text-xl ${isYuku > 100 ? 'text-red-400' : isYuku > 70 ? 'text-amber-400' : 'text-emerald-400'}`}>%{isYuku}</p></div>
+                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Tahsilat</p><p className="mt-2 text-xl text-cyan-400">{paraGoster(Number(aktifIs.tahsilat || 0))}</p></div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-800 bg-[#0B1120] p-5">
+                <p className="text-xs text-slate-400 mb-3">Notlar</p>
+                <p className="text-sm text-slate-300">{aktifIs.notlar || 'Bu iş için not girilmemiş.'}</p>
+              </div>
+
+              {/* Compact aksiyonlar — PATCH-2'de tab'a taşınacak */}
+              <div className="mt-4 rounded-3xl border border-slate-800 bg-[#111827] p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Aksiyonlar</p>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => router.push(`/is/detay?id=${aktifIs.id}`)}
+                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition">
+                    Satış Paneli
+                  </button>
+                  <button onClick={() => setPlakaAcik(true)}
+                    className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 transition">
+                    Plaka Optimizasyonu
+                  </button>
+                  <button onClick={() => router.push(aktifIs.musteriId ? `/dashboard/tahsilatlar?isId=${aktifIs.id}` : '/dashboard/tahsilatlar')}
+                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition">
+                    Tahsilat
+                  </button>
+                  <button onClick={() => setUretimPlaniAcik(true)}
+                    className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition">
+                    Üretim Planı
+                  </button>
+                  <button onClick={aktifLinkKopyala} disabled={!aktifIs.teklifNo}
+                    className="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition disabled:opacity-40">
+                    Linki Kopyala
+                  </button>
+                  <button onClick={aktifRevizeEt}
+                    className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-500/20 transition">
+                    Revize Teklif
+                  </button>
+                  <button onClick={aktifTakipMesajiKopyala} disabled={!aktifIs.teklifNo}
+                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition disabled:opacity-40">
+                    Akıllı Takip Mesajı
                   </button>
                 </div>
               </div>
-            </div>
-            )
-          })}
+            </>
+          )}
+        </main>
+      </div>
+
+      {/* ── DESKTOP: BOTTOM ACTION BAR ───────────────────────────────────── */}
+      <div className="hidden md:flex shrink-0 items-center justify-between border-t border-slate-800 bg-[#030712] px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push('/dashboard/yeni-is-v3?fresh=1')}
+            className="rounded-xl border border-blue-600/50 bg-blue-600/10 px-4 py-2 text-xs font-semibold text-blue-300 transition hover:bg-blue-600/20"
+          >
+            + Yeni İş
+          </button>
         </div>
-      </div>
-
-      {/* MASAÜSTÜ ORTA — DETAY */}
-      <div className="hidden md:flex md:w-[50%] p-6 flex-col gap-5 overflow-hidden">
-        {!aktifIs && <div className="text-slate-400">Bir iş seç</div>}
-        {aktifIs && (
-          <>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Seçili İş</p>
-                <div className="mt-2 flex items-center gap-3">
-                  <h2 className="text-xl md:text-2xl leading-tight">{aktifIs.musteriAdi}</h2>
-                  <DarkBadge tone="purple">v{Number(aktifIs.versiyon || 1)}</DarkBadge>
-                </div>
-                <div className="mt-2 flex items-center gap-3">
-                  <p className="text-slate-400 text-sm">{aktifIs.urunAdi}</p>
-                  <TasBadge durum={aktifIs.tasDurumu} />
-                </div>
-                {aktifIs.createdAt && (
-                  <p className="mt-1 text-xs text-slate-600">{new Date(aktifIs.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                )}
-              </div>
-              {/* Durum değiştir */}
-              <button onClick={() => setDurumDegistirAcik(true)}
-                className={`rounded-full border px-3 py-1 text-xs cursor-pointer hover:opacity-80 transition ${durumRenk(aktifIs.durum)}`}>
-                {durumEtiket(aktifIs.durum)} ▾
+        <div className="flex items-center gap-2">
+          {aktifIs && (
+            <>
+              <button
+                onClick={() => router.push(`/dashboard/yeni-is-v3?duzenle=${aktifIs.id}`)}
+                className="rounded-xl border border-slate-600/50 bg-slate-700/30 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-700/50"
+              >
+                Düzenle
               </button>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-              <div className="bg-[#111827] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Teklif Tutarı</p><p className="text-lg mt-2 text-emerald-400">{paraGoster(aktifSatis)}</p></div>
-              <div className="bg-[#111827] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Maliyet</p><p className="text-lg mt-2">{paraGoster(aktifMaliyet)}</p></div>
-              <div className="bg-[#111827] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Kâr</p><p className="text-lg mt-2 text-yellow-400">{paraGoster(aktifKar)}</p></div>
-              <div className="bg-[#111827] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Kazanç</p><p className="text-lg mt-2 text-blue-400">%{aktifKarYuzde.toFixed(1)}</p></div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-[#0B1120] p-3 md:p-4">
-              {(() => {
-                const takip = teklifTakipDurumu(aktifIs)
-                return (
-                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Satış Takip Uyarısı</p>
-                      <p className={`mt-2 text-xl font-black ${takip.renk}`}>{takip.baslik}</p>
-                      <p className="mt-2 text-sm text-slate-400">{takip.metin}</p>
-                      <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Sıcaklık Skoru</p>
-                          <p className={`text-sm font-black ${takip.renk}`}>{takip.skor}/5 · {takip.etiket}</p>
-                        </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, takip.skor * 20))}%`, backgroundColor: takip.barColor }} />
-                        </div>
-                        <p className="mt-2 text-xs text-slate-400">Önerilen aksiyon: <b>{takip.aksiyon}</b></p>
-                      </div>
-                      <p className="mt-2 text-xs text-slate-500">
-                        Görüntülenme: {Number(aktifIs.teklifGoruntulenmeSayisi || 0)} kez
-                        {aktifIs.teklifSonGoruntulenmeTarihi ? ` · Son bakış: ${new Date(aktifIs.teklifSonGoruntulenmeTarihi).toLocaleString("tr-TR")}` : " · Henüz açılmadı"}
-                      </p>
-                    </div>
-                    <button onClick={aktifTakipMesajiKopyala} className="w-full md:w-auto shrink-0 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold hover:bg-slate-700">Akıllı Takip Mesajı Kopyala</button>
-                  </div>
-                )
-              })()}
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Taş / Ürün</p><p className="mt-2 text-sm">{aktifIs.urunAdi || '-'}</p><p className="mt-1 text-xs text-slate-500">{aktifIs.malzemeTipi || '-'}</p></div>
-              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Kaç Plaka Lazım?</p><p className="mt-2 text-xl">{Number(aktifIs.kullanilanPlakaSayisi || 0)} plaka</p><p className="mt-1 text-xs text-slate-500">{aktifIs.plakaGenislikCm || '-'} × {aktifIs.plakaUzunlukCm || '-'} cm</p></div>
-              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Taş Durumu</p><p className={`mt-2 text-lg ${aktifIs.tasDurumu === 'alinacak' ? 'text-amber-400' : aktifIs.tasDurumu ? 'text-emerald-400' : 'text-slate-400'}`}>{aktifIs.tasDurumu === 'alinacak' ? 'Taş Alınacak' : aktifIs.tasDurumu ? 'Taş Stokta' : 'Belirsiz'}</p></div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Toplam Süre</p><p className="mt-2 text-xl">{Number(aktifIs.toplamSureDakika || 0).toFixed(0)} dk</p></div>
-              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Atölye İş Yükü</p><p className={`mt-2 text-xl ${isYuku > 100 ? 'text-red-400' : isYuku > 70 ? 'text-amber-400' : 'text-emerald-400'}`}>%{isYuku}</p></div>
-              <div className="bg-[#0B1120] border border-slate-800 p-3 md:p-4 rounded-xl"><p className="text-xs text-slate-400">Tahsilat</p><p className="mt-2 text-xl text-cyan-400">{paraGoster(Number(aktifIs.tahsilat || 0))}</p></div>
-            </div>
-
-            <div className="bg-[#0B1120] border border-slate-800 p-5 rounded-xl flex-1">
-              <p className="text-xs text-slate-400 mb-3">Notlar</p>
-              <p className="text-sm text-slate-300">{aktifIs.notlar || 'Bu iş için not girilmemiş.'}</p>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* MASAÜSTÜ SAĞ — AKSIYONLAR */}
-      <div className="hidden md:flex md:w-[25%] p-6 border-l border-slate-800 flex-col gap-4">
-        <button onClick={() => router.push('/dashboard/yeni-is-v3?fresh=1')} className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-semibold">+ Yeni İş</button>
-        <button disabled={!aktifIs} onClick={() => router.push(`/dashboard/yeni-is-v3?duzenle=${aktifIs?.id}`)} className="bg-blue-600 hover:bg-blue-500 p-4 rounded-xl disabled:bg-slate-700">✏️ Düzenle</button>
-        <button disabled={!aktifIs} onClick={() => router.push(`/is/detay?id=${aktifIs?.id}`)} className="bg-emerald-600 hover:bg-emerald-500 p-4 rounded-xl disabled:bg-slate-700">Satış Paneli</button>
-        <button disabled={!aktifIs} onClick={() => setPlakaAcik(true)} className="bg-indigo-600 hover:bg-indigo-500 p-4 rounded-xl disabled:bg-slate-700">Plaka Optimizasyonu</button>
-        <button disabled={!aktifIs} onClick={() => router.push(aktifIs?.musteriId ? `/dashboard/tahsilatlar?isId=${aktifIs.id}` : '/dashboard/tahsilatlar')} className="bg-amber-600 hover:bg-amber-500 p-4 rounded-xl disabled:bg-slate-700">Tahsilat</button>
-        <button disabled={!aktifIs} onClick={() => setUretimPlaniAcik(true)} className="bg-purple-600 hover:bg-purple-500 p-4 rounded-xl disabled:bg-slate-700">Üretim Planı</button>
-        <button disabled={!aktifIs} onClick={() => window.open(`/api/isler/${aktifIs?.id}/pdf`, "_blank")} className="bg-slate-700 hover:bg-slate-600 p-4 rounded-xl disabled:bg-slate-800">PDF Teklif</button>
-        <button onClick={aktifWhatsappGonder} disabled={!aktifIs?.teklifNo} className="w-full rounded-2xl bg-green-600 px-5 py-4 text-white font-bold hover:bg-green-500 disabled:opacity-40">📲 WhatsApp ile Gönder</button>
-        <button onClick={aktifLinkKopyala} disabled={!aktifIs?.teklifNo} className="w-full rounded-2xl bg-slate-800 px-5 py-4 text-white font-bold hover:bg-slate-700 disabled:opacity-40">🔗 Linki Kopyala</button>
-        <button onClick={aktifRevizeEt} disabled={!aktifIs} className="w-full rounded-2xl bg-purple-600 px-5 py-4 text-white font-bold hover:bg-purple-500 disabled:opacity-40">✏️ Revize Teklif</button>
-        <button onClick={aktifTakipMesajiKopyala} disabled={!aktifIs?.teklifNo} className="w-full rounded-2xl bg-amber-600 px-5 py-4 text-white font-bold hover:bg-amber-500 disabled:opacity-40">⏱ Akıllı Takip Mesajı Kopyala</button>
+              <button
+                onClick={() => window.open(`/api/isler/${aktifIs.id}/pdf`, "_blank")}
+                className="rounded-xl border border-slate-600/50 bg-slate-700/30 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-700/50"
+              >
+                PDF Teklif
+              </button>
+              <button
+                onClick={aktifWhatsappGonder}
+                disabled={!aktifIs.teklifNo}
+                className="rounded-xl border border-green-600/50 bg-green-600/10 px-4 py-2 text-xs font-semibold text-green-300 transition hover:bg-green-600/20 disabled:opacity-40"
+              >
+                WhatsApp
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* FİLTRE BOTTOM SHEET */}
