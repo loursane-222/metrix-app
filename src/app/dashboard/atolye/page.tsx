@@ -135,6 +135,10 @@ export default function AtolyePage() {
   const [ortalamalar, setOrtalamalar] = useState<Record<string, number>>({})
   const [yeniGider, setYeniGider] = useState({ tarih: bugunStr(), kategori: 'toplamMaas', aciklama: '', tutar: '' })
   const [giderYukleniyor, setGiderYukleniyor] = useState(false)
+  const [personelKayitMaasToplami, setPersonelKayitMaasToplami] = useState(0)
+  const [personelKayitSgkToplami, setPersonelKayitSgkToplami] = useState(0)
+  const [personelKayitSayisi, setPersonelKayitSayisi] = useState(0)
+  const [aktarMesaj, setAktarMesaj] = useState('')
 
   const [yeniMakine, setYeniMakine] = useState({ makineAdi: '', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikAktifCalismaSaati: '' })
   const [yeniArac, setYeniArac] = useState({ aracAdi: '', aracTipi: 'Kamyonet', alinanBedel: '', paraBirimi: 'TRY', amortismanSuresiAy: '', aylikBakim: '', aylikSigortaKasko: '', aylikVergiMuayene: '' })
@@ -179,12 +183,25 @@ export default function AtolyePage() {
     setAraclar(arv.araclar || [])
     setGecmisGiderler(gv.giderler || [])
     setOrtalamalar(gv.ortalamalar || {})
+    setPersonelKayitMaasToplami(Number(av.personelKayitMaasToplami) || 0)
+    setPersonelKayitSgkToplami(Number(av.personelKayitSgkToplami) || 0)
+    setPersonelKayitSayisi(Number(av.personelKayitSayisi) || 0)
   }
 
   useEffect(() => { yukle() }, [])
 
   function setAlan(k: keyof FormState, v: string) {
     setForm(prev => ({ ...prev, [k]: k === 'plakaBasinaMtul' ? v.replace(',', '.') : v }))
+  }
+
+  function personeldenAktar() {
+    setForm(prev => ({
+      ...prev,
+      toplamMaas: String(Math.round(personelKayitMaasToplami)),
+      sgkGideri: String(Math.round(personelKayitSgkToplami)),
+    }))
+    setAktarMesaj('Aktarıldı')
+    setTimeout(() => setAktarMesaj(''), 3000)
   }
 
   function rawVal(v: string) {
@@ -466,6 +483,21 @@ export default function AtolyePage() {
                 <p className="text-[10px] uppercase tracking-widest text-blue-400 pt-1">Personel</p>
                 <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} value={form["toplamMaas"] as string} onChange={setAlan} />
                 <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} value={form["sgkGideri"] as string} onChange={setAlan} />
+                {personelKayitSayisi > 0 && (
+                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-wider text-blue-400">Personel kayıtlarından hesaplanan</p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      {Math.round(personelKayitMaasToplami + personelKayitSgkToplami).toLocaleString('tr-TR')} ₺
+                      <span className="ml-1.5 text-xs font-normal text-slate-400">· {personelKayitSayisi} kişi</span>
+                    </p>
+                    <button
+                      onClick={personeldenAktar}
+                      className="mt-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/20"
+                    >
+                      {aktarMesaj || 'Kayıtlardan Aktar'}
+                    </button>
+                  </div>
+                )}
                 <ParaInput label="Yemek Gideri" fieldKey="yemekGideri" ort={ortalamalar.yemekGideri} value={form["yemekGideri"] as string} onChange={setAlan} />
                 <ParaInput label="Yol Gideri" fieldKey="yolGideri" ort={ortalamalar.yolGideri} value={form["yolGideri"] as string} onChange={setAlan} />
 
@@ -741,6 +773,23 @@ export default function AtolyePage() {
                 <div className="sm:col-span-2 xl:col-span-3"><p className="text-[10px] uppercase tracking-widest text-blue-400">Personel</p></div>
                 <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} value={form.toplamMaas} onChange={setAlan} />
                 <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} value={form.sgkGideri} onChange={setAlan} />
+                {personelKayitSayisi > 0 && (
+                  <div className="sm:col-span-2 xl:col-span-3 flex items-center justify-between gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wider text-blue-400">Personel kayıtlarından hesaplanan maliyet</p>
+                      <p className="mt-0.5 text-sm font-semibold text-white">
+                        {Math.round(personelKayitMaasToplami + personelKayitSgkToplami).toLocaleString('tr-TR')} ₺
+                        <span className="ml-2 text-xs font-normal text-slate-400">· {personelKayitSayisi} aktif personel</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={personeldenAktar}
+                      className="shrink-0 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/20"
+                    >
+                      {aktarMesaj || 'Kayıtlardan Aktar'}
+                    </button>
+                  </div>
+                )}
                 <ParaInput label="Yemek Gideri" fieldKey="yemekGideri" ort={ortalamalar.yemekGideri} value={form.yemekGideri} onChange={setAlan} />
                 <ParaInput label="Yol Gideri" fieldKey="yolGideri" ort={ortalamalar.yolGideri} value={form.yolGideri} onChange={setAlan} />
                 <div className="sm:col-span-2 xl:col-span-3"><p className="text-[10px] uppercase tracking-widest text-blue-400 pt-1">Sabit Giderler</p></div>
