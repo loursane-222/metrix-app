@@ -121,6 +121,7 @@ export default function AtolyePage() {
   const [araclar, setAraclar] = useState<Arac[]>([])
   const [logoUrl, setLogoUrl] = useState('')
   const [aktifSol, setAktifSol] = useState<'kimlik' | 'gider' | 'kapasite'>('kimlik')
+  const [aktifTab, setAktifTab] = useState<'genel' | 'uretim' | 'kaynaklar' | 'giderler'>('genel')
   const [makineModal, setMakineModal] = useState(false)
   const [aracModal, setAracModal] = useState(false)
   const [detayModal, setDetayModal] = useState<'makine' | 'arac' | null>(null)
@@ -399,7 +400,17 @@ export default function AtolyePage() {
         </div>
       </div>
 
-      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:flex-1 md:min-h-0 md:grid-cols-[270px_minmax(0,1fr)] md:p-3 md:overflow-hidden">
+      {/* DESKTOP SECTION TABS */}
+      <div className="hidden md:flex items-center gap-2 border-b border-slate-800/60 px-4 py-2 shrink-0">
+        <div className="flex items-center gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-1">
+          <button onClick={() => setAktifTab('genel')} className={`rounded-xl px-4 py-1.5 text-sm font-medium transition-colors ${aktifTab === 'genel' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Genel Bakış</button>
+          <button onClick={() => setAktifTab('uretim')} className={`rounded-xl px-4 py-1.5 text-sm font-medium transition-colors ${aktifTab === 'uretim' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Üretim Modeli</button>
+          <button onClick={() => setAktifTab('kaynaklar')} className={`rounded-xl px-4 py-1.5 text-sm font-medium transition-colors ${aktifTab === 'kaynaklar' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Kaynaklar</button>
+          <button onClick={() => setAktifTab('giderler')} className={`rounded-xl px-4 py-1.5 text-sm font-medium transition-colors ${aktifTab === 'giderler' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Giderler</button>
+        </div>
+      </div>
+
+      <div className="md:hidden grid min-h-[100dvh] grid-cols-1 gap-3">
 
         <button onClick={() => setMobileSolOpen(true)} className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] left-4 z-[120] rounded-2xl bg-slate-800 px-5 py-4 text-sm font-bold shadow-2xl md:hidden">Atölye</button>
         <button onClick={() => setMobileSagOpen(true)} className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] right-4 z-[120] rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-2xl md:hidden">Karar</button>
@@ -599,6 +610,188 @@ export default function AtolyePage() {
             {mesaj && <p className="text-center text-xs text-emerald-300">{mesaj}</p>}
           </div>
         </aside>
+      </div>
+
+      {/* DESKTOP COCKPIT CANVAS */}
+      <div className="hidden md:block md:flex-1 md:min-h-0 md:overflow-y-auto md:p-4">
+
+        {aktifTab === 'genel' && (
+          <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
+            <div className="flex flex-col gap-4">
+              <div className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
+                <p className="text-xs uppercase tracking-widest text-slate-500">Aylık Toplam Gider</p>
+                <p className="mt-1 text-4xl font-bold tabular-nums">{tl(hesap.toplam)}</p>
+                <div className="mt-4 grid grid-cols-4 gap-2">
+                  <SmallStat label="Personel" value={tl(hesap.personel)} />
+                  <SmallStat label="Sabit Gider" value={tl(hesap.sabit)} />
+                  <SmallStat label="Makine Amort." value={tl(hesap.makine)} />
+                  <SmallStat label="Araç Maliyeti" value={tl(hesap.arac)} />
+                </div>
+              </div>
+              <div className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
+                <div className="mb-3 flex justify-between text-xs text-slate-400">
+                  <span>Gider Dağılımı</span><span>{tl(hesap.toplam)}</span>
+                </div>
+                <div className="h-5 overflow-hidden rounded-full bg-slate-800 flex">
+                  <div style={{ width: `${hesap.oranPersonel}%` }} className="bg-blue-500" />
+                  <div style={{ width: `${hesap.oranSabit}%` }} className="bg-emerald-500" />
+                  <div style={{ width: `${hesap.oranMakine}%` }} className="bg-amber-500" />
+                  <div style={{ width: `${hesap.oranArac}%` }} className="bg-violet-500" />
+                </div>
+                <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
+                  <Break label="Personel" value={pct(hesap.oranPersonel)} color="bg-blue-500" />
+                  <Break label="Sabit" value={pct(hesap.oranSabit)} color="bg-emerald-500" />
+                  <Break label="Makine" value={pct(hesap.oranMakine)} color="bg-amber-500" />
+                  <Break label="Araç" value={pct(hesap.oranArac)} color="bg-violet-500" />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
+                <p className="mb-3 text-sm text-slate-400">Kaynaklar</p>
+                <div className="flex flex-col gap-2">
+                  <ResourceCard title="Makineler" count={makineler.length} value={tl(hesap.makine)} onDetail={() => setDetayModal('makine')} onAdd={() => setMakineModal(true)} />
+                  <ResourceCard title="Araçlar" count={araclar.length} value={tl(hesap.arac)} onDetail={() => setDetayModal('arac')} onAdd={() => setAracModal(true)} />
+                </div>
+              </div>
+              <div className={`rounded-3xl border p-5 ${hesap.durumTone}`}>
+                <p className="text-sm font-semibold">{hesap.durum}</p>
+                <p className="mt-2 text-xs leading-relaxed opacity-90">{hesap.tavsiye}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {aktifTab === 'uretim' && (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+              <ModelCard label="Aylık Plaka" value={hesap.toplamPlaka.toFixed(0)} sub="adet" />
+              <ModelCard label="Aylık Mtül" value={hesap.aylikMtul.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sub="mtül" />
+              <ModelCard label="Çalışma" value="12.480" sub="dk/ay" />
+              <ModelCard label="Plaka Maliyeti" value={Math.round(hesap.plakaMaliyet).toLocaleString('tr-TR')} sub="₺ / plaka" compact />
+            </div>
+            <div className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
+              <div className="mb-3 flex justify-between text-xs text-slate-400">
+                <span>Gider Dağılımı</span><span>{tl(hesap.toplam)}</span>
+              </div>
+              <div className="h-5 overflow-hidden rounded-full bg-slate-800 flex">
+                <div style={{ width: `${hesap.oranPersonel}%` }} className="bg-blue-500" />
+                <div style={{ width: `${hesap.oranSabit}%` }} className="bg-emerald-500" />
+                <div style={{ width: `${hesap.oranMakine}%` }} className="bg-amber-500" />
+                <div style={{ width: `${hesap.oranArac}%` }} className="bg-violet-500" />
+              </div>
+              <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
+                <Break label="Personel" value={pct(hesap.oranPersonel)} color="bg-blue-500" />
+                <Break label="Sabit" value={pct(hesap.oranSabit)} color="bg-emerald-500" />
+                <Break label="Makine" value={pct(hesap.oranMakine)} color="bg-amber-500" />
+                <Break label="Araç" value={pct(hesap.oranArac)} color="bg-violet-500" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {aktifTab === 'kaynaklar' && (
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <ResourceCard title="Makineler" count={makineler.length} value={tl(hesap.makine)} onDetail={() => setDetayModal('makine')} onAdd={() => setMakineModal(true)} />
+              <ResourceCard title="Araçlar" count={araclar.length} value={tl(hesap.arac)} onDetail={() => setDetayModal('arac')} onAdd={() => setAracModal(true)} />
+            </div>
+            <div className="rounded-3xl border border-slate-800 bg-[#111827] p-5">
+              <p className="text-xs text-slate-500">Operasyon Notu</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-300">{hesap.tavsiye}</p>
+            </div>
+          </div>
+        )}
+
+        {aktifTab === 'giderler' && (
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-4 xl:grid-cols-[260px_1fr]">
+              <div className="flex flex-col gap-3">
+                <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 flex items-center justify-center">
+                      {logoUrl ? <img src={logoUrl} alt="Logo" className="h-full w-full object-cover" /> : <span className="text-xs text-slate-500">Logo</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{form.atolyeAdi || 'Atölye'}</p>
+                      <p className="text-xs text-slate-400">{[form.sehir, form.ilce].filter(Boolean).join(' / ') || 'Konum yok'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => logoInputRef.current?.click()} className="mt-3 w-full rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">
+                    {logoYukleniyor ? 'Yükleniyor...' : 'Logo Yükle'}
+                  </button>
+                </div>
+                <div className="flex gap-1 rounded-xl border border-white/[0.06] bg-white/[0.03] p-1">
+                  <button onClick={() => setAktifSol('kimlik')} className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${aktifSol === 'kimlik' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Kimlik</button>
+                  <button onClick={() => setAktifSol('gider')} className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${aktifSol === 'gider' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Giderler</button>
+                  <button onClick={() => setAktifSol('kapasite')} className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors ${aktifSol === 'kapasite' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Kapasite</button>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
+                {aktifSol === 'kimlik' && (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <Input label="Atölye Adı" value={form.atolyeAdi} onChange={(v: string) => setAlan('atolyeAdi', v)} />
+                    <Input label="Şehir" value={form.sehir} onChange={(v: string) => setAlan('sehir', v)} />
+                    <Input label="İlçe" value={form.ilce} onChange={(v: string) => setAlan('ilce', v)} />
+                    <Input label="Telefon" value={form.telefon} onChange={(v: string) => setAlan('telefon', v)} />
+                    <Input label="Kuruluş Yılı" value={form.kurulusYili} onChange={(v: string) => setAlan('kurulusYili', v)} />
+                    <Input label="E-posta" value={form.email} onChange={(v: string) => setAlan('email', v)} />
+                  </div>
+                )}
+                {aktifSol === 'gider' && (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="sm:col-span-2 xl:col-span-3"><p className="text-[10px] uppercase tracking-widest text-blue-400">Personel</p></div>
+                    <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} value={form.toplamMaas} onChange={setAlan} />
+                    <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} value={form.sgkGideri} onChange={setAlan} />
+                    <ParaInput label="Yemek Gideri" fieldKey="yemekGideri" ort={ortalamalar.yemekGideri} value={form.yemekGideri} onChange={setAlan} />
+                    <ParaInput label="Yol Gideri" fieldKey="yolGideri" ort={ortalamalar.yolGideri} value={form.yolGideri} onChange={setAlan} />
+                    <div className="sm:col-span-2 xl:col-span-3"><p className="text-[10px] uppercase tracking-widest text-blue-400 pt-1">Sabit Giderler</p></div>
+                    <ParaInput label="Kira" fieldKey="kira" ort={ortalamalar.kira} value={form.kira} onChange={setAlan} />
+                    <ParaInput label="Elektrik" fieldKey="elektrik" ort={ortalamalar.elektrik} value={form.elektrik} onChange={setAlan} />
+                    <ParaInput label="Su" fieldKey="su" ort={ortalamalar.su} value={form.su} onChange={setAlan} />
+                    <ParaInput label="Doğalgaz" fieldKey="dogalgaz" ort={ortalamalar.dogalgaz} value={form.dogalgaz} onChange={setAlan} />
+                    <ParaInput label="İnternet" fieldKey="internet" ort={ortalamalar.internet} value={form.internet} onChange={setAlan} />
+                    <ParaInput label="Sarf Malzeme" fieldKey="sarfMalzeme" ort={ortalamalar.sarfMalzeme} value={form.sarfMalzeme} onChange={setAlan} />
+                    <ParaInput label="Diğer Giderler" fieldKey="digerGider" ort={ortalamalar.diger} value={form.digerGider} onChange={setAlan} />
+                  </div>
+                )}
+                {aktifSol === 'kapasite' && (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <Input label="Porselen Plaka/Ay" value={form.aylikPorselenPlaka} onChange={(v: string) => setAlan('aylikPorselenPlaka', v)} />
+                    <Input label="Kuvars Plaka/Ay" value={form.aylikKuvarsPlaka} onChange={(v: string) => setAlan('aylikKuvarsPlaka', v)} />
+                    <Input label="Doğaltaş Plaka/Ay" value={form.aylikDogaltasPlaka} onChange={(v: string) => setAlan('aylikDogaltasPlaka', v)} />
+                    <Input label="Plaka Başına Mtül" value={form.plakaBasinaMtul} onChange={(v: string) => setAlan('plakaBasinaMtul', v)} />
+                    <Input label="KDV %" value={form.kdvOrani} onChange={(v: string) => setAlan('kdvOrani', v)} />
+                    <Input label="Teklif Geçerlilik (gün)" value={form.teklifGecerlilik} onChange={(v: string) => setAlan('teklifGecerlilik', v)} />
+                  </div>
+                )}
+              </div>
+            </div>
+            {aktifSol === 'gider' && gecmisGiderler.length > 0 && (
+              <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
+                <p className="mb-3 text-[10px] uppercase tracking-widest text-slate-500">Geçmiş Gider Kayıtları</p>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {gecmisGiderler.slice(0, 12).map(g => (
+                    <div key={g.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-700 bg-[#0B1120] px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-white">
+                          {KATEGORİLER.find(k => k.key === g.kategori)?.label || g.kategori}
+                          {g.aciklama ? ` — ${g.aciklama}` : ''}
+                        </p>
+                        <p className="text-[10px] text-slate-500">{new Date(g.tarih).toLocaleDateString('tr-TR', { month: 'short', year: 'numeric' })}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <p className="text-xs text-emerald-400">{Number(g.tutar).toLocaleString('tr-TR')} ₺</p>
+                        <button onClick={() => giderSil(g.id)} className="text-[10px] text-red-400 hover:text-red-300">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
 
       {/* DESKTOP BOTTOM ACTION BAR */}
