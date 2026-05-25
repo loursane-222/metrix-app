@@ -36,7 +36,23 @@ export async function GET() {
   if (!atolye) return NextResponse.json({ hata: 'Atölye bulunamadı.' }, { status: 404 })
 
   const { toplamAylikGider, dakikaMaliyeti, gunlukGider } = toplamHesapla(atolye)
-  return NextResponse.json({ atolye, toplamAylikGider, dakikaMaliyeti, gunlukGider })
+
+  const aktifPersoneller = await prisma.personel.findMany({
+    where: { atolyeId: atolye.id, aktif: true },
+    select: { brutMaas: true, sgkOrani: true },
+  })
+  const personelKayitMaasToplami = aktifPersoneller.reduce((sum, p) => sum + Number(p.brutMaas), 0)
+  const personelKayitSgkToplami = aktifPersoneller.reduce((sum, p) => sum + Number(p.brutMaas) * (Number(p.sgkOrani) / 100), 0)
+  const personelKayitToplamMaliyet = personelKayitMaasToplami + personelKayitSgkToplami
+  const personelKayitSayisi = aktifPersoneller.length
+
+  return NextResponse.json({
+    atolye, toplamAylikGider, dakikaMaliyeti, gunlukGider,
+    personelKayitMaasToplami,
+    personelKayitSgkToplami,
+    personelKayitToplamMaliyet,
+    personelKayitSayisi,
+  })
 }
 
 export async function POST(req: NextRequest) {
