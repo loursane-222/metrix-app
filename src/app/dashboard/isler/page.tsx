@@ -45,6 +45,7 @@ export default function IslerPage() {
   const [filterSheetAcik, setFilterSheetAcik] = useState(false)
   const [draftDurum, setDraftDurum] = useState("tumu")
   const [draftZaman, setDraftZaman] = useState("tumu")
+  const [desktopMoreOpen, setDesktopMoreOpen] = useState(false)
 
   function aktifTeklifLinki() {
     if (!aktifIs?.teklifNo) return ""
@@ -820,40 +821,6 @@ export default function IslerPage() {
                 <p className="text-sm text-slate-300">{aktifIs.notlar || 'Bu iş için not girilmemiş.'}</p>
               </div>
 
-              {/* Compact aksiyonlar — PATCH-2'de tab'a taşınacak */}
-              <div className="mt-4 rounded-3xl border border-slate-800 bg-[#111827] p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Aksiyonlar</p>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => router.push(`/is/detay?id=${aktifIs.id}`)}
-                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition">
-                    Satış Paneli
-                  </button>
-                  <button onClick={() => setPlakaAcik(true)}
-                    className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 transition">
-                    Plaka Optimizasyonu
-                  </button>
-                  <button onClick={() => router.push(aktifIs.musteriId ? `/dashboard/tahsilatlar?isId=${aktifIs.id}` : '/dashboard/tahsilatlar')}
-                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition">
-                    Tahsilat
-                  </button>
-                  <button onClick={() => setUretimPlaniAcik(true)}
-                    className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition">
-                    Üretim Planı
-                  </button>
-                  <button onClick={aktifLinkKopyala} disabled={!aktifIs.teklifNo}
-                    className="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 transition disabled:opacity-40">
-                    Linki Kopyala
-                  </button>
-                  <button onClick={aktifRevizeEt}
-                    className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-500/20 transition">
-                    Revize Teklif
-                  </button>
-                  <button onClick={aktifTakipMesajiKopyala} disabled={!aktifIs.teklifNo}
-                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition disabled:opacity-40">
-                    Akıllı Takip Mesajı
-                  </button>
-                </div>
-              </div>
             </>
           )}
         </main>
@@ -861,7 +828,7 @@ export default function IslerPage() {
 
       {/* ── DESKTOP: BOTTOM ACTION BAR ───────────────────────────────────── */}
       <div className="hidden md:flex shrink-0 items-center justify-between border-t border-slate-800 bg-[#030712] px-4 py-2.5">
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => router.push('/dashboard/yeni-is-v3?fresh=1')}
             className="rounded-xl border border-blue-600/50 bg-blue-600/10 px-4 py-2 text-xs font-semibold text-blue-300 transition hover:bg-blue-600/20"
@@ -869,28 +836,87 @@ export default function IslerPage() {
             + Yeni İş
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          {aktifIs && (
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          {!aktifIs ? (
+            <p className="text-xs text-slate-600">İş seçin</p>
+          ) : (
             <>
               <button
+                onClick={() => router.push(`/is/detay?id=${aktifIs.id}`)}
+                className="rounded-xl border border-emerald-600/40 bg-emerald-600/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-600/20 whitespace-nowrap"
+              >
+                Satış Paneli
+              </button>
+              <button
                 onClick={() => router.push(`/dashboard/yeni-is-v3?duzenle=${aktifIs.id}`)}
-                className="rounded-xl border border-slate-600/50 bg-slate-700/30 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-700/50"
+                className="rounded-xl border border-slate-600/50 bg-slate-700/30 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-700/50 whitespace-nowrap"
               >
                 Düzenle
               </button>
               <button
                 onClick={() => window.open(`/api/isler/${aktifIs.id}/pdf`, "_blank")}
-                className="rounded-xl border border-slate-600/50 bg-slate-700/30 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-700/50"
+                className="rounded-xl border border-slate-600/50 bg-slate-700/30 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-700/50 whitespace-nowrap"
               >
-                PDF Teklif
+                PDF
               </button>
               <button
                 onClick={aktifWhatsappGonder}
                 disabled={!aktifIs.teklifNo}
-                className="rounded-xl border border-green-600/50 bg-green-600/10 px-4 py-2 text-xs font-semibold text-green-300 transition hover:bg-green-600/20 disabled:opacity-40"
+                className="rounded-xl border border-green-600/50 bg-green-600/10 px-3 py-2 text-xs font-semibold text-green-300 transition hover:bg-green-600/20 disabled:opacity-40 whitespace-nowrap"
               >
-                WhatsApp
+                WA
               </button>
+              <button
+                onClick={() => router.push(aktifIs.musteriId ? `/dashboard/tahsilatlar?isId=${aktifIs.id}` : '/dashboard/tahsilatlar')}
+                className="rounded-xl border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-600/20 whitespace-nowrap"
+              >
+                Tahsilat
+              </button>
+              <button
+                onClick={() => setPlakaAcik(true)}
+                className="rounded-xl border border-indigo-600/40 bg-indigo-600/10 px-3 py-2 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-600/20 whitespace-nowrap"
+              >
+                Plaka Opt.
+              </button>
+              <button
+                onClick={() => setUretimPlaniAcik(true)}
+                className="rounded-xl border border-purple-600/40 bg-purple-600/10 px-3 py-2 text-xs font-semibold text-purple-300 transition hover:bg-purple-600/20 whitespace-nowrap"
+              >
+                Üretim
+              </button>
+              {/* Diğer popover */}
+              <div className="relative">
+                <button
+                  onClick={() => setDesktopMoreOpen(o => !o)}
+                  className="rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs font-semibold text-slate-400 transition hover:bg-slate-700 whitespace-nowrap"
+                >
+                  Diğer ▾
+                </button>
+                {desktopMoreOpen && (
+                  <div className="absolute bottom-[calc(100%+8px)] right-0 z-[50] min-w-[180px] rounded-2xl border border-slate-700 bg-[#0B1120] p-2 shadow-2xl">
+                    <button
+                      onClick={() => { aktifLinkKopyala(); setDesktopMoreOpen(false) }}
+                      disabled={!aktifIs.teklifNo}
+                      className="flex w-full items-center rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      Linki Kopyala
+                    </button>
+                    <button
+                      onClick={() => { aktifRevizeEt(); setDesktopMoreOpen(false) }}
+                      className="flex w-full items-center rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-violet-300 transition hover:bg-slate-800"
+                    >
+                      Revize Teklif
+                    </button>
+                    <button
+                      onClick={() => { aktifTakipMesajiKopyala(); setDesktopMoreOpen(false) }}
+                      disabled={!aktifIs.teklifNo}
+                      className="flex w-full items-center rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-amber-300 transition hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      Akıllı Takip Mesajı
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
