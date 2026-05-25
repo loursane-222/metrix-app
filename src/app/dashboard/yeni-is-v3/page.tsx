@@ -246,6 +246,21 @@ function defaultParcalar(tip: MutfakTipi): Parca[] {
   }
 }
 
+function parcaSatisKatsayisi(tip: Parca["tip"] | string, ad = "") {
+  const normalize = (v: string) => v.toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g")
+    .replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  const rawTip = normalize(String(tip || ""));
+  const rawAd = normalize(ad);
+  const s = `${rawTip} ${rawAd}`;
+
+  if (s.includes("ada")) return 1.5;
+  if (s.includes("tezgah arasi") || s.includes("panel")) return 0.75;
+  return 1;
+}
+
 // ─── Hesap motoru ─────────────────────────────────────────────────────────────
 function hesapla(form: FormState, makineler: any[]) {
   const makineMaliyet = (id: string) => {
@@ -323,11 +338,17 @@ function hesapla(form: FormState, makineler: any[]) {
   const kar = satisFiyati - toplamMaliyet;
   const karYuzde = toplamMaliyet > 0 ? (kar / toplamMaliyet) * 100 : 0;
   const birimFiyat = toplamMtul > 0 ? satisFiyati / toplamMtul : 0;
+  const weightedMtul = form.parcalar.reduce((acc, p) => {
+    const en = n(p.en), boy = n(p.boy), adet = n(p.adet) || 1;
+    if (en <= 0 || boy <= 0) return acc;
+    return acc + (boy / 100) * adet * parcaSatisKatsayisi(p.tip, p.ad);
+  }, 0);
+  const baseSatisMtul = satisFiyati > 0 && weightedMtul > 0 ? satisFiyati / weightedMtul : 0;
 
   return {
     toplamMtul, toplamOnAlinMtul, toplamParcaAlani, plakaSayisi,
     plakaFiyatiTl, malzemeMaliyeti, iscilikMaliyeti, toplamMaliyet,
-    satisFiyati, kar, karYuzde, birimFiyat, toplamDakika,
+    satisFiyati, kar, karYuzde, birimFiyat, weightedMtul, baseSatisMtul, toplamDakika,
     eviyeMaliyet, ocakMaliyet, prizMaliyet,
     ...operasyonMtul,
   };
@@ -374,6 +395,7 @@ export default function YeniIsV3Page() {
 
   const [aktifAdim, setAktifAdim] = useState<Adim>("musteri");
   const [form, setForm] = useState<FormState>(defaultForm);
+  const [satirFiyatOverride, setSatirFiyatOverride] = useState<Record<string, string>>({});
   const [musteriler, setMusteriler] = useState<any[]>([]);
   const [makineler, setMakineler]   = useState<any[]>([]);
   const [musteriArama, setMusteriArama]     = useState("");
@@ -636,10 +658,74 @@ export default function YeniIsV3Page() {
   }
   function parcaSil(id: string) {
     setForm((p) => ({ ...p, parcalar: p.parcalar.filter((x) => x.id !== id) }));
+    setSatirFiyatOverride((p) => {
+      const next = { ...p };
+      delete next[id];
+      return next;
+    });
   }
 
   const hesap = useMemo(() => hesapla(form, makineler), [form, makineler]);
   const laborV2Enabled = process.env.NEXT_PUBLIC_LABOR_V2_PREVIEW === "true";
+  const kalemAnaliz = useMemo(() => {
+    const makineMaliyetFn = (id: string) => {
+      const m = makineler.find((x: any) => x.id === id);
+      return Number(m?.dakikalikMaliyet ?? m?.dkMaliyet ?? m?.dakikaMaliyet ?? m?.hesaplananDakikaMaliyeti ?? 0) || 106;
+    };
+    const satirlar: any[] = [];
+
+    form.parcalar.forEach((p) => {
+      const en = n(p.en), boy = n(p.boy), adet = n(p.adet) || 1;
+      if (en <= 0 || boy <= 0) return;
+
+      const mtul = (boy / 100) * adet;
+      const maliyetDk = mtul * n(form.tezgahDakika || "25");
+      const maliyetTl = maliyetDk * makineMaliyetFn(form.tezgahMakineId);
+      const plakaPayi = hesap.toplamParcaAlani > 0
+        ? (en * boy * adet / hesap.toplamParcaAlani) * hesap.malzemeMaliyeti
+        : 0;
+      const maliyetMtul = mtul > 0 ? (maliyetTl + plakaPayi) / mtul : 0;
+      const defaultSatisMtul = hesap.baseSatisMtul * parcaSatisKatsayisi(p.tip, p.ad);
+      const overrideValue = satirFiyatOverride[p.id];
+      const overrideSatisMtul = n(overrideValue);
+      const manuel = overrideSatisMtul > 0;
+      const satisMtul = manuel ? overrideSatisMtul : defaultSatisMtul;
+
+      satirlar.push({
+        id: p.id,
+        ad: p.ad,
+        mtul,
+        maliyetMtul,
+        defaultSatisMtul,
+        satisMtul,
+        toplamSatis: satisMtul * mtul,
+        defaultToplamSatis: defaultSatisMtul * mtul,
+        manuel,
+        parcaSatiri: true,
+      });
+    });
+
+    if (hesap.effectivePahlamaMtul > 0) {
+      const mtul = hesap.effectivePahlamaMtul;
+      const maliyetTl = mtul * n(form.pahlamaDakika || "1") * makineMaliyetFn(form.pahlamaMakineId);
+      satirlar.push({ ad: "Pahlama", mtul, maliyetMtul: mtul > 0 ? maliyetTl / mtul : 0, satisMtul: 0, toplamSatis: 0, ekIs: true });
+    }
+    if (hesap.effectiveKesim45Mtul > 0) {
+      const mtul = hesap.effectiveKesim45Mtul;
+      const maliyetTl = mtul * n(form.kesim45Dakika || "4") * makineMaliyetFn(form.kesim45MakineId);
+      satirlar.push({ ad: "45° Kesim", mtul, maliyetMtul: mtul > 0 ? maliyetTl / mtul : 0, satisMtul: 0, toplamSatis: 0, ekIs: true });
+    }
+    if (n(form.eviyes) > 0)  satirlar.push({ ad: `Eviye (${form.eviyes} ad)`,  mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.eviyes)  * 200 * makineMaliyetFn(form.tezgahMakineId) });
+    if (n(form.ocaklar) > 0) satirlar.push({ ad: `Ocak (${form.ocaklar} ad)`,   mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.ocaklar) * 150 * makineMaliyetFn(form.tezgahMakineId) });
+    if (n(form.prizler) > 0) satirlar.push({ ad: `Priz/Delik (${form.prizler} ad)`, mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.prizler) * 50 * makineMaliyetFn(form.tezgahMakineId) });
+
+    return {
+      satirlar,
+      varsayilanToplamSatis: satirlar.reduce((acc, s) => acc + (s.defaultToplamSatis || 0), 0),
+      overrideToplamSatis: satirlar.reduce((acc, s) => acc + (s.toplamSatis || 0), 0),
+      overrideAktif: satirlar.some((s) => s.manuel),
+    };
+  }, [form, hesap, makineler, satirFiyatOverride]);
 
   // Kaydet
   async function kaydet() {
@@ -1596,71 +1682,71 @@ export default function YeniIsV3Page() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(() => {
-                          const satirlar: any[] = [];
-                          const makineMaliyetFn = (id: string) => {
-                            const m = makineler.find((x: any) => x.id === id);
-                            return Number(m?.dakikalikMaliyet ?? m?.dkMaliyet ?? m?.dakikaMaliyet ?? m?.hesaplananDakikaMaliyeti ?? 0) || 106;
-                          };
-                          // Her parça için satır
-                          form.parcalar.forEach((p) => {
-                            const en = n(p.en), boy = n(p.boy), adet = n(p.adet) || 1;
-                            if (en > 0 && boy > 0) {
-                              const mtul = (boy / 100) * adet;
-                              const maliyetDk = mtul * n(form.tezgahDakika || "25");
-                              const maliyetTl = maliyetDk * makineMaliyetFn(form.tezgahMakineId);
-                              const maliyetMtul = mtul > 0 ? maliyetTl / mtul : 0;
-                              // Plaka maliyeti bu parçaya düşen pay
-                              const plakaPayi = hesap.toplamParcaAlani > 0
-                                ? (en * boy * adet / hesap.toplamParcaAlani) * hesap.malzemeMaliyeti
-                                : 0;
-                              const toplamMaliyetKalem = maliyetTl + plakaPayi;
-                              const maliyetMtulTam = mtul > 0 ? toplamMaliyetKalem / mtul : 0;
-                              const satisMtul = hesap.toplamMtul > 0 ? hesap.satisFiyati / hesap.toplamMtul : 0;
-                              const toplamSatis = satisMtul * mtul;
-                              satirlar.push({ ad: p.ad, mtul, maliyetMtul: maliyetMtulTam, satisMtul, toplamSatis });
-                            }
-                          });
-                          // Ek işler
-                          if (hesap.effectivePahlamaMtul > 0) {
-                            const mtul = hesap.effectivePahlamaMtul;
-                            const maliyetTl = mtul * n(form.pahlamaDakika || "1") * makineMaliyetFn(form.pahlamaMakineId);
-                            satirlar.push({ ad: "Pahlama", mtul, maliyetMtul: mtul > 0 ? maliyetTl/mtul : 0, satisMtul: 0, toplamSatis: 0, ekIs: true });
-                          }
-                          if (hesap.effectiveKesim45Mtul > 0) {
-                            const mtul = hesap.effectiveKesim45Mtul;
-                            const maliyetTl = mtul * n(form.kesim45Dakika || "4") * makineMaliyetFn(form.kesim45MakineId);
-                            satirlar.push({ ad: "45° Kesim", mtul, maliyetMtul: mtul > 0 ? maliyetTl/mtul : 0, satisMtul: 0, toplamSatis: 0, ekIs: true });
-                          }
-                          if (n(form.eviyes) > 0)  satirlar.push({ ad: `Eviye (${form.eviyes} ad)`,  mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.eviyes)  * 200 * makineMaliyetFn(form.tezgahMakineId) });
-                          if (n(form.ocaklar) > 0) satirlar.push({ ad: `Ocak (${form.ocaklar} ad)`,   mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.ocaklar) * 150 * makineMaliyetFn(form.tezgahMakineId) });
-                          if (n(form.prizler) > 0)  satirlar.push({ ad: `Priz/Delik (${form.prizler} ad)`, mtul: 0, maliyetMtul: 0, satisMtul: 0, toplamSatis: 0, ekIs: true, sabit: n(form.prizler) * 50 * makineMaliyetFn(form.tezgahMakineId) });
-                          return satirlar.map((s, i) => (
-                            <tr key={i} style={{ borderBottom: "1px solid #0d1117", background: i % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent" }}>
+                        {kalemAnaliz.satirlar.map((s, i) => (
+                            <tr key={s.id || `${s.ad}-${i}`} style={{ borderBottom: "1px solid #0d1117", background: i % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent" }}>
                               <td style={{ padding: "8px 6px", fontWeight: 600, color: s.ekIs ? "#9ca3af" : "#f9fafb" }}>
                                 {s.ad}
                                 {s.ekIs && <span style={{ marginLeft: "4px", fontSize: "10px", color: "#4b5563", background: "#1f2937", borderRadius: "4px", padding: "1px 4px" }}>Maliyete dahil</span>}
+                                {s.parcaSatiri && (
+                                  <span style={{ marginLeft: "6px", fontSize: "10px", color: s.manuel ? "#fbbf24" : "#6b7280", background: s.manuel ? "rgba(251,191,36,.12)" : "#1f2937", borderRadius: "4px", padding: "1px 5px" }}>
+                                    {s.manuel ? "Manuel" : "Default"}
+                                  </span>
+                                )}
                               </td>
                               <td style={{ padding: "8px 6px", textAlign: "right", color: "#9ca3af" }}>{s.mtul > 0 ? s.mtul.toFixed(2) : "—"}</td>
                               <td style={{ padding: "8px 6px", textAlign: "right", color: "#fbbf24" }}>
                                 {s.sabit ? tl(s.sabit) : s.maliyetMtul > 0 ? tl(s.maliyetMtul) + "/mtül" : "—"}
                               </td>
                               <td style={{ padding: "8px 6px", textAlign: "right", color: s.ekIs ? "#4b5563" : "#10b981" }}>
-                                {s.satisMtul > 0 ? tl(s.satisMtul) + "/mtül" : s.ekIs ? "Dahil" : "—"}
+                                {s.parcaSatiri ? (
+                                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "5px", minWidth: "132px" }}>
+                                    <span style={{ color: s.manuel ? "#fbbf24" : "#10b981", fontWeight: 800 }}>{tl(s.satisMtul)}/mtül</span>
+                                    <span style={{ fontSize: "10px", color: "#6b7280" }}>Default: {tl(s.defaultSatisMtul)}/mtül</span>
+                                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+                                      <span style={{ fontSize: "10px", color: "#6b7280" }}>Manuel satış/mtül</span>
+                                      <input
+                                        value={satirFiyatOverride[s.id] || ""}
+                                        onChange={(e) => setSatirFiyatOverride((p) => ({ ...p, [s.id]: e.target.value }))}
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder="₺"
+                                        style={{ width: "72px", height: "26px", borderRadius: "8px", border: "1px solid #1f2937", background: "#030712", color: "#f9fafb", padding: "4px 6px", fontSize: "11px", textAlign: "right" }}
+                                      />
+                                      {s.manuel && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setSatirFiyatOverride((p) => {
+                                            const next = { ...p };
+                                            delete next[s.id];
+                                            return next;
+                                          })}
+                                          style={{ height: "26px", border: "1px solid #374151", background: "#111827", color: "#9ca3af", borderRadius: "8px", padding: "0 7px", fontSize: "10px", cursor: "pointer" }}
+                                        >
+                                          Sıfırla
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : s.satisMtul > 0 ? tl(s.satisMtul) + "/mtül" : s.ekIs ? "Dahil" : "—"}
                               </td>
                               <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 700, color: s.ekIs ? "#6b7280" : "#f9fafb" }}>
                                 {s.toplamSatis > 0 ? tl(s.toplamSatis) : s.sabit ? tl(s.sabit) : "—"}
                               </td>
                             </tr>
-                          ));
-                        })()}
+                          ))}
                       </tbody>
                       <tfoot>
                         <tr style={{ borderTop: "2px solid #1f2937", background: "#0d1117" }}>
-                          <td colSpan={2} style={{ padding: "10px 6px", fontWeight: 900, fontSize: "13px" }}>TOPLAM</td>
+                          <td colSpan={2} style={{ padding: "10px 6px", fontWeight: 900, fontSize: "13px" }}>VARSAYILAN TOPLAM</td>
                           <td style={{ padding: "10px 6px", textAlign: "right", color: "#fbbf24", fontWeight: 700 }}>{tl(hesap.toplamMaliyet)}</td>
                           <td style={{ padding: "10px 6px", textAlign: "right", color: "#10b981", fontWeight: 700 }}>{hesap.toplamMtul > 0 ? tl(hesap.satisFiyati / hesap.toplamMtul) + "/mtül" : "—"}</td>
-                          <td style={{ padding: "10px 6px", textAlign: "right", color: "#10b981", fontWeight: 900, fontSize: "15px" }}>{tl(hesap.satisFiyati)}</td>
+                          <td style={{ padding: "10px 6px", textAlign: "right", color: "#10b981", fontWeight: 900, fontSize: "15px" }}>{tl(kalemAnaliz.varsayilanToplamSatis || hesap.satisFiyati)}</td>
+                        </tr>
+                        <tr style={{ borderTop: "1px solid #1f2937", background: kalemAnaliz.overrideAktif ? "rgba(251,191,36,.06)" : "#0d1117" }}>
+                          <td colSpan={2} style={{ padding: "10px 6px", fontWeight: 900, fontSize: "13px" }}>SATIR OVERRIDE TOPLAMI</td>
+                          <td style={{ padding: "10px 6px", textAlign: "right", color: "#6b7280", fontWeight: 700 }}>Frontend/session</td>
+                          <td style={{ padding: "10px 6px", textAlign: "right", color: kalemAnaliz.overrideAktif ? "#fbbf24" : "#6b7280", fontWeight: 700 }}>{kalemAnaliz.overrideAktif ? "Manuel" : "Default"}</td>
+                          <td style={{ padding: "10px 6px", textAlign: "right", color: kalemAnaliz.overrideAktif ? "#fbbf24" : "#10b981", fontWeight: 900, fontSize: "15px" }}>{tl(kalemAnaliz.overrideToplamSatis || kalemAnaliz.varsayilanToplamSatis || hesap.satisFiyati)}</td>
                         </tr>
                       </tfoot>
                     </table>
