@@ -85,6 +85,7 @@ export default function PersonelSayfasi() {
   const [mobileView, setMobileView] = useState<"list" | "detail">("list")
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const [personelKayitToplamMaliyet, setPersonelKayitToplamMaliyet] = useState(0)
+  const [aktifTab, setAktifTab] = useState<"profil" | "yetkiler">("profil")
 
   useEffect(() => { yukle() }, [])
   useEffect(() => { if (aktif?.id) yetkiYukle(aktif.id) }, [aktif?.id])
@@ -227,6 +228,24 @@ export default function PersonelSayfasi() {
             label="Seçili"
             value={aktif ? `${aktif.ad} ${aktif.soyad}` : "Seçili yok"}
           />
+        </div>
+      </div>
+
+      {/* ── DESKTOP: TAB BAR ────────────────────────────────────────────── */}
+      <div className="hidden md:flex shrink-0 items-center gap-2 border-b border-slate-800/60 px-4 py-2">
+        <div className="flex items-center gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-1">
+          <button
+            onClick={() => setAktifTab("profil")}
+            className={`rounded-xl px-4 py-1.5 text-sm font-medium transition-colors ${aktifTab === "profil" ? "bg-slate-700/80 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          >
+            Profil & Performans
+          </button>
+          <button
+            onClick={() => setAktifTab("yetkiler")}
+            className={`rounded-xl px-4 py-1.5 text-sm font-medium transition-colors ${aktifTab === "yetkiler" ? "bg-slate-700/80 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          >
+            Yetkiler
+          </button>
         </div>
       </div>
 
@@ -432,14 +451,14 @@ export default function PersonelSayfasi() {
                 key={p.id}
                 personel={p}
                 isActive={aktif?.id === p.id}
-                onClick={() => setAktif(p)}
+                onClick={() => { setAktif(p); setAktifTab("profil") }}
                 onDelete={() => personelSil(p.id)}
               />
             ))}
           </div>
         </aside>
 
-        {/* Sağ sütun: detay paneli */}
+        {/* Sağ sütun: tab-conditional */}
         <main className="min-h-0 overflow-y-auto rounded-3xl border border-slate-800 bg-[#0B1120] p-5">
           {!aktif ? (
             <div className="flex h-full items-center justify-center">
@@ -448,7 +467,7 @@ export default function PersonelSayfasi() {
                 <p className="mt-1 text-sm text-slate-600">Sol listeden bir personel seçin</p>
               </div>
             </div>
-          ) : (
+          ) : aktifTab === "profil" ? (
             <PersonelDetailPanel
               aktif={aktif}
               onEdit={() => acForm(aktif)}
@@ -456,6 +475,25 @@ export default function PersonelSayfasi() {
               onBack={() => {}}
               personelKayitToplamMaliyet={personelKayitToplamMaliyet}
             />
+          ) : (
+            <div className="flex h-full flex-col">
+              <div className="mb-5">
+                <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Yetkiler</p>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight">
+                  {aktif.ad} {aktif.soyad}
+                </h2>
+                <p className="mt-1 text-sm text-slate-400">{aktif.gorevi}</p>
+              </div>
+              <div className="space-y-2">
+                <Toggle label="İş programı görebilir" value={yetki.isProgramiGorebilir} onChange={(v) => setYetki({ ...yetki, isProgramiGorebilir: v })} />
+                <Toggle label="İş programı düzenleyebilir" value={yetki.isProgramiDuzenleyebilir} onChange={(v) => setYetki({ ...yetki, isProgramiDuzenleyebilir: v })} />
+                <Toggle label="İmalat tamamlayabilir" value={yetki.imalatTamamlayabilir} onChange={(v) => setYetki({ ...yetki, imalatTamamlayabilir: v })} />
+                <Toggle label="Maliyet görebilir" value={yetki.maliyetGorebilir} onChange={(v) => setYetki({ ...yetki, maliyetGorebilir: v })} />
+                <Toggle label="Müşteri görebilir" value={yetki.musteriGorebilir} onChange={(v) => setYetki({ ...yetki, musteriGorebilir: v })} />
+                <Toggle label="Teklif oluşturabilir" value={yetki.teklifOlusturabilir} onChange={(v) => setYetki({ ...yetki, teklifOlusturabilir: v })} />
+                <Toggle label="Atölye ayarı görebilir" value={yetki.atolyeAyarGorebilir} onChange={(v) => setYetki({ ...yetki, atolyeAyarGorebilir: v })} />
+              </div>
+            </div>
           )}
         </main>
       </div>
@@ -479,13 +517,15 @@ export default function PersonelSayfasi() {
               >
                 Personeli Düzenle
               </button>
-              <button
-                onClick={yetkiKaydet}
-                disabled={yetkiKaydediliyor}
-                className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold transition hover:bg-emerald-500 disabled:bg-slate-700"
-              >
-                {yetkiKaydediliyor ? "Kaydediliyor..." : "Yetkileri Kaydet"}
-              </button>
+              {aktifTab === "yetkiler" && (
+                <button
+                  onClick={yetkiKaydet}
+                  disabled={yetkiKaydediliyor}
+                  className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold transition hover:bg-emerald-500 disabled:bg-slate-700"
+                >
+                  {yetkiKaydediliyor ? "Kaydediliyor..." : "Yetkileri Kaydet"}
+                </button>
+              )}
             </>
           )}
         </div>
