@@ -7,6 +7,8 @@ type Piece = {
   label: string;
   tipAdi?: string;
   parcaTuru?: string;
+  sekilTipi?: "dikdortgen" | "oval" | "kapsul" | "l_parca" | "ozel_sablon";
+  shapeNotu?: string;
   genislik: number;
   yukseklik: number;
   x?: number;

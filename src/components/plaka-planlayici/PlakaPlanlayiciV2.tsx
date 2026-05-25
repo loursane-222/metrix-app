@@ -23,11 +23,15 @@ function num(v: string | number | undefined) {
 }
 
 // ─── Tipler ───────────────────────────────────────────────────────────────────
+type SekilTipi = "dikdortgen" | "oval" | "kapsul" | "l_parca" | "ozel_sablon";
+
 type KesimRow = {
   parcaTuru: string;    // Gerçek parça ismi (dışarıdan gelir, liste yok)
   uzunluk: string;      // cm
   genislik: string;     // cm
   sureDakika: string;
+  sekilTipi?: SekilTipi;
+  shapeNotu?: string;
 };
 
 type Tip = {
@@ -53,6 +57,8 @@ type Piece = {
   x: number;
   y: number;
   slabIndex: number;
+  sekilTipi?: SekilTipi;
+  shapeNotu?: string;
 };
 
 type Slab = { index: number; yerlesim: Piece[] };
@@ -117,6 +123,24 @@ function defaultSure(parcaTuru: string) {
 
 function emptyRows(n = 3): KesimRow[] {
   return Array.from({ length: n }, () => ({ parcaTuru:"", uzunluk:"", genislik:"", sureDakika:"" }));
+}
+
+function shapeLabel(sekilTipi?: SekilTipi) {
+  switch (sekilTipi) {
+    case "oval": return "Oval";
+    case "kapsul": return "Kapsül";
+    case "l_parca": return "L";
+    case "ozel_sablon": return "Özel";
+    default: return "";
+  }
+}
+
+function kindLabel(parcaTuru?: string) {
+  const t = String(parcaTuru || "").toLowerCase().replace(/\s/g,"_");
+  if (t.includes("on_alin") || t.includes("ön_alın") || t === "on_alin") return "Ön alın";
+  if (t.includes("tezgah_arasi") || t.includes("tezgah_arası")) return "Tezgah arası";
+  if (t.includes("tezgah")) return "Tezgah";
+  return "Diğer";
 }
 
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
@@ -197,6 +221,8 @@ export function PlakaPlanlayiciV2({
         parcaTuru: row.parcaTuru,
         genislik: num(row.uzunluk),
         yukseklik: num(row.genislik),
+        sekilTipi: row.sekilTipi || "dikdortgen",
+        shapeNotu: row.shapeNotu,
       });
     }
     return pieces;
@@ -546,12 +572,20 @@ export function PlakaPlanlayiciV2({
                   Parça {idx + 1}
                 </div>
                 {/* Parça adı — düzenlenebilir text input, liste yok */}
-                <input
-                  value={row.parcaTuru}
-                  onChange={e => updateRow(idx, { parcaTuru: e.target.value })}
-                  placeholder="örn: Ana Tezgah, Ön Alın..."
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-                />
+                <div>
+                  <input
+                    value={row.parcaTuru}
+                    onChange={e => updateRow(idx, { parcaTuru: e.target.value })}
+                    placeholder="örn: Ana Tezgah, Ön Alın..."
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                  {shapeLabel(row.sekilTipi) && (
+                    <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                      <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5">{shapeLabel(row.sekilTipi)}</span>
+                      {row.shapeNotu && <span className="truncate">{row.shapeNotu}</span>}
+                    </div>
+                  )}
+                </div>
                 <input value={row.uzunluk} onChange={e => updateRow(idx, { uzunluk: e.target.value })}
                   type="text" inputMode="decimal" placeholder="0"
                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
@@ -656,30 +690,47 @@ function SingleSlab({ slab, result, onPointerDown, onPointerMove, onRotate, stop
   onPointerDown: any; onPointerMove: any; onRotate: any; stopDrag: any;
 }) {
   const boardRef = useRef<HTMLDivElement>(null!);
+  const [selectedPieceId, setSelectedPieceId] = useState<number | null>(null);
   const parcaAlani = slab.yerlesim.reduce((s, p) => s + p.genislik * p.yukseklik, 0);
   const plakaAlani = result.plakaGenislik * result.plakaYukseklik;
   const slabFire   = plakaAlani > 0 ? ((plakaAlani - parcaAlani) / plakaAlani * 100) : 0;
+  const selectedPiece = useMemo(
+    () => slab.yerlesim.find(p => p.id === selectedPieceId) || null,
+    [slab.yerlesim, selectedPieceId]
+  );
 
   return (
-    <div className="rounded-2xl bg-slate-50 p-4">
+    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 shadow-xl sm:p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-black text-slate-800">Plaka {slab.index + 1}</h4>
+        <div>
+          <h4 className="text-sm font-black text-white">Plaka {slab.index + 1}</h4>
+          <p className="mt-0.5 text-[11px] font-semibold text-slate-400">CAD yerleşim alanı · parçalar sürüklenebilir</p>
+        </div>
         <div className="flex gap-2 flex-wrap">
-          <span className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 border border-amber-200">
+          <span className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-xs font-bold text-amber-200">
             Fire: %{slabFire.toFixed(1)}
           </span>
-          <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
+          <span className="rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-bold text-slate-300">
             {result.plakaGenislik}×{result.plakaYukseklik} cm · {slab.yerlesim.length} parça
           </span>
         </div>
       </div>
 
-      <div
-        ref={boardRef}
-        onPointerMove={e => onPointerMove(e, slab.index, result.plakaGenislik, result.plakaYukseklik, boardRef)}
-        onPointerUp={stopDrag}
-        onPointerLeave={stopDrag}
-        className="relative touch-none overflow-hidden border-[3px] border-slate-900 shadow-inner w-full"
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div
+          className="rounded-xl border border-slate-800 bg-slate-900 p-2 shadow-inner"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(148,163,184,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.10) 1px, transparent 1px), radial-gradient(circle at 12px 12px, rgba(148,163,184,0.18) 1px, transparent 1px)",
+            backgroundSize: "28px 28px, 28px 28px, 14px 14px",
+          }}
+        >
+          <div
+            ref={boardRef}
+            onPointerMove={e => onPointerMove(e, slab.index, result.plakaGenislik, result.plakaYukseklik, boardRef)}
+            onPointerUp={stopDrag}
+            onPointerLeave={stopDrag}
+            className="relative touch-none overflow-hidden border-[3px] border-cyan-200/80 shadow-[0_0_0_1px_rgba(15,23,42,0.95),0_18px_55px_rgba(0,0,0,0.45)] w-full"
         style={{
           aspectRatio: `${result.plakaGenislik}/${result.plakaYukseklik}`,
           backgroundImage: result.imageUrl
@@ -692,41 +743,132 @@ function SingleSlab({ slab, result, onPointerDown, onPointerMove, onRotate, stop
         {slab.yerlesim.map(p => {
           const c = kindColor(p.parcaTuru);
           const label = (p.parcaTuru || "").replace(/_/g, " ");
+          const sekil = p.sekilTipi || "dikdortgen";
+          const shapeTag = shapeLabel(sekil);
+          const isSpecialShape = sekil !== "dikdortgen";
+          const wPct = (p.genislik / result.plakaGenislik) * 100;
+          const hPct = (p.yukseklik / result.plakaYukseklik) * 100;
+          const isTiny = wPct < 8 || hPct < 11;
+          const isSelected = selectedPieceId === p.id;
           return (
             <div
               key={p.id}
-              onPointerDown={e => onPointerDown(e, slab.index, p, boardRef, result.plakaGenislik, result.plakaYukseklik)}
+              title={`${label} · ${p.genislik}×${p.yukseklik} cm · ${kindLabel(p.parcaTuru)}${shapeTag ? ` · ${shapeTag}` : ""}`}
+              onPointerDown={e => {
+                setSelectedPieceId(p.id);
+                onPointerDown(e, slab.index, p, boardRef, result.plakaGenislik, result.plakaYukseklik);
+              }}
               className="absolute touch-none select-none cursor-grab active:cursor-grabbing
-                flex flex-col items-center justify-center text-center"
+                group flex flex-col items-center justify-center text-center transition
+                hover:z-20 hover:brightness-110"
               style={{
                 left: `${(p.x / result.plakaGenislik) * 100}%`,
                 top: `${(p.y / result.plakaYukseklik) * 100}%`,
-                width: `${(p.genislik / result.plakaGenislik) * 100}%`,
-                height: `${(p.yukseklik / result.plakaYukseklik) * 100}%`,
-                background: c.bg,
-                border: `2px solid ${c.border}`,
+                width: `${wPct}%`,
+                height: `${hPct}%`,
+                background: isSpecialShape ? "transparent" : c.bg,
+                border: isSpecialShape ? "1px dashed rgba(15,23,42,0.45)" : `2px solid ${isSelected ? "#f8fafc" : c.border}`,
                 color: c.text,
                 boxSizing: "border-box",
-                padding: "2px",
+                padding: isTiny ? "1px" : "4px",
+                boxShadow: isSelected
+                  ? `0 0 0 2px rgba(255,255,255,0.95), 0 0 26px ${c.border}`
+                  : "0 1px 8px rgba(15,23,42,0.18)",
+                zIndex: isSelected ? 30 : 1,
               }}
             >
+              {isSpecialShape && (
+                <div
+                  aria-hidden
+                  className="absolute pointer-events-none"
+                  style={{
+                    inset: 2,
+                    background: c.bg,
+                    border: sekil === "ozel_sablon" ? `2px dashed ${isSelected ? "#f8fafc" : c.border}` : `2px solid ${isSelected ? "#f8fafc" : c.border}`,
+                    borderRadius: sekil === "oval" || sekil === "kapsul" ? "999px" : sekil === "ozel_sablon" ? "8px" : "2px",
+                    clipPath: sekil === "l_parca" ? "polygon(0 0,100% 0,100% 38%,38% 38%,38% 100%,0 100%)" : undefined,
+                  }}
+                />
+              )}
+              {shapeTag && !isTiny && (
+                <span
+                  className="absolute left-1 top-1 z-[2] max-w-[calc(100%-38px)] truncate rounded-full border border-white/25 bg-slate-950/75 px-1.5 py-0.5 text-[9px] font-black text-white shadow"
+                >
+                  {shapeTag}
+                </span>
+              )}
               <button
                 type="button"
                 onPointerDown={e => e.stopPropagation()}
                 onClick={e => {
                   e.stopPropagation();
+                  setSelectedPieceId(p.id);
                   onRotate(slab.index, p.id, result.plakaGenislik, result.plakaYukseklik);
                 }}
-                className="absolute right-1 top-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-black text-slate-900 shadow"
+                className="absolute right-1 top-1 z-[3] rounded border border-slate-200 bg-white/90 px-1.5 py-0.5 text-[10px] font-black text-slate-900 opacity-90 shadow transition group-hover:opacity-100"
                 title="90 derece döndür"
               >
                 90°
               </button>
-              <span style={{ fontSize:"clamp(7px,1.1vw,11px)", fontWeight:900, lineHeight:1.2 }}>{label}</span>
-              <small style={{ fontSize:"clamp(6px,0.9vw,10px)", opacity:0.8 }}>{p.genislik}×{p.yukseklik}</small>
+              {!isTiny && (
+                <span className="relative z-[1] max-w-full truncate px-1 text-[clamp(8px,1vw,11px)] font-black leading-tight drop-shadow">
+                  {label}
+                </span>
+              )}
+              <small className="relative z-[1] max-w-full truncate rounded bg-slate-950/35 px-1 text-[clamp(7px,0.9vw,10px)] font-bold leading-tight text-white/90">
+                {p.genislik}×{p.yukseklik}
+              </small>
+              {!isTiny && (
+                <span className="absolute bottom-1 left-1 z-[2] max-w-[calc(100%-8px)] truncate rounded bg-white/85 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-slate-900">
+                  {kindLabel(p.parcaTuru)}
+                </span>
+              )}
             </div>
           );
         })}
+          </div>
+        </div>
+
+        <aside className="hidden rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-slate-200 shadow-inner md:block">
+          <p className="text-[10px] font-black uppercase tracking-widest text-cyan-200">Seçili Parça</p>
+          {selectedPiece ? (
+            <div className="mt-3 space-y-2">
+              <div>
+                <p className="truncate text-sm font-black text-white" title={selectedPiece.parcaTuru || selectedPiece.label}>
+                  {selectedPiece.parcaTuru || selectedPiece.label || "Parça"}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-400">Plaka {slab.index + 1}</p>
+              </div>
+              <dl className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2">
+                  <dt className="text-[9px] font-black uppercase text-slate-500">Ölçü</dt>
+                  <dd className="mt-0.5 font-black text-slate-100">{selectedPiece.genislik}×{selectedPiece.yukseklik}</dd>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2">
+                  <dt className="text-[9px] font-black uppercase text-slate-500">Şekil</dt>
+                  <dd className="mt-0.5 font-black text-slate-100">{shapeLabel(selectedPiece.sekilTipi) || "Dikdörtgen"}</dd>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2">
+                  <dt className="text-[9px] font-black uppercase text-slate-500">Sıra</dt>
+                  <dd className="mt-0.5 font-black text-slate-100">{kindLabel(selectedPiece.parcaTuru)}</dd>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-2">
+                  <dt className="text-[9px] font-black uppercase text-slate-500">Konum</dt>
+                  <dd className="mt-0.5 font-black text-slate-100">{selectedPiece.x},{selectedPiece.y}</dd>
+                </div>
+              </dl>
+              {selectedPiece.shapeNotu && (
+                <p className="rounded-lg border border-slate-800 bg-slate-950/70 p-2 text-xs font-semibold text-slate-300">
+                  {selectedPiece.shapeNotu}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
+              Detayları görmek için bir parçaya tıklayın.
+            </p>
+          )}
+        </aside>
       </div>
     </div>
   );

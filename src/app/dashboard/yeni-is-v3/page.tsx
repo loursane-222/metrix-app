@@ -15,6 +15,24 @@ function tl(v: number) {
   return v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
 }
 function uid() { return Math.random().toString(36).slice(2, 8); }
+function parcaMtul(p: Pick<Parca, "en" | "boy" | "adet">): number {
+  const en = n(p.en), boy = n(p.boy), adet = n(p.adet) || 1;
+  return en > 0 && boy > 0 ? (boy / 100) * adet : 0;
+}
+function operasyonMtulHesapla(parcalar: Parca[], manualPahlamaMtul: any, manualKesim45Mtul: any) {
+  const autoPahlamaMtul = parcalar.reduce((acc, p) => acc + parcaMtul(p), 0);
+  const autoKesim45Mtul = parcalar.reduce((acc, p) => acc + (p.onAlin ? parcaMtul(p) : 0), 0);
+  const manualPahlama = n(manualPahlamaMtul);
+  const manualKesim45 = n(manualKesim45Mtul);
+  return {
+    autoPahlamaMtul,
+    autoKesim45Mtul,
+    manualPahlamaMtul: manualPahlama,
+    manualKesim45Mtul: manualKesim45,
+    effectivePahlamaMtul: autoPahlamaMtul + manualPahlama,
+    effectiveKesim45Mtul: autoKesim45Mtul + manualKesim45,
+  };
+}
 
 const TASLAK_KEY = "metrix_yeni_is_v3_taslak";
 const TASLAK_KEY_LEGACY = "metrix_yeni_is_v4_taslak";
@@ -23,6 +41,7 @@ const TASLAK_KEY_LEGACY = "metrix_yeni_is_v4_taslak";
 type Adim = "musteri" | "olculer" | "fiyat";
 type IsModeli = "tam" | "sadece_iscilik" | "fason";
 type MutfakTipi = "duz" | "l" | "u" | "paralel" | "coffee" | "ozel";
+type SekilTipi = "dikdortgen" | "oval" | "kapsul" | "l_parca" | "ozel_sablon";
 
 interface Parca {
   id: string;
@@ -32,6 +51,8 @@ interface Parca {
   adet: string;
   onAlin: boolean;
   tip: "tezgah" | "panel" | "ada" | "tezgah_arasi" | "ozel";
+  sekilTipi?: SekilTipi;
+  shapeNotu?: string;
 }
 
 interface FormState {
@@ -136,6 +157,64 @@ const IS_MODELLERI = [
   { id: "fason"         as IsModeli, label: "Fason Kesim",   ikon: "✂️", aciklama: "Sadece kesim/ebatlama" },
 ];
 
+const SEKIL_TIPLERI: { id: SekilTipi; label: string }[] = [
+  { id: "dikdortgen", label: "Dikdörtgen" },
+  { id: "oval", label: "Oval" },
+  { id: "kapsul", label: "Kapsül / Oval uçlu" },
+  { id: "l_parca", label: "L Parça" },
+  { id: "ozel_sablon", label: "Özel Şablon" },
+];
+
+function sekilOlcuMetni(sekilTipi?: SekilTipi) {
+  switch (sekilTipi || "dikdortgen") {
+    case "oval":
+      return {
+        enLabel: "Kısa Çap (cm)",
+        boyLabel: "Uzun Çap (cm)",
+        enPlaceholder: "80",
+        boyPlaceholder: "180",
+        helper: "Plaka yerleşiminde kapladığı dikdörtgen alan kullanılır.",
+        notGoster: false,
+      };
+    case "kapsul":
+      return {
+        enLabel: "Genişlik / Çap (cm)",
+        boyLabel: "Toplam Boy (cm)",
+        enPlaceholder: "80",
+        boyPlaceholder: "180",
+        helper: "Oval uçlu parça bounding box ile yerleşir.",
+        notGoster: false,
+      };
+    case "l_parca":
+      return {
+        enLabel: "Genişlik (cm)",
+        boyLabel: "Toplam Boy (cm)",
+        enPlaceholder: "80",
+        boyPlaceholder: "220",
+        helper: "İlk fazda L parça kapladığı dikdörtgen alanla yerleşir. Detayı not olarak yazın.",
+        notGoster: true,
+      };
+    case "ozel_sablon":
+      return {
+        enLabel: "Kapladığı En (cm)",
+        boyLabel: "Kapladığı Boy (cm)",
+        enPlaceholder: "80",
+        boyPlaceholder: "180",
+        helper: "Özel şablon ilk fazda kapladığı dikdörtgen alanla hesaplanır.",
+        notGoster: true,
+      };
+    default:
+      return {
+        enLabel: "En (cm)",
+        boyLabel: "Boy (cm)",
+        enPlaceholder: "65",
+        boyPlaceholder: "285",
+        helper: "",
+        notGoster: false,
+      };
+  }
+}
+
 // ─── Müşteri tipleri ──────────────────────────────────────────────────────────
 const MUSTERI_TIPLERI = [
   { id: "Ev sahibi",  label: "Ev Sahibi",  ikon: "🏡", carpan: "3.0"  },
@@ -148,7 +227,7 @@ const MUSTERI_TIPLERI = [
 // ─── Mutfak tipine göre varsayılan parçalar ───────────────────────────────────
 function defaultParcalar(tip: MutfakTipi): Parca[] {
   const p = (ad: string, t: Parca["tip"]): Parca => ({
-    id: uid(), ad, en: "", boy: "", adet: "1", onAlin: t === "tezgah" || t === "ada", tip: t,
+    id: uid(), ad, en: "", boy: "", adet: "1", onAlin: t === "tezgah" || t === "ada", tip: t, sekilTipi: "dikdortgen",
   });
   switch (tip) {
     case "duz":     return [p("Tezgah", "tezgah")];
@@ -203,11 +282,12 @@ function hesapla(form: FormState, makineler: any[]) {
     : n(form.plakaFiyatiEuro) * n(form.kullanilanKur);
 
   const malzemeMaliyeti = form.isModeli === "tam" ? plakaSayisi * plakaFiyatiTl : 0;
+  const operasyonMtul = operasyonMtulHesapla(form.parcalar, form.pahlamaMtul, form.kesim45Mtul);
 
   // İşçilik maliyeti (makine dakika ücreti)
   const tezgahDk   = toplamMtul * n(form.tezgahDakika || "25");
-  const pahlamaDk  = n(form.pahlamaMtul)  * n(form.pahlamaDakika || "1");
-  const kesim45Dk  = n(form.kesim45Mtul)  * n(form.kesim45Dakika || "4");
+  const pahlamaDk  = operasyonMtul.effectivePahlamaMtul * n(form.pahlamaDakika || "1");
+  const kesim45Dk  = operasyonMtul.effectiveKesim45Mtul * n(form.kesim45Dakika || "4");
   const toplamDakika = tezgahDk + pahlamaDk + kesim45Dk;
 
   const iscilikMaliyeti = tezgahDk  * makineMaliyet(form.tezgahMakineId)
@@ -243,6 +323,7 @@ function hesapla(form: FormState, makineler: any[]) {
     plakaFiyatiTl, malzemeMaliyeti, iscilikMaliyeti, toplamMaliyet,
     satisFiyati, kar, karYuzde, birimFiyat, toplamDakika,
     eviyeMaliyet, ocakMaliyet, prizMaliyet,
+    ...operasyonMtul,
   };
 }
 
@@ -265,6 +346,16 @@ function defaultForm(): FormState {
     kesim45MakineId: "", kesim45Dakika: "4",
     notlar: "",
   };
+}
+
+// ─── YiChip ──────────────────────────────────────────────────────────────────
+function YiChip({ label, value, tone = "text-white" }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-1.5">
+      <p className="text-[9px] uppercase tracking-wider text-slate-500">{label}</p>
+      <p className={`text-xs font-semibold tabular-nums ${tone}`}>{value}</p>
+    </div>
+  )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -325,6 +416,43 @@ export default function YeniIsV3Page() {
           const pahlamaOp = ops.find((o: any) => o.operasyonTipi === 'pahlama');
           const kesim45Op = ops.find((o: any) => o.operasyonTipi === '45_kesim');
           const tezgahOp  = ops.find((o: any) => o.operasyonTipi === 'tezgah');
+          const yuklenenParcalar: Parca[] = [
+            ...(Number(is.metrajMtul) > 0 ? [{
+              id: 'yuklenen-tezgah',
+              ad: 'Tezgah',
+              en: '60',
+              boy: String((Number(is.metrajMtul) * 100).toFixed(0)),
+              adet: '1',
+              onAlin: false,
+              tip: 'tezgah' as const,
+              sekilTipi: 'dikdortgen' as const,
+            }] : []),
+            ...(Number(is.tezgahArasiMtul) > 0 ? [{
+              id: 'yuklenen-tezgah-arasi',
+              ad: 'Tezgah Arası',
+              en: '10',
+              boy: String((Number(is.tezgahArasiMtul) * 100).toFixed(0)),
+              adet: '1',
+              onAlin: false,
+              tip: 'tezgah_arasi' as const,
+              sekilTipi: 'dikdortgen' as const,
+            }] : []),
+            ...(Number(is.adaTezgahMtul) > 0 ? [{
+              id: 'yuklenen-ada',
+              ad: 'Ada Tezgah',
+              en: '90',
+              boy: String((Number(is.adaTezgahMtul) * 100).toFixed(0)),
+              adet: '1',
+              onAlin: false,
+              tip: 'ada' as const,
+              sekilTipi: 'dikdortgen' as const,
+            }] : []),
+          ].filter(p => p.boy !== '0');
+          const yuklenenPahlamaToplam = pahlamaOp?.toplamDakika && pahlamaOp?.birimDakika ? (pahlamaOp.toplamDakika / pahlamaOp.birimDakika) : n(is.pahlamaMtul);
+          const yuklenenKesim45Toplam = kesim45Op?.toplamDakika && kesim45Op?.birimDakika ? (kesim45Op.toplamDakika / kesim45Op.birimDakika) : n(is.kesim45Mtul);
+          const yuklenenAuto = operasyonMtulHesapla(yuklenenParcalar, 0, 0);
+          const yuklenenManualPahlama = Math.max(0, yuklenenPahlamaToplam - yuklenenAuto.autoPahlamaMtul);
+          const yuklenenManualKesim45 = Math.max(0, yuklenenKesim45Toplam - yuklenenAuto.autoKesim45Mtul);
           setForm(p => ({
             ...p,
             musteriId:       is.musteriId || '',
@@ -337,9 +465,9 @@ export default function YeniIsV3Page() {
             plakaEn:         String(is.plakaGenislikCm || '160'),
             plakaBoy:        String(is.plakaUzunlukCm || '320'),
             tezgahDakika:    String(is.birMtulDakika || '25'),
-            pahlamaMtul:     String(pahlamaOp?.toplamDakika && pahlamaOp?.birimDakika ? (pahlamaOp.toplamDakika / pahlamaOp.birimDakika).toFixed(2) : is.pahlamaMtul || ''),
+            pahlamaMtul:     yuklenenManualPahlama > 0 ? yuklenenManualPahlama.toFixed(2) : '',
             pahlamaDakika:   String(pahlamaOp?.birimDakika || '1'),
-            kesim45Mtul:     String(kesim45Op?.toplamDakika && kesim45Op?.birimDakika ? (kesim45Op.toplamDakika / kesim45Op.birimDakika).toFixed(2) : is.kesim45Mtul || ''),
+            kesim45Mtul:     yuklenenManualKesim45 > 0 ? yuklenenManualKesim45.toFixed(2) : '',
             kesim45Dakika:   String(kesim45Op?.birimDakika || '4'),
             tezgahMakineId:  tezgahOp?.makineId || p.tezgahMakineId,
             pahlamaMakineId: pahlamaOp?.makineId || p.pahlamaMakineId,
@@ -348,35 +476,7 @@ export default function YeniIsV3Page() {
             plakaLayoutJson: is.plakaLayoutJson || null,
             plakaImageUrl:   is.plakaImageUrl || '',
             // Ölçüleri parcalar'a dönüştür
-            parcalar: [
-              ...(Number(is.metrajMtul) > 0 ? [{
-                id: 'yuklenen-tezgah',
-                ad: 'Tezgah',
-                en: '60',
-                boy: String((Number(is.metrajMtul) * 100).toFixed(0)),
-                adet: '1',
-                onAlin: false,
-                tip: 'tezgah' as const,
-              }] : []),
-              ...(Number(is.tezgahArasiMtul) > 0 ? [{
-                id: 'yuklenen-tezgah-arasi',
-                ad: 'Tezgah Arası',
-                en: '10',
-                boy: String((Number(is.tezgahArasiMtul) * 100).toFixed(0)),
-                adet: '1',
-                onAlin: false,
-                tip: 'tezgah_arasi' as const,
-              }] : []),
-              ...(Number(is.adaTezgahMtul) > 0 ? [{
-                id: 'yuklenen-ada',
-                ad: 'Ada Tezgah',
-                en: '90',
-                boy: String((Number(is.adaTezgahMtul) * 100).toFixed(0)),
-                adet: '1',
-                onAlin: false,
-                tip: 'ada' as const,
-              }] : []),
-            ].filter(p => p.boy !== '0'),
+            parcalar: yuklenenParcalar,
           }));
         }).catch(() => {}).finally(() => setDuzenleYukleniyor(false));
         return;
@@ -463,7 +563,7 @@ export default function YeniIsV3Page() {
         if (en <= 0 || boy <= 0 || unite >= adet) return;
         if (p.onAlin) {
           const oaEn = n(form.onAlinEnOverride?.["toplam"]) || 4;
-          pieces.push({ id: id++, label: `${p.ad} Ön Alın #${unite+1}`, parcaTuru: "ön alın", tipAdi, genislik: boy, yukseklik: oaEn });
+          pieces.push({ id: id++, label: `${p.ad} Ön Alın #${unite+1}`, parcaTuru: "ön alın", tipAdi, genislik: boy, yukseklik: oaEn, sekilTipi: "dikdortgen" });
         }
       });
       // Sonra tezgahları ekle
@@ -471,7 +571,7 @@ export default function YeniIsV3Page() {
         const en = n(p.en), boy = n(p.boy), adet = Math.max(1, n(p.adet) || 1);
         if (en <= 0 || boy <= 0 || unite >= adet) return;
         const parcaTuru = normalizeParcaTuru(p.ad);
-        pieces.push({ id: id++, label: `${p.ad} #${unite+1}`, parcaTuru, tipAdi, genislik: boy, yukseklik: en });
+        pieces.push({ id: id++, label: `${p.ad} #${unite+1}`, parcaTuru, tipAdi, genislik: boy, yukseklik: en, sekilTipi: p.sekilTipi || "dikdortgen", shapeNotu: p.shapeNotu });
       });
     }
 
@@ -515,29 +615,16 @@ export default function YeniIsV3Page() {
     setForm((p) => ({ ...p, parcalar: p.parcalar.map((x) => x.id === id ? { ...x, [field]: val } : x) }));
   }
   function parcaEkle() {
-    setForm((p) => ({ ...p, parcalar: [...p.parcalar, { id: uid(), ad: `Parça ${p.parcalar.length + 1}`, en: "", boy: "", adet: "1", onAlin: false, tip: "ozel" as const }] }));
+    setForm((p) => ({ ...p, parcalar: [...p.parcalar, { id: uid(), ad: `Parça ${p.parcalar.length + 1}`, en: "", boy: "", adet: "1", onAlin: false, tip: "ozel" as const, sekilTipi: "dikdortgen" as const }] }));
   }
 
-  // Parça listesinden toplam işçilik mtülünü hesapla
-  function toplamIscilikMtul(parcalar: Parca[]): number {
-    return parcalar.reduce((acc, p) => {
-      const boy = n(p.boy), adet = n(p.adet) || 1;
-      if (boy <= 0) return acc;
-      const mtul = (boy / 100) * adet;
-      return acc + mtul + (p.onAlin ? mtul : 0);
-    }, 0);
-  }
-
-  // Parça güncellenince pahlama ve 45° kesimi otomatik güncelle
+  // Parça güncellenince otomatik operasyonlar derived hesaplanır; ilave/manual değerler korunur.
   function parcaGuncelleVeHesapla(id: string, field: keyof Parca, val: any) {
     setForm((prev) => {
       const yeniParcalar = prev.parcalar.map((x) => x.id === id ? { ...x, [field]: val } : x);
-      const toplamMtul = toplamIscilikMtul(yeniParcalar);
       return {
         ...prev,
         parcalar: yeniParcalar,
-        pahlamaMtul: toplamMtul > 0 ? toplamMtul.toFixed(2) : prev.pahlamaMtul,
-        kesim45Mtul: toplamMtul > 0 ? toplamMtul.toFixed(2) : prev.kesim45Mtul,
       };
     });
   }
@@ -555,8 +642,8 @@ export default function YeniIsV3Page() {
       // Eski API formatına dönüştür
       const operasyonlar = [
         { tip: "tezgah", mtul: hesap.toplamMtul, dakika: n(form.tezgahDakika), makineId: form.tezgahMakineId },
-        { tip: "pahlama", mtul: n(form.pahlamaMtul), dakika: n(form.pahlamaDakika), makineId: form.pahlamaMakineId },
-        { tip: "45_kesim", mtul: n(form.kesim45Mtul), dakika: n(form.kesim45Dakika), makineId: form.kesim45MakineId },
+        { tip: "pahlama", mtul: hesap.effectivePahlamaMtul, dakika: n(form.pahlamaDakika), makineId: form.pahlamaMakineId },
+        { tip: "45_kesim", mtul: hesap.effectiveKesim45Mtul, dakika: n(form.kesim45Dakika), makineId: form.kesim45MakineId },
       ].filter((x) => x.mtul > 0 && x.dakika > 0).map((x) => ({
         operasyonTipi: x.tip, makineId: x.makineId || null,
         adet: 1, birimDakika: x.dakika, toplamDakika: x.mtul * x.dakika,
@@ -595,8 +682,8 @@ export default function YeniIsV3Page() {
         ozelIscilik1Mtul: "0", ozelIscilik1Dakika: "0",
         ozelIscilik2Mtul: "0", ozelIscilik2Dakika: "0",
         ozelIscilik3Mtul: "0", ozelIscilik3Dakika: "0",
-        kesim45Mtul: form.kesim45Mtul, kesim45Dakika: form.kesim45Dakika, kesim45MakineId: form.kesim45MakineId,
-        pahlamaMtul: form.pahlamaMtul, pahlamaDakika: form.pahlamaDakika, pahlamaMakineId: form.pahlamaMakineId,
+        kesim45Mtul: String(hesap.effectiveKesim45Mtul.toFixed(2)), kesim45Dakika: form.kesim45Dakika, kesim45MakineId: form.kesim45MakineId,
+        pahlamaMtul: String(hesap.effectivePahlamaMtul.toFixed(2)), pahlamaDakika: form.pahlamaDakika, pahlamaMakineId: form.pahlamaMakineId,
         yapistirmaMtul: "0", yapistirmaDakika: "0", yapistirmaMakineId: "",
         tezgahMakineId: form.tezgahMakineId, tezgahArasiMakineId: "", adaMakineId: "",
         stresAlmaMakineId: "", fasonEbatlamaMakineId: "",
@@ -681,6 +768,7 @@ export default function YeniIsV3Page() {
                   adet: String(p.adet || "1"),
                   onAlin: false,
                   tip: "ozel" as const,
+                  sekilTipi: "dikdortgen" as const,
                 }));
 
               // Ön alın varsa ilk tezgaha onAlin=true set et
@@ -786,7 +874,7 @@ export default function YeniIsV3Page() {
 
   // ─── WIZARD ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ height: "100dvh", background: "#030712", color: "#fff", display: "flex", overflow: "hidden" }}>
+    <div className="relative min-h-[100dvh] bg-[#030712] text-white md:h-screen md:overflow-hidden md:flex md:flex-col">
       <style>{`
         .plaka-v2-fix input,.plaka-v2-fix select,.plaka-v2-fix textarea{color:#0f172a!important;background:#ffffff!important;-webkit-text-fill-color:#0f172a!important;}
         .plaka-v2-fix option{color:#0f172a!important;background:#ffffff!important;}
@@ -802,6 +890,25 @@ export default function YeniIsV3Page() {
         .ikon-btn:hover{border-color:#374151;background:#1f2937;color:#d1d5db;}
         .ikon-btn.aktif{border-color:#10b981;background:rgba(16,185,129,0.1);color:#10b981;}
         .parca-row{display:grid;gap:6px;align-items:end;padding:10px;border-radius:12px;background:#0d1117;border:1px solid #1f2937;margin-bottom:6px;}
+        .olcu-parca-row{background:#0d1117;border:1px solid #1f2937;border-radius:14px;padding:12px;margin-bottom:8px;}
+        .olcu-name-cell{display:flex;gap:8px;align-items:center;margin-bottom:10px;}
+        .olcu-shape-cell{margin-bottom:8px;}
+        .olcu-fields-grid{display:grid;grid-template-columns:1fr 1fr 80px;gap:8px;margin-bottom:8px;}
+        .olcu-field-label{font-size:10px;color:#6b7280;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;}
+        .olcu-field-input{font-size:15px!important;padding:9px 12px!important;font-weight:700;}
+        .shape-meta-row{margin-top:8px;}
+        .shape-helper{font-size:10px;color:#6b7280;line-height:1.35;}
+        .shape-note-input{margin-top:6px;}
+        .onalin-row{display:flex;align-items:center;gap:8px;margin-top:8px;}
+        .onalin-chip{flex:1;padding:8px 12px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;}
+        .onalin-box{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
+        .mtul-badge{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:8px 12px;font-size:12px;color:#10b981;font-weight:900;white-space:nowrap;flex-shrink:0;}
+        .parca-del{width:36px;height:36px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#ef4444;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .ek-is-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+        .ek-is-item{}
+        .ek-is-note{font-size:10px;color:#6b7280;margin-top:4px;}
+        .plaka-price-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+        .plaka-euro-row{display:flex;gap:6px;align-items:flex-end;}
         @media(max-width:640px){
           .desktop-sidebar{display:none!important;}
           .parca-row{grid-template-columns:1fr 1fr!important;}
@@ -811,8 +918,53 @@ export default function YeniIsV3Page() {
         }
         @media(min-width:641px){
           .mobile-only{display:none!important;}
+          .olcu-parca-row{width:100%;max-width:100%;min-width:0;overflow:hidden;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) 92px 62px 72px 46px 86px 68px 28px;gap:6px;align-items:end;padding:8px;border-radius:12px;margin-bottom:6px;background:rgba(13,17,23,.82);}
+          .olcu-parca-row>*{min-width:0;}
+          .olcu-name-cell{margin-bottom:0;align-items:flex-end;}
+          .olcu-name-cell .yi-inp{height:34px;min-width:0;}
+          .olcu-shape-cell{margin-bottom:0;}
+          .olcu-shape-cell .yi-sel{height:34px;min-width:0;font-size:11px!important;padding:7px 6px!important;border-radius:10px!important;}
+          .olcu-fields-grid{display:contents;}
+          .olcu-field-label{font-size:9px;margin-bottom:3px;letter-spacing:.08em;}
+          .olcu-field-input{height:34px;min-width:0;font-size:13px!important;padding:7px 8px!important;border-radius:10px!important;}
+          .shape-meta-row{grid-column:1/-1;margin-top:-1px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;}
+          .shape-note-input{height:32px;font-size:12px!important;padding:6px 9px!important;border-radius:10px!important;margin-top:0;}
+          .onalin-row{display:contents;margin-top:0;}
+          .onalin-chip{height:34px;min-width:0;justify-content:center;padding:0 6px;border-radius:999px;font-size:10px;white-space:nowrap;align-self:end;gap:4px;overflow:hidden;}
+          .onalin-box{width:12px;height:12px;border-radius:999px;font-size:8px;}
+          .mtul-badge{height:34px;min-width:0;display:flex;align-items:center;justify-content:center;padding:0 5px;border-radius:999px;font-size:10px;align-self:end;overflow:hidden;text-overflow:ellipsis;}
+          .parca-del{width:28px;height:34px;border-radius:9px;font-size:15px;align-self:end;}
+          .on-alin-summary{width:100%;max-width:100%;min-width:0;overflow:hidden;box-sizing:border-box;grid-template-columns:minmax(0,1fr) 92px 62px 72px 46px 86px 68px 28px!important;gap:6px!important;align-items:end!important;padding:7px 8px!important;border-radius:12px!important;background:rgba(251,191,36,.045)!important;}
+          .on-alin-summary .yi-inp{height:32px;font-size:12px!important;padding:6px 8px!important;border-radius:10px!important;}
+          .on-alin-summary-cell{height:32px;display:flex;align-items:center;justify-content:center;padding:0 8px!important;border-radius:10px!important;font-size:12px!important;}
+          .on-alin-summary-label{height:32px;display:flex;align-items:center;font-size:11px!important;}
+          .on-alin-summary-mtul{height:32px;display:flex;align-items:center;justify-content:center;font-size:11px!important;text-align:center!important;}
+          .ek-is-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;align-items:stretch;}
+          .ek-is-item{min-height:86px;background:rgba(13,17,23,.72);border:1px solid #1f2937;border-radius:12px;padding:8px;display:flex;flex-direction:column;justify-content:flex-start;}
+          .ek-is-item .yi-label{min-height:24px;margin-bottom:4px;line-height:1.15;}
+          .ek-is-item .yi-inp{height:34px;font-size:13px!important;padding:7px 9px!important;border-radius:10px!important;}
+          .ek-is-note{font-size:9px;line-height:1.2;margin-top:5px;min-height:22px;}
+          .plaka-price-grid{align-items:end;}
+          .plaka-price-grid .yi-inp{height:36px;font-size:13px!important;padding:8px 10px!important;border-radius:10px!important;}
+          .plaka-euro-row{align-items:flex-end;}
+          .plaka-euro-main{display:flex;flex-direction:column;justify-content:flex-end;flex:1;}
+          .plaka-kur-cell{width:80px;flex-shrink:0;display:flex;flex-direction:column;justify-content:flex-end;}
+          .plaka-kur-cell .yi-label{white-space:nowrap;}
         }
       `}</style>
+
+      {/* Desktop top strip */}
+      <div className="hidden md:flex shrink-0 items-center gap-2 border-b border-slate-800 bg-[#030712] px-4 py-2">
+        <YiChip label="Yeni İş" value={adimlar[aktifIdx].label} />
+        <YiChip label="Müşteri" value={form.musteriAdi || "—"} />
+        <YiChip label="Mtül" value={hesap.toplamMtul > 0 ? `${hesap.toplamMtul.toFixed(2)} mtül` : "—"} />
+        <YiChip label="Teklif" value={hesap.satisFiyati > 0 ? tl(hesap.satisFiyati) : "—"} tone="text-emerald-400" />
+        <YiChip label="Kâr" value={hesap.kar > 0 ? tl(hesap.kar) : "—"} tone="text-amber-300" />
+        <YiChip label="Plaka" value={hesap.plakaSayisi > 0 ? `${hesap.plakaSayisi} adet` : "—"} />
+        <YiChip label="Taslak" value={taslakKaydedildi ? "Kaydedildi" : "Hazır"} tone={taslakKaydedildi ? "text-emerald-400" : "text-slate-400"} />
+      </div>
+
+      <div className="md:flex-1 md:min-h-0 md:overflow-hidden md:flex">
 
       {/* Sidebar — masaüstü */}
       <aside className="desktop-sidebar" style={{ width: "210px", borderRight: "1px solid #1f2937", display: "flex", flexDirection: "column", flexShrink: 0, background: "#030712" }}>
@@ -986,42 +1138,66 @@ export default function YeniIsV3Page() {
 
 
 
-                {form.parcalar.map((p) => (
-                  <div key={p.id} style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: "14px", padding: "12px", marginBottom: "8px" }}>
-                    {/* Parça adı + sil */}
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "10px" }}>
-                      <input className="yi-inp" style={{ fontSize: "14px", padding: "9px 12px", flex: 1, fontWeight: 700 }} value={p.ad} onChange={(e) => parcaGuncelle(p.id, "ad", e.target.value)} placeholder="Parça adı" />
-                      <button onClick={() => parcaSil(p.id)} style={{ width: "36px", height: "36px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "10px", color: "#ef4444", cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>×</button>
-                    </div>
-                    {/* En / Boy / Adet */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: "8px", marginBottom: "8px" }}>
-                      <div>
-                        <div style={{ fontSize: "10px", color: "#6b7280", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>En (cm)</div>
-                        <input className="yi-inp" style={{ fontSize: "15px", padding: "9px 12px", fontWeight: 700 }} type="text" inputMode="decimal" placeholder="65" value={p.en} onChange={(e) => parcaGuncelleVeHesapla(p.id, "en", e.target.value)} />
+                {form.parcalar.map((p) => {
+                  const olcuMetni = sekilOlcuMetni(p.sekilTipi);
+                  return (
+                    <div key={p.id} className="olcu-parca-row">
+                      {/* Parça adı + sil */}
+                      <div className="olcu-name-cell">
+                        <input className="yi-inp olcu-field-input" style={{ flex: 1 }} value={p.ad} onChange={(e) => parcaGuncelle(p.id, "ad", e.target.value)} placeholder="Parça adı" />
                       </div>
-                      <div>
-                        <div style={{ fontSize: "10px", color: "#6b7280", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Boy (cm)</div>
-                        <input className="yi-inp" style={{ fontSize: "15px", padding: "9px 12px", fontWeight: 700 }} type="text" inputMode="decimal" placeholder="285" value={p.boy} onChange={(e) => parcaGuncelleVeHesapla(p.id, "boy", e.target.value)} />
+                      <div className="olcu-shape-cell">
+                        <div className="olcu-field-label">Şekil</div>
+                        <select className="yi-sel" value={p.sekilTipi || "dikdortgen"} onChange={(e) => parcaGuncelle(p.id, "sekilTipi", e.target.value as SekilTipi)}>
+                          {SEKIL_TIPLERI.map((s) => (
+                            <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                        </select>
                       </div>
-                      <div>
-                        <div style={{ fontSize: "10px", color: "#6b7280", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Adet</div>
-                        <input className="yi-inp" style={{ fontSize: "15px", padding: "9px 12px", fontWeight: 700 }} type="text" inputMode="decimal" placeholder="1" value={p.adet} onChange={(e) => parcaGuncelleVeHesapla(p.id, "adet", e.target.value)} />
+                      {/* En / Boy / Adet */}
+                      <div className="olcu-fields-grid">
+                        <div>
+                          <div className="olcu-field-label">{olcuMetni.enLabel}</div>
+                          <input className="yi-inp olcu-field-input" type="text" inputMode="decimal" placeholder={olcuMetni.enPlaceholder} value={p.en} onChange={(e) => parcaGuncelleVeHesapla(p.id, "en", e.target.value)} />
+                        </div>
+                        <div>
+                          <div className="olcu-field-label">{olcuMetni.boyLabel}</div>
+                          <input className="yi-inp olcu-field-input" type="text" inputMode="decimal" placeholder={olcuMetni.boyPlaceholder} value={p.boy} onChange={(e) => parcaGuncelleVeHesapla(p.id, "boy", e.target.value)} />
+                        </div>
+                        <div>
+                          <div className="olcu-field-label">Adet</div>
+                          <input className="yi-inp olcu-field-input" type="text" inputMode="decimal" placeholder="1" value={p.adet} onChange={(e) => parcaGuncelleVeHesapla(p.id, "adet", e.target.value)} />
+                        </div>
                       </div>
-                    </div>
-                    {/* Ön alın toggle */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-                      <button onClick={() => parcaGuncelleVeHesapla(p.id, "onAlin", !p.onAlin)} style={{ flex: 1, padding: "8px 12px", borderRadius: "10px", border: p.onAlin ? "1.5px solid #10b981" : "1.5px solid #1f2937", background: p.onAlin ? "rgba(16,185,129,0.1)" : "transparent", color: p.onAlin ? "#10b981" : "#6b7280", cursor: "pointer", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ width: "18px", height: "18px", borderRadius: "4px", background: p.onAlin ? "#10b981" : "#1f2937", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", flexShrink: 0 }}>{p.onAlin ? "✓" : ""}</span>
-                        Ön alın var
-                      </button>
-                      {n(p.boy) > 0 && n(p.adet) > 0 && (
-                        <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "10px", padding: "8px 12px", fontSize: "12px", color: "#10b981", fontWeight: 900, whiteSpace: "nowrap", flexShrink: 0 }}>
-                          {((n(p.boy) / 100) * (n(p.adet) || 1)).toFixed(2)} mtül
+                      {/* Ön alın toggle */}
+                      <div className="onalin-row">
+                        <button onClick={() => parcaGuncelleVeHesapla(p.id, "onAlin", !p.onAlin)} className="onalin-chip" style={{ border: p.onAlin ? "1.5px solid #10b981" : "1.5px solid #1f2937", background: p.onAlin ? "rgba(16,185,129,0.1)" : "transparent", color: p.onAlin ? "#10b981" : "#6b7280" }}>
+                          <span className="onalin-box" style={{ background: p.onAlin ? "#10b981" : "#1f2937" }}>{p.onAlin ? "✓" : ""}</span>
+                          Ön alın var
+                        </button>
+                        {n(p.boy) > 0 && n(p.adet) > 0 && (
+                          <div className="mtul-badge">
+                            {((n(p.boy) / 100) * (n(p.adet) || 1)).toFixed(2)} mtül
+                          </div>
+                        )}
+                        <button onClick={() => parcaSil(p.id)} className="parca-del">×</button>
+                      </div>
+                      {olcuMetni.helper && (
+                        <div className="shape-meta-row">
+                          <div className="shape-helper">{olcuMetni.helper}</div>
+                          {olcuMetni.notGoster && (
+                            <input
+                              className="yi-inp shape-note-input"
+                              placeholder="Örn: müşteri çizimine göre özel form"
+                              value={p.shapeNotu || ""}
+                              onChange={(e) => parcaGuncelle(p.id, "shapeNotu", e.target.value)}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* ÖN ALIN TOPLAM SATIRI — ön alın seçili parça varsa göster */}
                 {(() => {
@@ -1032,17 +1208,17 @@ export default function YeniIsV3Page() {
                   const toplamMtul = toplamBoy / 100;
                   const oaEn = form.onAlinEnOverride?.["toplam"] ?? "4";
                   return (
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 50px 50px 24px", gap: "6px", alignItems: "center", padding: "10px 12px", background: "rgba(251,191,36,0.07)", borderRadius: "12px", border: "1px solid rgba(251,191,36,0.25)", marginTop: "4px" }}>
-                      <div style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 700 }}>↳ Ön Alın (otomatik)</div>
+                    <div className="on-alin-summary" style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 50px 50px 24px", gap: "6px", alignItems: "center", padding: "10px 12px", background: "rgba(251,191,36,0.07)", borderRadius: "12px", border: "1px solid rgba(251,191,36,0.25)", marginTop: "4px" }}>
+                      <div className="on-alin-summary-label" style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 700 }}>↳ Ön Alın (otomatik)</div>
                       <input
                         className="yi-inp"
                         style={{ fontSize: "13px", padding: "8px 10px", borderColor: "rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.05)", color: "#fbbf24" }}
                         type="text" inputMode="decimal" value={oaEn}
                         onChange={(e) => setForm((prev) => ({ ...prev, onAlinEnOverride: { ...(prev.onAlinEnOverride || {}), toplam: e.target.value } }))}
                       />
-                      <div style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "#fbbf24", textAlign: "center", fontWeight: 700 }}>{toplamBoy}</div>
-                      <div style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "#fbbf24", textAlign: "center", fontWeight: 700 }}>{toplamAdet}</div>
-                      <div style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 900, textAlign: "center" }}>{toplamMtul.toFixed(2)} mtül</div>
+                      <div className="on-alin-summary-cell" style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "#fbbf24", textAlign: "center", fontWeight: 700 }}>{toplamBoy}</div>
+                      <div className="on-alin-summary-cell" style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "10px", padding: "8px 10px", fontSize: "13px", color: "#fbbf24", textAlign: "center", fontWeight: 700 }}>{toplamAdet}</div>
+                      <div className="on-alin-summary-mtul" style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 900, textAlign: "center" }}>{toplamMtul.toFixed(2)} mtül</div>
                       <div />
                     </div>
                   );
@@ -1073,26 +1249,32 @@ export default function YeniIsV3Page() {
               {/* Ek işler */}
               <div className="yi-kart">
                 <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>🔧 Ek İşler</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                  <div>
+                <div className="ek-is-grid">
+                  <div className="ek-is-item">
                     <span className="yi-label">Eviye deliği</span>
                     <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.eviyes} onChange={(e) => setAlan("eviyes", e.target.value)} />
                   </div>
-                  <div>
+                  <div className="ek-is-item">
                     <span className="yi-label">Ocak deliği</span>
                     <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.ocaklar} onChange={(e) => setAlan("ocaklar", e.target.value)} />
                   </div>
-                  <div>
+                  <div className="ek-is-item">
                     <span className="yi-label">Priz / delik</span>
                     <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.prizler} onChange={(e) => setAlan("prizler", e.target.value)} />
                   </div>
-                  <div>
-                    <span className="yi-label">Pahlama (mtül)</span>
+                  <div className="ek-is-item">
+                    <span className="yi-label">İlave Pahlama (mtül)</span>
                     <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.pahlamaMtul} onChange={(e) => setAlan("pahlamaMtul", e.target.value)} />
+                    <p className="ek-is-note">
+                      Otomatik {hesap.autoPahlamaMtul.toFixed(2)} + İlave {hesap.manualPahlamaMtul.toFixed(2)} = {hesap.effectivePahlamaMtul.toFixed(2)} mtül
+                    </p>
                   </div>
-                  <div>
-                    <span className="yi-label">45° Kesim (mtül)</span>
+                  <div className="ek-is-item">
+                    <span className="yi-label">İlave 45° Kesim (mtül)</span>
                     <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.kesim45Mtul} onChange={(e) => setAlan("kesim45Mtul", e.target.value)} />
+                    <p className="ek-is-note">
+                      Otomatik {hesap.autoKesim45Mtul.toFixed(2)} + İlave {hesap.manualKesim45Mtul.toFixed(2)} = {hesap.effectiveKesim45Mtul.toFixed(2)} mtül
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1114,9 +1296,9 @@ export default function YeniIsV3Page() {
                         const oaEn = n(form.onAlinEnOverride?.['toplam']) || 4;
                         for (let i = 0; i < adet; i++) {
                           if (p.onAlin) {
-                            rows.push({ parcaTuru: p.ad + ' Ön Alın', uzunluk: String(boy), genislik: String(oaEn), sureDakika: '8' });
+                            rows.push({ parcaTuru: p.ad + ' Ön Alın', uzunluk: String(boy), genislik: String(oaEn), sureDakika: '8', sekilTipi: 'dikdortgen' });
                           }
-                          rows.push({ parcaTuru: p.ad, uzunluk: String(boy), genislik: String(en), sureDakika: String(n(form.tezgahDakika) || 25) });
+                          rows.push({ parcaTuru: p.ad, uzunluk: String(boy), genislik: String(en), sureDakika: String(n(form.tezgahDakika) || 25), sekilTipi: p.sekilTipi || 'dikdortgen', shapeNotu: p.shapeNotu });
                         }
                       });
                       setPlakaInitialRows(rows);
@@ -1131,16 +1313,21 @@ export default function YeniIsV3Page() {
                       ✓ Plan aktarıldı — {hesap.plakaSayisi} plaka
                     </div>
                   )}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div className="plaka-price-grid">
                     <div>
                       <span className="yi-label">Plaka Fiyatı (TL)</span>
                       <input className="yi-inp" type="text" inputMode="decimal" placeholder="0" value={form.plakaFiyati} onChange={(e) => setAlan("plakaFiyati", e.target.value)} />
                     </div>
                     <div>
-                      <span className="yi-label">veya Euro fiyatı</span>
-                      <div style={{ display: "flex", gap: "6px" }}>
-                        <input className="yi-inp" type="text" inputMode="decimal" placeholder="€" value={form.plakaFiyatiEuro} onChange={(e) => setAlan("plakaFiyatiEuro", e.target.value)} style={{ flex: 1 }} />
-                        <input className="yi-inp" type="text" inputMode="decimal" placeholder="Kur" value={form.kullanilanKur} onChange={(e) => setAlan("kullanilanKur", e.target.value)} style={{ width: "70px" }} />
+                      <div className="plaka-euro-row">
+                        <div className="plaka-euro-main">
+                          <span className="yi-label">veya Euro fiyatı</span>
+                          <input className="yi-inp" type="text" inputMode="decimal" placeholder="€" value={form.plakaFiyatiEuro} onChange={(e) => setAlan("plakaFiyatiEuro", e.target.value)} />
+                        </div>
+                        <div className="plaka-kur-cell">
+                          <span className="yi-label">Euro Kuru</span>
+                          <input className="yi-inp" type="text" inputMode="decimal" placeholder="Kur" value={form.kullanilanKur} onChange={(e) => setAlan("kullanilanKur", e.target.value)} />
+                        </div>
                       </div>
                     </div>
                     <div>
@@ -1424,13 +1611,13 @@ export default function YeniIsV3Page() {
                             }
                           });
                           // Ek işler
-                          if (n(form.pahlamaMtul) > 0) {
-                            const mtul = n(form.pahlamaMtul);
+                          if (hesap.effectivePahlamaMtul > 0) {
+                            const mtul = hesap.effectivePahlamaMtul;
                             const maliyetTl = mtul * n(form.pahlamaDakika || "1") * makineMaliyetFn(form.pahlamaMakineId);
                             satirlar.push({ ad: "Pahlama", mtul, maliyetMtul: mtul > 0 ? maliyetTl/mtul : 0, satisMtul: 0, toplamSatis: 0, ekIs: true });
                           }
-                          if (n(form.kesim45Mtul) > 0) {
-                            const mtul = n(form.kesim45Mtul);
+                          if (hesap.effectiveKesim45Mtul > 0) {
+                            const mtul = hesap.effectiveKesim45Mtul;
                             const maliyetTl = mtul * n(form.kesim45Dakika || "4") * makineMaliyetFn(form.kesim45MakineId);
                             satirlar.push({ ad: "45° Kesim", mtul, maliyetMtul: mtul > 0 ? maliyetTl/mtul : 0, satisMtul: 0, toplamSatis: 0, ekIs: true });
                           }
@@ -1482,6 +1669,7 @@ export default function YeniIsV3Page() {
               </button>
             </div>
           )}
+
         </div>
 
         {/* Mobil alt çubuk */}
@@ -1500,10 +1688,38 @@ export default function YeniIsV3Page() {
           )}
         </div>
       </main>
+      </div>
 
-      {/* ✨ Floating AI Bubble — mobil ve masaüstü */}
+      {/* Desktop bottom action bar */}
+      <div className="hidden md:flex shrink-0 items-center justify-between gap-3 border-t border-slate-800 bg-[#030712] px-4 py-3">
+        <button onClick={() => router.push("/dashboard/isler")} style={{ padding: "10px 14px", background: "#0d1117", border: "1px solid #1f2937", borderRadius: "12px", color: "#d1d5db", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+          ← İşlere Dön
+        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => setAiMode(true)} style={{ padding: "10px 16px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.35)", borderRadius: "12px", color: "#6ee7b7", fontSize: "13px", fontWeight: 800, cursor: "pointer" }}>
+            ✨ AI
+          </button>
+          <button onClick={() => setPlakaAcik(true)} style={{ padding: "10px 16px", background: "rgba(29,78,216,0.18)", border: "1px solid rgba(59,130,246,0.35)", borderRadius: "12px", color: "#bfdbfe", fontSize: "13px", fontWeight: 800, cursor: "pointer" }}>
+            📐 Planlayıcı
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => onceki && setAktifAdim(onceki)} disabled={!onceki} style={{ padding: "10px 14px", background: "#0d1117", border: "1px solid #1f2937", borderRadius: "12px", color: onceki ? "#d1d5db" : "#4b5563", fontSize: "13px", fontWeight: 700, cursor: onceki ? "pointer" : "not-allowed" }}>
+            Önceki
+          </button>
+          <button onClick={() => sonraki && setAktifAdim(sonraki)} disabled={!sonraki} style={{ padding: "10px 14px", background: sonraki ? "#0d1117" : "#111827", border: "1px solid #1f2937", borderRadius: "12px", color: sonraki ? "#d1d5db" : "#4b5563", fontSize: "13px", fontWeight: 700, cursor: sonraki ? "pointer" : "not-allowed" }}>
+            Sonraki
+          </button>
+          <button onClick={kaydet} disabled={kaydediliyor} style={{ padding: "10px 18px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "12px", color: "#fff", fontSize: "13px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer" }}>
+            {kaydediliyor ? "Kaydediliyor..." : duzenleId ? "Kaydet" : "Teklifi Kaydet"}
+          </button>
+        </div>
+      </div>
+
+      {/* ✨ Floating AI Bubble — mobil */}
       {!aiMode && !basariEkrani && (
         <button
+          className="mobile-only"
           onClick={() => setAiMode(true)}
           style={{
             position: "fixed",
