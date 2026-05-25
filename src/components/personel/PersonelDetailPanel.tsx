@@ -98,11 +98,13 @@ export function PersonelDetailPanel({
   onEdit,
   onStatusChange,
   onBack,
+  personelKayitToplamMaliyet,
 }: {
   aktif: Personel
   onEdit: () => void
   onStatusChange: (id: string, newAktif: boolean) => Promise<void>
   onBack: () => void
+  personelKayitToplamMaliyet?: number
 }) {
   const [changingStatus, setChangingStatus] = useState(false)
 
@@ -114,6 +116,14 @@ export function PersonelDetailPanel({
   const sgkOrani = Number(aktif.sgkOrani ?? 20.5)
   const isverenSgk = brutMaas > 0 ? Math.round(brutMaas * (sgkOrani / 100)) : 0
   const toplamMaliyet = brutMaas + isverenSgk
+
+  const maasPayi = (personelKayitToplamMaliyet ?? 0) > 0 && toplamMaliyet > 0
+    ? Math.round((toplamMaliyet / personelKayitToplamMaliyet!) * 100)
+    : null
+  const gunlukCalismaGun = Number(aktif.gunlukCalismaGun ?? 5)
+  const kapasiteOrani = (aktif.toplamGorev || 0) > 0
+    ? Math.round(((aktif.toplamGorev || 0) / Math.max(gunlukCalismaGun * 22, 1)) * 100)
+    : null
 
   async function handleToggle() {
     setChangingStatus(true)
@@ -220,21 +230,28 @@ export function PersonelDetailPanel({
           </div>
         )}
 
-        {/* Gelecek metrikler placeholder */}
         <div className="mt-4 flex flex-wrap gap-2">
-          {[
-            "Mtül/gün verimi",
-            "Kapasite oranı",
-            "Maaş payı %",
-          ].map((label) => (
-            <span
-              key={label}
-              className="flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/40 px-2.5 py-1 text-[10px] text-slate-500"
-            >
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-600" />
-              {label} · Hesaplanıyor
+          {maasPayi !== null ? (
+            <span className="rounded-full border border-slate-700 bg-slate-800/40 px-2.5 py-1 text-[10px] text-slate-300">
+              Maaş payı · %{maasPayi}
             </span>
-          ))}
+          ) : (
+            <span className="rounded-full border border-slate-800 bg-slate-900/40 px-2.5 py-1 text-[10px] text-slate-600">
+              Maaş payı · Veri yok
+            </span>
+          )}
+          {kapasiteOrani !== null ? (
+            <span className="rounded-full border border-slate-700 bg-slate-800/40 px-2.5 py-1 text-[10px] text-slate-300">
+              Görev yoğunluğu · %{kapasiteOrani}
+            </span>
+          ) : (
+            <span className="rounded-full border border-slate-800 bg-slate-900/40 px-2.5 py-1 text-[10px] text-slate-600">
+              Görev yoğunluğu · Veri yok
+            </span>
+          )}
+          <span className="rounded-full border border-slate-800 bg-slate-900/40 px-2.5 py-1 text-[10px] text-slate-600">
+            Mtül/gün verimi · Veri bekliyor
+          </span>
         </div>
       </div>
 

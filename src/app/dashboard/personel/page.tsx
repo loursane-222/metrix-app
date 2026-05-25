@@ -84,14 +84,20 @@ export default function PersonelSayfasi() {
   const [yetkiKaydediliyor, setYetkiKaydediliyor] = useState(false)
   const [mobileView, setMobileView] = useState<"list" | "detail">("list")
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
+  const [personelKayitToplamMaliyet, setPersonelKayitToplamMaliyet] = useState(0)
 
   useEffect(() => { yukle() }, [])
   useEffect(() => { if (aktif?.id) yetkiYukle(aktif.id) }, [aktif?.id])
 
   async function yukle(secilecekId?: string) {
-    const res = await fetch("/api/personel", { credentials: "include", cache: "no-store" })
+    const [res, atolyeRes] = await Promise.all([
+      fetch("/api/personel", { credentials: "include", cache: "no-store" }),
+      fetch("/api/atolye", { credentials: "include", cache: "no-store" }).catch(() => null),
+    ])
     if (res.status === 401) { window.location.href = "/login"; return }
     const json = await res.json()
+    const atolyeJson = atolyeRes?.ok ? await atolyeRes.json().catch(() => ({})) : {}
+    setPersonelKayitToplamMaliyet(Number(atolyeJson.personelKayitToplamMaliyet) || 0)
     const liste: Personel[] = Array.isArray(json.personeller) ? json.personeller : []
     setPersoneller(liste)
     if (secilecekId) {
@@ -297,6 +303,7 @@ export default function PersonelSayfasi() {
               onEdit={() => acForm(aktif)}
               onStatusChange={handleStatusChange}
               onBack={() => setMobileView("list")}
+              personelKayitToplamMaliyet={personelKayitToplamMaliyet}
             />
           )}
 
@@ -447,6 +454,7 @@ export default function PersonelSayfasi() {
               onEdit={() => acForm(aktif)}
               onStatusChange={handleStatusChange}
               onBack={() => {}}
+              personelKayitToplamMaliyet={personelKayitToplamMaliyet}
             />
           )}
         </main>
