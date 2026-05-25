@@ -1,0 +1,25 @@
+{
+  "name": "cutout-defaults",
+  "input": {
+    "economics": { "shopMinuteCost": 10 },
+    "operations": [
+      { "key": "eviye", "label": "Eviye (1 ad)", "category": "CUTOUT", "totalMinutes": 20 },
+      { "key": "ocak", "label": "Ocak (1 ad)", "category": "CUTOUT", "totalMinutes": 20 },
+      { "key": "priz", "label": "Priz/Delik (2 ad)", "category": "CUTOUT", "totalMinutes": 10 }
+    ],
+    "config": { "setup": { "baseMinutes": 0 } }
+  },
+  "expected": {
+    "version": "labor-v2",
+    "totalMinutes": 50,
+    "totalLaborCost": 500,
+    "warningKeys": [],
+    "adjustmentKeys": [],
+    "breakdownCategories": ["CUTOUT", "CUTOUT", "CUTOUT"],
+    "explain": [
+      "Eviye (1 ad): 20 dk",
+      "Ocak (1 ad): 20 dk",
+      "Priz/Delik (2 ad): 10 dk"
+    ]
+  }
+}

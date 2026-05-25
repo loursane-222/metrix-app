@@ -2,6 +2,16 @@ import type { LaborV2Config } from "./types";
 
 export const LABOR_V2_VERSION = "labor-v2" as const;
 
+export const LABOR_V2_CUTOUT_DEFAULT_MINUTES = {
+  sink: 20,
+  eviye: 20,
+  cooktop: 20,
+  ocak: 20,
+  socket: 5,
+  priz: 5,
+  delik: 5,
+} as const;
+
 export const DEFAULT_LABOR_V2_CONFIG: LaborV2Config = {
   setup: {
     baseMinutes: 10,

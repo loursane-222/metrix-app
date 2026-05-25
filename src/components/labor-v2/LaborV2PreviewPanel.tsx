@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { calculateLaborV2, compareLaborV1V2, normalizeLaborV2Input } from "@/lib/labor-v2";
+import { LABOR_V2_CUTOUT_DEFAULT_MINUTES } from "@/lib/labor-v2";
 import type { LaborV2Input, LaborV2OperationInput } from "@/lib/labor-v2";
 import { LaborV2DebugPanel } from "./LaborV2DebugPanel";
 
@@ -83,9 +84,9 @@ export function LaborV2PreviewPanel({
     }
 
     [
-      { key: "eviye", label: "Eviye", count: n(form.eviyes), minutes: 200 },
-      { key: "ocak", label: "Ocak", count: n(form.ocaklar), minutes: 150 },
-      { key: "priz", label: "Priz/Delik", count: n(form.prizler), minutes: 50 },
+      { key: "eviye", label: "Eviye", count: n(form.eviyes), minutes: LABOR_V2_CUTOUT_DEFAULT_MINUTES.eviye },
+      { key: "ocak", label: "Ocak", count: n(form.ocaklar), minutes: LABOR_V2_CUTOUT_DEFAULT_MINUTES.ocak },
+      { key: "priz", label: "Priz/Delik", count: n(form.prizler), minutes: LABOR_V2_CUTOUT_DEFAULT_MINUTES.priz },
     ].forEach((item) => {
       if (item.count <= 0) return;
       operations.push({

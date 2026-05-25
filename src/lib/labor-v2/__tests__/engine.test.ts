@@ -14,6 +14,7 @@ interface LaborV2Fixture {
     warningKeys: string[];
     adjustmentKeys: string[];
     breakdownCategories: LaborV2OperationCategory[];
+    explain?: string[];
   };
 }
 
@@ -187,6 +188,7 @@ export function testFixtureExpectations() {
     .sort();
 
   assert.deepEqual(fixtureFiles, [
+    "cutout-defaults.json",
     "minimum-floor.json",
     "missing-economics.json",
     "shape-heavy.json",
@@ -207,5 +209,8 @@ export function testFixtureExpectations() {
       fixture.expected.breakdownCategories,
       fixture.name
     );
+    if (fixture.expected.explain) {
+      assert.deepEqual(result.explain, fixture.expected.explain, fixture.name);
+    }
   }
 }
