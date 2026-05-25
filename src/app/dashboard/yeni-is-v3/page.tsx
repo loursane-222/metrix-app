@@ -1768,6 +1768,86 @@ export default function YeniIsV3Page() {
                 </div>
               )}
 
+              {hesap.toplamMtul > 0 && (
+                <div className="yi-kart mobile-only">
+                  <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>📐 Kalem Bazlı Birim Analiz</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {kalemAnaliz.satirlar.map((s, i) => (
+                      <div key={s.id || `${s.ad}-mobile-${i}`} style={{ background: s.ekIs ? "rgba(13,17,23,.55)" : "#0d1117", border: "1px solid #1f2937", borderRadius: "12px", padding: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start", marginBottom: "8px" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ fontSize: "13px", fontWeight: 800, color: s.ekIs ? "#9ca3af" : "#f9fafb", wordBreak: "break-word" }}>{s.ad}</p>
+                            <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "2px" }}>{s.mtul > 0 ? `${s.mtul.toFixed(2)} mtül` : "Sabit maliyet"}</p>
+                          </div>
+                          {s.parcaSatiri ? (
+                            <span style={{ flexShrink: 0, fontSize: "10px", color: s.manuel ? "#fbbf24" : "#6b7280", background: s.manuel ? "rgba(251,191,36,.12)" : "#1f2937", borderRadius: "999px", padding: "3px 8px", fontWeight: 800 }}>
+                              {s.manuel ? "Manuel" : "Default"}
+                            </span>
+                          ) : (
+                            <span style={{ flexShrink: 0, fontSize: "10px", color: "#4b5563", background: "#111827", borderRadius: "999px", padding: "3px 8px", fontWeight: 800 }}>Dahil</span>
+                          )}
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: s.parcaSatiri ? "8px" : 0 }}>
+                          <div style={{ background: "#030712", borderRadius: "9px", padding: "7px" }}>
+                            <p style={{ fontSize: "10px", color: "#6b7280", marginBottom: "3px" }}>Maliyet/mtül</p>
+                            <p style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 800 }}>{s.sabit ? tl(s.sabit) : s.maliyetMtul > 0 ? `${tl(s.maliyetMtul)}/mtül` : "—"}</p>
+                          </div>
+                          <div style={{ background: "#030712", borderRadius: "9px", padding: "7px" }}>
+                            <p style={{ fontSize: "10px", color: "#6b7280", marginBottom: "3px" }}>Satış/mtül</p>
+                            <p style={{ fontSize: "12px", color: s.parcaSatiri && s.manuel ? "#fbbf24" : s.ekIs ? "#4b5563" : "#10b981", fontWeight: 800 }}>{s.parcaSatiri ? `${tl(s.satisMtul)}/mtül` : "Dahil"}</p>
+                          </div>
+                          <div style={{ gridColumn: "1 / -1", background: "#030712", borderRadius: "9px", padding: "7px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                            <p style={{ fontSize: "10px", color: "#6b7280" }}>Toplam Satış</p>
+                            <p style={{ fontSize: "13px", color: s.ekIs ? "#6b7280" : "#f9fafb", fontWeight: 900 }}>{s.toplamSatis > 0 ? tl(s.toplamSatis) : s.sabit ? tl(s.sabit) : "—"}</p>
+                          </div>
+                        </div>
+
+                        {s.parcaSatiri && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "10px", color: "#6b7280" }}>Manuel satış/mtül</span>
+                            <input
+                              value={satirFiyatOverride[s.id] || ""}
+                              onChange={(e) => setSatirFiyatOverride((p) => ({ ...p, [s.id]: e.target.value }))}
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={tl(s.defaultSatisMtul)}
+                              style={{ flex: "1 1 120px", minWidth: "0", height: "30px", borderRadius: "9px", border: "1px solid #1f2937", background: "#030712", color: "#f9fafb", padding: "5px 8px", fontSize: "12px", textAlign: "right" }}
+                            />
+                            {s.manuel && (
+                              <button
+                                type="button"
+                                onClick={() => setSatirFiyatOverride((p) => {
+                                  const next = { ...p };
+                                  delete next[s.id];
+                                  return next;
+                                })}
+                                style={{ height: "30px", border: "1px solid #374151", background: "#111827", color: "#9ca3af", borderRadius: "9px", padding: "0 9px", fontSize: "11px", cursor: "pointer" }}
+                              >
+                                Sıfırla
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {[
+                      { l: "Varsayılan toplam", v: tl(kalemAnaliz.varsayilanToplamSatis || hesap.satisFiyati), c: "#10b981" },
+                      { l: "Satır override toplamı", v: tl(kalemAnaliz.overrideToplamSatis || kalemAnaliz.varsayilanToplamSatis || hesap.satisFiyati), c: kalemAnaliz.overrideAktif ? "#fbbf24" : "#10b981" },
+                      { l: "Genel satış fiyatı", v: tl(hesap.satisFiyati), c: "#f9fafb" },
+                    ].map((t) => (
+                      <div key={t.l} style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center", background: "#0d1117", border: "1px solid #1f2937", borderRadius: "10px", padding: "9px 10px" }}>
+                        <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 700 }}>{t.l}</span>
+                        <span style={{ fontSize: "13px", color: t.c, fontWeight: 900 }}>{t.v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Notlar */}
               <div>
                 <span className="yi-label">Notlar</span>
