@@ -376,8 +376,30 @@ export default function AtolyePage() {
 // ParaInput moved to top-level
 
   return (
-    <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] text-white p-2 md:h-screen md:overflow-hidden md:p-3">
-      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:grid-cols-[270px_minmax(0,1fr)_290px]">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-[#030712] text-white p-2 md:h-screen md:overflow-hidden md:p-0 md:flex md:flex-col">
+      {/* DESKTOP TOP STRIP */}
+      <div className="hidden md:flex items-center gap-2 border-b border-slate-800/60 px-4 py-2 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0 mr-2">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-tight truncate">{form.atolyeAdi || 'Atölye'}</p>
+            <p className="text-[10px] text-slate-500 leading-tight">{[form.sehir, form.ilce].filter(Boolean).join(' / ') || 'Konum yok'}</p>
+          </div>
+          <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${hesap.durumTone}`}>{hesap.durum}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-1 flex-wrap">
+          <TopChip label="Günlük Gider" value={tl(hesap.gunluk)} />
+          <TopChip label="Aylık Plaka" value={`${hesap.toplamPlaka.toFixed(0)} adet`} />
+          <TopChip label="Aylık Mtül" value={formatMtulTR(hesap.aylikMtul, 1)} />
+          <TopChip label="Verimlilik" value={`%${hesap.verimlilik.toFixed(0)}`} />
+          <TopChip label="Dakika Maliyeti" value={tl(hesap.dakika)} />
+        </div>
+        <div className={`hidden xl:block shrink-0 max-w-xs rounded-2xl border px-3 py-2 text-xs ${hesap.durumTone}`}>
+          <p className="font-semibold">{hesap.durum}</p>
+          <p className="mt-0.5 opacity-80 leading-snug">{hesap.tavsiye}</p>
+        </div>
+      </div>
+
+      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:flex-1 md:min-h-0 md:grid-cols-[270px_minmax(0,1fr)] md:p-3 md:overflow-hidden">
 
         <button onClick={() => setMobileSolOpen(true)} className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] left-4 z-[120] rounded-2xl bg-slate-800 px-5 py-4 text-sm font-bold shadow-2xl md:hidden">Atölye</button>
         <button onClick={() => setMobileSagOpen(true)} className="fixed bottom-[calc(env(safe-area-inset-bottom)+90px)] right-4 z-[120] rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold shadow-2xl md:hidden">Karar</button>
@@ -554,7 +576,7 @@ export default function AtolyePage() {
         </main>
 
         {/* SAĞ PANEL */}
-        <aside className={`fixed right-0 top-0 z-[140] h-[100dvh] w-[88vw] max-w-[360px] overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-full md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:overflow-hidden md:flex md:flex-col ${mobileSagOpen ? "translate-x-0" : "translate-x-full"}`}>
+        <aside className={`fixed right-0 top-0 z-[140] h-[100dvh] w-[88vw] max-w-[360px] overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300 md:static md:h-full md:w-auto md:max-w-none md:translate-x-0 md:rounded-3xl md:border md:overflow-hidden md:flex md:flex-col md:hidden ${mobileSagOpen ? "translate-x-0" : "translate-x-full"}`}>
           <button onClick={() => setMobileSagOpen(false)} className="mb-4 w-full rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden">Kapat</button>
           <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Karar Paneli</p>
           <h2 className="mt-1 text-lg font-semibold">Canlı Özet</h2>
@@ -577,6 +599,21 @@ export default function AtolyePage() {
             {mesaj && <p className="text-center text-xs text-emerald-300">{mesaj}</p>}
           </div>
         </aside>
+      </div>
+
+      {/* DESKTOP BOTTOM ACTION BAR */}
+      <div className="hidden md:flex items-center justify-between border-t border-slate-800 bg-[#030712] px-4 py-2.5 shrink-0">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setMakineModal(true)} className="rounded-xl border border-blue-600/50 bg-blue-600/10 px-4 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-600/20">+ Makine Ekle</button>
+          <button onClick={() => setAracModal(true)} className="rounded-xl border border-violet-600/50 bg-violet-600/10 px-4 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-600/20">+ Araç Ekle</button>
+          <button onClick={() => setGiderModal(true)} className="rounded-xl border border-amber-600/50 bg-amber-600/10 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-600/20">+ Gider Ekle</button>
+        </div>
+        <div className="flex items-center gap-3">
+          {mesaj && <p className="text-xs text-emerald-300">{mesaj}</p>}
+          <button onClick={kaydet} disabled={kaydediliyor} className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:bg-slate-700">
+            {kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+        </div>
       </div>
 
       {/* GİDER EKLE MODAL */}
@@ -861,6 +898,14 @@ function RightCard({ label, value }: any) {
     <div className="rounded-2xl border border-slate-800 bg-[#111827] p-3">
       <p className="text-xs text-slate-400">{label}</p>
       <p className="mt-1 break-words text-lg font-semibold leading-tight tabular-nums">{value}</p>
+    </div>
+  )
+}
+function TopChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-1.5">
+      <p className="text-[9px] uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="text-xs font-semibold tabular-nums text-white">{value}</p>
     </div>
   )
 }
