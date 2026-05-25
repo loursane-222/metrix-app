@@ -416,6 +416,7 @@ export default function YeniIsV3Page() {
   const [plakaFireOrani, setPlakaFireOrani] = useState(0);
   const [duzenleId, setDuzenleId]           = useState<string | null>(null);
   const [duzenleYukleniyor, setDuzenleYukleniyor] = useState(false);
+  const [laborV2IscilikMaliyeti, setLaborV2IscilikMaliyeti] = useState<number | null>(null);
 
   // Layout override
   useEffect(() => {
@@ -1645,21 +1646,23 @@ export default function YeniIsV3Page() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   {[
                     { l: "Malzeme (Plaka)",     v: hesap.malzemeMaliyeti,   gizle: form.isModeli !== "tam" },
-                    { l: "İşçilik",             v: hesap.iscilikMaliyeti,   gizle: false },
+                    { l: "İşçilik",             v: hesap.iscilikMaliyeti,   gizle: false, laborV2: true },
                     { l: "Toplam Maliyet",      v: hesap.toplamMaliyet,     gizle: false, kalin: true },
                     { l: "Satış Fiyatı",        v: hesap.satisFiyati,       gizle: false, kalin: true, yesil: true },
                     { l: "Kâr",                v: hesap.kar,               gizle: false, sari: true },
                   ].filter((s) => !s.gizle).map((s) => (
                     <div key={s.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: s.kalin ? "#0d1117" : "transparent", borderRadius: "10px", borderTop: s.kalin ? "1px solid #1f2937" : "none" }}>
                       <span style={{ fontSize: "13px", color: "#9ca3af", fontWeight: s.kalin ? 700 : 400 }}>{s.l}</span>
-                      <span style={{ fontSize: s.kalin ? "16px" : "14px", fontWeight: s.kalin ? 900 : 600, color: s.yesil ? "#10b981" : s.sari ? "#fbbf24" : "#f9fafb" }}>{tl(s.v)}</span>
+                      <span style={{ fontSize: s.kalin ? "16px" : "14px", fontWeight: s.kalin ? 900 : 600, color: s.yesil ? "#10b981" : s.sari ? "#fbbf24" : "#f9fafb" }}>
+                        {tl(s.laborV2 && laborV2Enabled && laborV2IscilikMaliyeti !== null ? laborV2IscilikMaliyeti : s.v)}
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {laborV2Enabled && (
-                <LaborV2PreviewPanel form={form} hesap={hesap} makineler={makineler} plakaFireOrani={plakaFireOrani} />
+                <LaborV2PreviewPanel form={form} hesap={hesap} makineler={makineler} plakaFireOrani={plakaFireOrani} onLaborCostChange={setLaborV2IscilikMaliyeti} />
               )}
 
               {/* İş özeti */}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { calculateLaborV2, compareLaborV1V2, normalizeLaborV2Input } from "@/lib/labor-v2";
+import { useEffect, useMemo } from "react";
+import { calculateLaborV2, normalizeLaborV2Input } from "@/lib/labor-v2";
 import { LABOR_V2_CUTOUT_DEFAULT_MINUTES } from "@/lib/labor-v2";
 import type { LaborV2Input, LaborV2OperationInput } from "@/lib/labor-v2";
 import { LaborV2DebugPanel } from "./LaborV2DebugPanel";
@@ -18,7 +18,7 @@ function parcaMtul(parca: { en?: unknown; boy?: unknown; adet?: unknown }): numb
   return en > 0 && boy > 0 ? (boy / 100) * adet : 0;
 }
 
-export function LaborV2PreviewPanel({
+function useLaborV2Result({
   form,
   hesap,
   makineler,
@@ -122,18 +122,22 @@ export function LaborV2PreviewPanel({
     });
   }, [form, hesap, makineler, plakaFireOrani]);
 
-  const laborV2Result = useMemo(() => calculateLaborV2(laborV2Input), [laborV2Input]);
-  const laborV2Comparison = useMemo(
-    () => compareLaborV1V2(
-      {
-        totalMinutes: hesap.toplamDakika,
-        laborCost: hesap.iscilikMaliyeti,
-        totalCost: hesap.toplamMaliyet,
-      },
-      laborV2Result
-    ),
-    [hesap, laborV2Result]
-  );
+  return useMemo(() => calculateLaborV2(laborV2Input), [laborV2Input]);
+}
 
-  return <LaborV2DebugPanel result={laborV2Result} comparison={laborV2Comparison} />;
+export function LaborV2PreviewPanel(props: {
+  form: any;
+  hesap: any;
+  makineler: any[];
+  plakaFireOrani: number;
+  onLaborCostChange?: (value: number | null) => void;
+}) {
+  const { onLaborCostChange } = props;
+  const laborV2Result = useLaborV2Result(props);
+
+  useEffect(() => {
+    onLaborCostChange?.(laborV2Result?.totalLaborCost || null);
+  }, [laborV2Result, onLaborCostChange]);
+
+  return <LaborV2DebugPanel result={laborV2Result} />;
 }
