@@ -735,8 +735,8 @@ export default function IslerPage() {
           </div>
         </aside>
 
-        {/* Sağ canvas: detay + geçici compact aksiyonlar */}
-        <main className="min-h-0 overflow-y-auto rounded-3xl border border-slate-800 bg-[#0B1120] p-5">
+        {/* Sağ canvas: detay */}
+        <main className="min-h-0 overflow-y-auto rounded-3xl border border-slate-800 bg-[#0B1120] p-4">
           {!aktifIs ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
@@ -746,19 +746,20 @@ export default function IslerPage() {
             </div>
           ) : (
             <>
+              {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Seçili İş</p>
-                  <div className="mt-2 flex items-center gap-3">
-                    <h2 className="text-2xl leading-tight">{aktifIs.musteriAdi}</h2>
+                  <p className="text-[10px] tracking-[0.25em] text-slate-500 uppercase">Seçili İş</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <h2 className="text-xl leading-tight">{aktifIs.musteriAdi}</h2>
                     <DarkBadge tone="purple">v{Number(aktifIs.versiyon || 1)}</DarkBadge>
                   </div>
-                  <div className="mt-2 flex items-center gap-3">
-                    <p className="text-slate-400 text-sm">{aktifIs.urunAdi}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-sm text-slate-400">{aktifIs.urunAdi}</p>
                     <TasBadge durum={aktifIs.tasDurumu} />
                   </div>
                   {aktifIs.createdAt && (
-                    <p className="mt-1 text-xs text-slate-600">{new Date(aktifIs.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                    <p className="mt-0.5 text-[10px] text-slate-600">{new Date(aktifIs.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                   )}
                 </div>
                 <button onClick={() => setDurumDegistirAcik(true)}
@@ -767,60 +768,66 @@ export default function IslerPage() {
                 </button>
               </div>
 
-              <div className="mt-5 grid grid-cols-4 gap-3">
-                <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Teklif Tutarı</p><p className="text-lg mt-2 text-emerald-400">{paraGoster(aktifSatis)}</p></div>
-                <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Maliyet</p><p className="text-lg mt-2">{paraGoster(aktifMaliyet)}</p></div>
-                <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Kâr</p><p className="text-lg mt-2 text-yellow-400">{paraGoster(aktifKar)}</p></div>
-                <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Kazanç</p><p className="text-lg mt-2 text-blue-400">%{aktifKarYuzde.toFixed(1)}</p></div>
+              {/* KPI 4-col */}
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                <div className="rounded-xl border border-slate-800 bg-[#111827] p-3"><p className="text-[10px] text-slate-400">Teklif</p><p className="mt-1 text-sm font-semibold text-emerald-400">{paraGoster(aktifSatis)}</p></div>
+                <div className="rounded-xl border border-slate-800 bg-[#111827] p-3"><p className="text-[10px] text-slate-400">Maliyet</p><p className="mt-1 text-sm font-semibold">{paraGoster(aktifMaliyet)}</p></div>
+                <div className="rounded-xl border border-slate-800 bg-[#111827] p-3"><p className="text-[10px] text-slate-400">Kâr</p><p className="mt-1 text-sm font-semibold text-yellow-400">{paraGoster(aktifKar)}</p></div>
+                <div className="rounded-xl border border-slate-800 bg-[#111827] p-3"><p className="text-[10px] text-slate-400">Kazanç</p><p className="mt-1 text-sm font-semibold text-blue-400">%{aktifKarYuzde.toFixed(1)}</p></div>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-slate-800 bg-[#111827] p-4">
+              {/* Satış Takip — compact strip */}
+              <div className="mt-3 rounded-xl border border-slate-800 bg-[#111827] p-3">
                 {(() => {
                   const takip = teklifTakipDurumu(aktifIs)
                   return (
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Satış Takip Uyarısı</p>
-                        <p className={`mt-2 text-xl font-black ${takip.renk}`}>{takip.baslik}</p>
-                        <p className="mt-2 text-sm text-slate-400">{takip.metin}</p>
-                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Sıcaklık Skoru</p>
-                            <p className={`text-sm font-black ${takip.renk}`}>{takip.skor}/5 · {takip.etiket}</p>
-                          </div>
-                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
-                            <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, takip.skor * 20))}%`, backgroundColor: takip.barColor }} />
-                          </div>
-                          <p className="mt-2 text-xs text-slate-400">Önerilen aksiyon: <b>{takip.aksiyon}</b></p>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                            style={{ color: takip.barColor, borderColor: takip.barColor + "44", background: takip.barColor + "15" }}>
+                            {takip.etiket || "—"}
+                          </span>
+                          <p className={`truncate text-sm font-bold ${takip.renk}`}>{takip.baslik}</p>
+                          <p className="hidden xl:block shrink-0 max-w-[200px] truncate text-xs text-slate-500">{takip.metin}</p>
                         </div>
-                        <p className="mt-2 text-xs text-slate-500">
-                          Görüntülenme: {Number(aktifIs.teklifGoruntulenmeSayisi || 0)} kez
-                          {aktifIs.teklifSonGoruntulenmeTarihi ? ` · Son bakış: ${new Date(aktifIs.teklifSonGoruntulenmeTarihi).toLocaleString("tr-TR")}` : " · Henüz açılmadı"}
-                        </p>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <p className={`tabular-nums text-xs font-bold ${takip.renk}`}>{takip.skor}/5</p>
+                          <button onClick={aktifTakipMesajiKopyala} className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:bg-slate-700">
+                            Takip Mesajı
+                          </button>
+                        </div>
                       </div>
-                      <button onClick={aktifTakipMesajiKopyala} className="shrink-0 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold hover:bg-slate-700">Akıllı Takip Mesajı Kopyala</button>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, takip.skor * 20))}%`, backgroundColor: takip.barColor }} />
+                        </div>
+                        <p className="shrink-0 tabular-nums text-[10px] text-slate-600">
+                          {Number(aktifIs.teklifGoruntulenmeSayisi || 0)}× görüntülendi
+                          {aktifIs.teklifSonGoruntulenmeTarihi ? ` · ${new Date(aktifIs.teklifSonGoruntulenmeTarihi).toLocaleDateString("tr-TR")}` : ""}
+                        </p>
+                        <p className="shrink-0 text-[10px] text-slate-500">{takip.aksiyon}</p>
+                      </div>
                     </div>
                   )
                 })()}
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-4">
-                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Taş / Ürün</p><p className="mt-2 text-sm">{aktifIs.urunAdi || '-'}</p><p className="mt-1 text-xs text-slate-500">{aktifIs.malzemeTipi || '-'}</p></div>
-                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Kaç Plaka Lazım?</p><p className="mt-2 text-xl">{Number(aktifIs.kullanilanPlakaSayisi || 0)} plaka</p><p className="mt-1 text-xs text-slate-500">{aktifIs.plakaGenislikCm || '-'} × {aktifIs.plakaUzunlukCm || '-'} cm</p></div>
-                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Taş Durumu</p><p className={`mt-2 text-lg ${aktifIs.tasDurumu === 'alinacak' ? 'text-amber-400' : aktifIs.tasDurumu ? 'text-emerald-400' : 'text-slate-400'}`}>{aktifIs.tasDurumu === 'alinacak' ? 'Taş Alınacak' : aktifIs.tasDurumu ? 'Taş Stokta' : 'Belirsiz'}</p></div>
+              {/* Info grid — 6 col */}
+              <div className="mt-3 grid grid-cols-6 gap-2">
+                <div className="rounded-xl border border-slate-800 bg-[#0B1120] p-3"><p className="text-[10px] text-slate-400">Taş / Ürün</p><p className="mt-1 text-xs font-semibold">{aktifIs.urunAdi || '—'}</p><p className="mt-0.5 text-[10px] text-slate-500">{aktifIs.malzemeTipi || '—'}</p></div>
+                <div className="rounded-xl border border-slate-800 bg-[#0B1120] p-3"><p className="text-[10px] text-slate-400">Plaka</p><p className="mt-1 text-sm font-bold">{Number(aktifIs.kullanilanPlakaSayisi || 0)}</p><p className="mt-0.5 text-[10px] text-slate-500">{aktifIs.plakaGenislikCm || '—'}×{aktifIs.plakaUzunlukCm || '—'} cm</p></div>
+                <div className="rounded-xl border border-slate-800 bg-[#0B1120] p-3"><p className="text-[10px] text-slate-400">Taş</p><p className={`mt-1 text-xs font-semibold ${aktifIs.tasDurumu === 'alinacak' ? 'text-amber-400' : aktifIs.tasDurumu ? 'text-emerald-400' : 'text-slate-400'}`}>{aktifIs.tasDurumu === 'alinacak' ? 'Alınacak' : aktifIs.tasDurumu ? 'Stokta' : '—'}</p></div>
+                <div className="rounded-xl border border-slate-800 bg-[#0B1120] p-3"><p className="text-[10px] text-slate-400">Süre</p><p className="mt-1 text-sm font-bold">{Number(aktifIs.toplamSureDakika || 0).toFixed(0)} dk</p></div>
+                <div className="rounded-xl border border-slate-800 bg-[#0B1120] p-3"><p className="text-[10px] text-slate-400">İş Yükü</p><p className={`mt-1 text-sm font-bold ${isYuku > 100 ? 'text-red-400' : isYuku > 70 ? 'text-amber-400' : 'text-emerald-400'}`}>%{isYuku}</p></div>
+                <div className="rounded-xl border border-slate-800 bg-[#0B1120] p-3"><p className="text-[10px] text-slate-400">Tahsilat</p><p className="mt-1 text-sm font-bold text-cyan-400">{paraGoster(Number(aktifIs.tahsilat || 0))}</p></div>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-4">
-                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Toplam Süre</p><p className="mt-2 text-xl">{Number(aktifIs.toplamSureDakika || 0).toFixed(0)} dk</p></div>
-                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Atölye İş Yükü</p><p className={`mt-2 text-xl ${isYuku > 100 ? 'text-red-400' : isYuku > 70 ? 'text-amber-400' : 'text-emerald-400'}`}>%{isYuku}</p></div>
-                <div className="bg-[#0B1120] border border-slate-800 p-4 rounded-xl"><p className="text-xs text-slate-400">Tahsilat</p><p className="mt-2 text-xl text-cyan-400">{paraGoster(Number(aktifIs.tahsilat || 0))}</p></div>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-slate-800 bg-[#0B1120] p-5">
-                <p className="text-xs text-slate-400 mb-3">Notlar</p>
+              {/* Notlar */}
+              <div className="mt-3 rounded-xl border border-slate-800 bg-[#0B1120] p-3">
+                <p className="mb-1.5 text-[10px] text-slate-400">Notlar</p>
                 <p className="text-sm text-slate-300">{aktifIs.notlar || 'Bu iş için not girilmemiş.'}</p>
               </div>
-
             </>
           )}
         </main>
