@@ -423,9 +423,23 @@ export default function YeniIsV3Page() {
     const inner = document.getElementById("dashboard-inner");
     const ms = main?.getAttribute("style")  || "";
     const is = inner?.getAttribute("style") || "";
-    if (main)  { main.style.overflow = "hidden"; main.style.height = "100dvh"; main.style.minHeight = "unset"; main.style.paddingBottom = "0"; }
-    if (inner) { inner.style.overflow = "hidden"; inner.style.height = "100dvh"; inner.style.minHeight = "unset"; }
-    return () => { if (main) main.setAttribute("style", ms); if (inner) inner.setAttribute("style", is); };
+    const desktopQuery = window.matchMedia("(min-width: 768px)");
+    const restoreShell = () => {
+      if (main) main.setAttribute("style", ms);
+      if (inner) inner.setAttribute("style", is);
+    };
+    const syncShell = () => {
+      if (!desktopQuery.matches) { restoreShell(); return; }
+      if (main)  { main.style.overflow = "hidden"; main.style.height = "100dvh"; main.style.minHeight = "unset"; main.style.paddingBottom = "0"; }
+      if (inner) { inner.style.overflow = "hidden"; inner.style.height = "100dvh"; inner.style.minHeight = "unset"; }
+    };
+    syncShell();
+    desktopQuery.addEventListener("change", syncShell);
+    return () => {
+      desktopQuery.removeEventListener("change", syncShell);
+      if (main) main.setAttribute("style", ms);
+      if (inner) inner.setAttribute("style", is);
+    };
   }, []);
 
   // Taslak yükle / Düzenleme modu
