@@ -19,7 +19,7 @@ const BOS_YETKI: PersonelYetki = {
   atolyeAyarGorebilir: false,
 }
 
-// ─── Sade yardımcılar (yetki aside'da kullanılır) ────────────────────────────
+// ─── Sade yardımcılar ─────────────────────────────────────────────────────────
 
 function Mini({ label, value, tone = "text-white" }: { label: string; value: string | number; tone?: string }) {
   return (
@@ -59,6 +59,15 @@ function Toggle({
         />
       </span>
     </button>
+  )
+}
+
+function PersonelChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-[#0B1120] px-3 py-1.5">
+      <p className="text-[9px] uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="text-xs font-semibold tabular-nums text-white">{value}</p>
+    </div>
   )
 }
 
@@ -191,20 +200,43 @@ export default function PersonelSayfasi() {
   }, [personeller])
 
   return (
-    <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 text-white md:h-screen md:overflow-hidden md:p-3">
-      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:h-full md:min-h-0 md:grid-cols-[270px_minmax(0,1fr)_300px]">
+    <div className="relative min-h-[100dvh] overflow-x-hidden bg-[#030712] p-2 text-white md:h-screen md:overflow-hidden md:p-0 md:flex md:flex-col">
 
-        {/* ── SOL: LİSTE ──────────────────────────────────────────────── */}
+      {/* ── DESKTOP: TOP STRIP ──────────────────────────────────────────── */}
+      <div className="hidden md:flex shrink-0 items-center gap-2 border-b border-slate-800/60 px-4 py-2">
+        <div className="mr-3 min-w-0">
+          <p className="text-sm font-semibold leading-tight">Ekip Radarı</p>
+          <p className="text-[10px] leading-tight text-slate-500">Personel Yönetimi</p>
+        </div>
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          <PersonelChip label="Aktif" value={`${ozet.aktifSayi} kişi`} />
+          <PersonelChip label="Ort. Skor" value={`%${ozet.ortalama}`} />
+          <PersonelChip label="Toplam Görev" value={`${ozet.toplamGorev} görev`} />
+          <PersonelChip label="Tamamlanan" value={`${ozet.tamamlanan} tamam`} />
+          <PersonelChip
+            label="Ayın Elemanı"
+            value={ayinElemani ? `${ayinElemani.ad} ${ayinElemani.soyad}` : "—"}
+          />
+          <PersonelChip
+            label="Seçili"
+            value={aktif ? `${aktif.ad} ${aktif.soyad}` : "Seçili yok"}
+          />
+        </div>
+      </div>
+
+      {/* ── MOBİLE: MEVCUT GRID (desktop'ta gizli) ──────────────────────── */}
+      <div className="grid min-h-[100dvh] grid-cols-1 gap-3 md:hidden">
+
+        {/* SOL: LİSTE */}
         <aside
           className={[
-            "flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-4 pt-[104px] md:pt-4",
-            mobileView === "list" ? "flex" : "hidden md:flex",
+            "flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-4 pt-[104px]",
+            mobileView === "list" ? "flex" : "hidden",
           ].join(" ")}
         >
           <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Ekip Radarı</p>
           <h1 className="mt-2 text-2xl font-semibold">Personel</h1>
 
-          {/* Mobil: hızlı ekle butonu */}
           <button
             onClick={() => acForm()}
             className="absolute right-4 top-6 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-lg md:hidden"
@@ -212,7 +244,6 @@ export default function PersonelSayfasi() {
             + Personel
           </button>
 
-          {/* Özet */}
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Mini label="Aktif" value={ozet.aktifSayi} />
             <Mini label="Skor" value={`%${ozet.ortalama}`} tone="text-emerald-300" />
@@ -220,7 +251,6 @@ export default function PersonelSayfasi() {
             <Mini label="Tamam" value={ozet.tamamlanan} tone="text-violet-300" />
           </div>
 
-          {/* Arama */}
           <input
             value={arama}
             onChange={(e) => setArama(e.target.value)}
@@ -228,7 +258,6 @@ export default function PersonelSayfasi() {
             className="mt-4 h-11 rounded-xl border border-slate-700 bg-[#111827] px-4 text-sm outline-none focus:border-blue-500"
           />
 
-          {/* Rol filtresi */}
           <select
             value={rol}
             onChange={(e) => setRol(e.target.value)}
@@ -238,7 +267,6 @@ export default function PersonelSayfasi() {
             {GOREVLER.map((g) => <option key={g}>{g}</option>)}
           </select>
 
-          {/* Liste */}
           <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
             {filtreli.map((p) => (
               <PersonelListCard
@@ -252,11 +280,11 @@ export default function PersonelSayfasi() {
           </div>
         </aside>
 
-        {/* ── ORTA: DETAY ─────────────────────────────────────────────── */}
+        {/* ORTA: DETAY */}
         <main
           className={[
-            "rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-tab-bar pt-[104px] md:overflow-y-auto md:p-5",
-            mobileView === "detail" ? "block overflow-y-auto" : "hidden md:block",
+            "rounded-3xl border border-slate-800 bg-[#0B1120] px-4 pb-tab-bar pt-[104px]",
+            mobileView === "detail" ? "block overflow-y-auto" : "hidden",
           ].join(" ")}
         >
           {!aktif ? (
@@ -301,17 +329,16 @@ export default function PersonelSayfasi() {
           </div>
         </main>
 
-        {/* ── SAĞ: YETKİ & AKSIYON ────────────────────────────────────── */}
+        {/* SAĞ: YETKİ SLIDE-OUT (mobile only) */}
         <aside
           className={[
             "fixed right-0 top-0 z-[180] h-[100dvh] w-[86vw] max-w-[380px] flex-col overflow-y-auto rounded-l-3xl border-l border-slate-800 bg-[#0B1120] p-4 shadow-2xl transition-transform duration-300",
-            "md:static md:w-auto md:h-full md:translate-x-0 md:rounded-3xl md:border md:flex md:flex-col md:overflow-hidden",
-            mobilePanelOpen ? "translate-x-0" : "translate-x-full",
+            mobilePanelOpen ? "flex translate-x-0" : "flex translate-x-full",
           ].join(" ")}
         >
           <button
             onClick={() => setMobilePanelOpen(false)}
-            className="mb-4 rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold md:hidden"
+            className="mb-4 rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold"
           >
             Kapat
           </button>
@@ -366,6 +393,94 @@ export default function PersonelSayfasi() {
             </button>
           </div>
         </aside>
+      </div>
+
+      {/* ── DESKTOP: COCKPIT CANVAS ──────────────────────────────────────── */}
+      <div className="hidden md:grid md:flex-1 md:min-h-0 md:grid-cols-[270px_minmax(0,1fr)] md:gap-3 md:overflow-hidden md:p-3">
+
+        {/* Sol sütun: liste + arama/filtre */}
+        <aside className="flex flex-col overflow-hidden rounded-3xl border border-slate-800 bg-[#0B1120] p-4">
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Ekip Radarı</p>
+          <h1 className="mt-2 text-2xl font-semibold">Personel</h1>
+
+          <input
+            value={arama}
+            onChange={(e) => setArama(e.target.value)}
+            placeholder="Ara..."
+            className="mt-4 h-11 rounded-xl border border-slate-700 bg-[#111827] px-4 text-sm outline-none focus:border-blue-500"
+          />
+
+          <select
+            value={rol}
+            onChange={(e) => setRol(e.target.value)}
+            className="mt-2 h-11 rounded-xl border border-slate-700 bg-[#111827] px-4 text-sm outline-none focus:border-blue-500"
+          >
+            <option>Tümü</option>
+            {GOREVLER.map((g) => <option key={g}>{g}</option>)}
+          </select>
+
+          <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
+            {filtreli.map((p) => (
+              <PersonelListCard
+                key={p.id}
+                personel={p}
+                isActive={aktif?.id === p.id}
+                onClick={() => setAktif(p)}
+                onDelete={() => personelSil(p.id)}
+              />
+            ))}
+          </div>
+        </aside>
+
+        {/* Sağ sütun: detay paneli */}
+        <main className="min-h-0 overflow-y-auto rounded-3xl border border-slate-800 bg-[#0B1120] p-5">
+          {!aktif ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center">
+                <p className="text-lg font-semibold text-slate-400">Personel seçilmedi</p>
+                <p className="mt-1 text-sm text-slate-600">Sol listeden bir personel seçin</p>
+              </div>
+            </div>
+          ) : (
+            <PersonelDetailPanel
+              aktif={aktif}
+              onEdit={() => acForm(aktif)}
+              onStatusChange={handleStatusChange}
+              onBack={() => {}}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* ── DESKTOP: BOTTOM ACTION BAR ───────────────────────────────────── */}
+      <div className="hidden md:flex shrink-0 items-center justify-between border-t border-slate-800 bg-[#030712] px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => acForm()}
+            className="rounded-xl border border-violet-600/50 bg-violet-600/10 px-4 py-2 text-xs font-semibold text-violet-300 transition hover:bg-violet-600/20"
+          >
+            + Personel Ekle
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          {aktif && (
+            <>
+              <button
+                onClick={() => acForm(aktif)}
+                className="rounded-xl border border-blue-600/50 bg-blue-600/10 px-4 py-2 text-xs font-semibold text-blue-300 transition hover:bg-blue-600/20"
+              >
+                Personeli Düzenle
+              </button>
+              <button
+                onClick={yetkiKaydet}
+                disabled={yetkiKaydediliyor}
+                className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold transition hover:bg-emerald-500 disabled:bg-slate-700"
+              >
+                {yetkiKaydediliyor ? "Kaydediliyor..." : "Yetkileri Kaydet"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Mobil panel backdrop */}
