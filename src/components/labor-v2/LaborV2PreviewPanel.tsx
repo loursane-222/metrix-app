@@ -1,0 +1,138 @@
+"use client";
+
+import { useMemo } from "react";
+import { calculateLaborV2, compareLaborV1V2, normalizeLaborV2Input } from "@/lib/labor-v2";
+import type { LaborV2Input, LaborV2OperationInput } from "@/lib/labor-v2";
+import { LaborV2DebugPanel } from "./LaborV2DebugPanel";
+
+function n(value: unknown): number {
+  const parsed = Number(String(value || "0").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parcaMtul(parca: { en?: unknown; boy?: unknown; adet?: unknown }): number {
+  const en = n(parca.en);
+  const boy = n(parca.boy);
+  const adet = n(parca.adet) || 1;
+  return en > 0 && boy > 0 ? (boy / 100) * adet : 0;
+}
+
+export function LaborV2PreviewPanel({
+  form,
+  hesap,
+  makineler,
+  plakaFireOrani,
+}: {
+  form: any;
+  hesap: any;
+  makineler: any[];
+  plakaFireOrani: number;
+}) {
+  const laborV2Input = useMemo<LaborV2Input>(() => {
+    const makineMaliyet = (id: string): number | undefined => {
+      const makine = makineler.find((item: any) => item.id === id);
+      const value = Number(
+        makine?.dakikalikMaliyet ??
+        makine?.dkMaliyet ??
+        makine?.dakikaMaliyet ??
+        makine?.hesaplananDakikaMaliyeti ??
+        0
+      );
+      return Number.isFinite(value) && value > 0 ? value : undefined;
+    };
+    const operations: LaborV2OperationInput[] = [];
+
+    (form.parcalar || []).forEach((parca: any) => {
+      const mtul = parcaMtul(parca);
+      const dakika = n(form.tezgahDakika || "25");
+      if (mtul <= 0 || dakika <= 0) return;
+      operations.push({
+        key: `parca_${parca.id}`,
+        label: parca.ad || "Parça",
+        category: "FABRICATION_BASE",
+        totalMinutes: mtul * dakika,
+        minuteCost: makineMaliyet(form.tezgahMakineId),
+        machineId: form.tezgahMakineId || undefined,
+        shapeType: parca.sekilTipi || "dikdortgen",
+        source: "yeni-is-v3.parcalar",
+      });
+    });
+
+    if (hesap.effectivePahlamaMtul > 0 && n(form.pahlamaDakika) > 0) {
+      operations.push({
+        key: "pahlama",
+        label: "Pahlama",
+        category: "EDGE",
+        totalMinutes: hesap.effectivePahlamaMtul * n(form.pahlamaDakika),
+        minuteCost: makineMaliyet(form.pahlamaMakineId),
+        machineId: form.pahlamaMakineId || undefined,
+        source: "yeni-is-v3.operasyon",
+      });
+    }
+
+    if (hesap.effectiveKesim45Mtul > 0 && n(form.kesim45Dakika) > 0) {
+      operations.push({
+        key: "kesim_45",
+        label: "45° Kesim",
+        category: "CUT_45",
+        totalMinutes: hesap.effectiveKesim45Mtul * n(form.kesim45Dakika),
+        minuteCost: makineMaliyet(form.kesim45MakineId),
+        machineId: form.kesim45MakineId || undefined,
+        source: "yeni-is-v3.operasyon",
+      });
+    }
+
+    [
+      { key: "eviye", label: "Eviye", count: n(form.eviyes), minutes: 200 },
+      { key: "ocak", label: "Ocak", count: n(form.ocaklar), minutes: 150 },
+      { key: "priz", label: "Priz/Delik", count: n(form.prizler), minutes: 50 },
+    ].forEach((item) => {
+      if (item.count <= 0) return;
+      operations.push({
+        key: item.key,
+        label: `${item.label} (${item.count} ad)`,
+        category: "CUTOUT",
+        totalMinutes: item.count * item.minutes,
+        minuteCost: makineMaliyet(form.tezgahMakineId),
+        machineId: form.tezgahMakineId || undefined,
+        source: "yeni-is-v3.ek-is",
+      });
+    });
+
+    return normalizeLaborV2Input({
+      project: {
+        totalMtul: hesap.toplamMtul,
+        totalAreaCm2: hesap.toplamParcaAlani,
+        pieceCount: (form.parcalar || []).length,
+        hasDamarTakibi: Boolean(form.plakaLayoutJson?.damarTakibi || form.plakaLayoutJson?.hasDamarTakibi),
+        hasBookmatch: Boolean(form.plakaLayoutJson?.bookmatch || form.plakaLayoutJson?.hasBookmatch),
+        layoutFireRate: n(form.plakaLayoutJson?.fireOrani || plakaFireOrani),
+        projectDifficulty: ["u", "ozel"].includes(form.mutfakTipi) ? "HIGH" : "NORMAL",
+      },
+      economics: {
+        shopMinuteCost: makineMaliyet(form.tezgahMakineId),
+        defaultMachineMinuteCost: makineMaliyet(form.tezgahMakineId),
+      },
+      operations,
+      metadata: {
+        source: "yeni-is-v3-desktop-preview",
+        authoritative: false,
+      },
+    });
+  }, [form, hesap, makineler, plakaFireOrani]);
+
+  const laborV2Result = useMemo(() => calculateLaborV2(laborV2Input), [laborV2Input]);
+  const laborV2Comparison = useMemo(
+    () => compareLaborV1V2(
+      {
+        totalMinutes: hesap.toplamDakika,
+        laborCost: hesap.iscilikMaliyeti,
+        totalCost: hesap.toplamMaliyet,
+      },
+      laborV2Result
+    ),
+    [hesap, laborV2Result]
+  );
+
+  return <LaborV2DebugPanel result={laborV2Result} comparison={laborV2Comparison} />;
+}

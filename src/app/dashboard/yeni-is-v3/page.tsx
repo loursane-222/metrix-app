@@ -3,8 +3,14 @@
 import { normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { PlakaPlanlayiciV2 } from "@/components/plaka-planlayici/PlakaPlanlayiciV2";
 import AiYeniIsPanel from "@/components/ai/AiYeniIsPanel";
+
+const LaborV2PreviewPanel = dynamic(
+  () => import("@/components/labor-v2/LaborV2PreviewPanel").then((mod) => mod.LaborV2PreviewPanel),
+  { ssr: false }
+);
 
 // ─── Yardımcılar ──────────────────────────────────────────────────────────────
 function n(v: any): number {
@@ -633,6 +639,7 @@ export default function YeniIsV3Page() {
   }
 
   const hesap = useMemo(() => hesapla(form, makineler), [form, makineler]);
+  const laborV2Enabled = process.env.NEXT_PUBLIC_LABOR_V2_PREVIEW === "true";
 
   // Kaydet
   async function kaydet() {
@@ -1550,6 +1557,10 @@ export default function YeniIsV3Page() {
                   ))}
                 </div>
               </div>
+
+              {laborV2Enabled && (
+                <LaborV2PreviewPanel form={form} hesap={hesap} makineler={makineler} plakaFireOrani={plakaFireOrani} />
+              )}
 
               {/* İş özeti */}
               <div className="yi-kart mobile-gizle">
