@@ -1,0 +1,18 @@
+{
+  "name": "shape-heavy",
+  "input": {
+    "economics": { "shopMinuteCost": 100 },
+    "operations": [
+      { "key": "shape", "label": "Oval parça", "category": "FABRICATION_BASE", "totalMinutes": 100, "shapeType": "oval" }
+    ],
+    "config": { "setup": { "baseMinutes": 0, "perComplexShapeMinutes": 0 } }
+  },
+  "expected": {
+    "version": "labor-v2",
+    "totalMinutes": 115,
+    "totalLaborCost": 11500,
+    "warningKeys": [],
+    "adjustmentKeys": ["shape_difficulty"],
+    "breakdownCategories": ["FABRICATION_BASE", "ADJUSTMENT"]
+  }
+}

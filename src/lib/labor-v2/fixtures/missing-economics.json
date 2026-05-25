@@ -1,0 +1,17 @@
+{
+  "name": "missing-economics",
+  "input": {
+    "operations": [
+      { "key": "missing", "label": "Eksik maliyet", "category": "FABRICATION_BASE", "totalMinutes": 10 }
+    ],
+    "config": { "setup": { "baseMinutes": 0 } }
+  },
+  "expected": {
+    "version": "labor-v2",
+    "totalMinutes": 10,
+    "totalLaborCost": 0,
+    "warningKeys": ["missing_shop_minute_cost", "missing_machine_cost"],
+    "adjustmentKeys": [],
+    "breakdownCategories": ["FABRICATION_BASE"]
+  }
+}

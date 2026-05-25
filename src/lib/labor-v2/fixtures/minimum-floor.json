@@ -1,0 +1,21 @@
+{
+  "name": "minimum-floor",
+  "input": {
+    "economics": { "shopMinuteCost": 50 },
+    "operations": [
+      { "key": "small", "label": "Küçük işlem", "category": "CUTOUT", "totalMinutes": 10 }
+    ],
+    "config": {
+      "setup": { "baseMinutes": 0 },
+      "floor": { "minimumCost": 1000 }
+    }
+  },
+  "expected": {
+    "version": "labor-v2",
+    "totalMinutes": 20,
+    "totalLaborCost": 1000,
+    "warningKeys": ["minimum_floor_applied"],
+    "adjustmentKeys": ["minimum_floor"],
+    "breakdownCategories": ["CUTOUT", "ADJUSTMENT"]
+  }
+}

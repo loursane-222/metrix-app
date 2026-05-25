@@ -1,0 +1,18 @@
+{
+  "name": "simple-tezgah",
+  "input": {
+    "economics": { "shopMinuteCost": 50 },
+    "operations": [
+      { "key": "tezgah", "label": "Tezgah işleme", "category": "FABRICATION_BASE", "totalMinutes": 100 }
+    ],
+    "config": { "setup": { "baseMinutes": 0 } }
+  },
+  "expected": {
+    "version": "labor-v2",
+    "totalMinutes": 100,
+    "totalLaborCost": 5000,
+    "warningKeys": [],
+    "adjustmentKeys": [],
+    "breakdownCategories": ["FABRICATION_BASE"]
+  }
+}
