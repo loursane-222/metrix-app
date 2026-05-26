@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import Link from "next/link";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
 import TaskDetailModal from "@/components/schedule/TaskDetailModal";
+import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 
 // ─── Live Ops types ───────────────────────────────────────────────────────────
 type RiskState = "NO_PLAN" | "NORMAL" | "OVERRUN" | "CRITICAL" | "STALE";
@@ -317,6 +318,12 @@ export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [sekme, setSekme] = useState<"yillik" | "aylik">("aylik");
+  const [activeDashboardTab, setActiveDashboardTab] = useState<"live" | "operations" | "sales" | "cash" | "reports">("live");
+  const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
+  const [dashboardCoachWelcome, setDashboardCoachWelcome] = useState(false);
+  const [dashboardCoachActive, setDashboardCoachActive] = useState(false);
+  const [dashboardCoachIndex, setDashboardCoachIndex] = useState(0);
+  const [dashboardCoachRect, setDashboardCoachRect] = useState<DOMRect | null>(null);
   const [liveOps, setLiveOps] = useState<{
     aktifEkip: AktifEkipItem[];
     toplamAktif: number;
@@ -400,6 +407,13 @@ export default function DashboardPage() {
     return () => window.removeEventListener("metrix:execution_update", handleExecutionUpdate);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || window.innerWidth < 768) return;
+    const dismissed = localStorage.getItem("metrix-dashboard-coach-dismissed") === "1";
+    const completed = localStorage.getItem("metrix-dashboard-coach-completed") === "1";
+    if (!dismissed && !completed) setDashboardCoachWelcome(true);
+  }, []);
+
   const finans: FinansBlok = useMemo(
     () =>
       data?.finans?.[sekme] ?? {
@@ -440,6 +454,237 @@ export default function DashboardPage() {
     { label: "Devam Eden", val: finans.devam, sub: (atelye.bekleyenOperasyon ?? 0) + " bekliyor", color: "text-blue-400", border: "border-blue-500/20" },
     { label: "Kaybedilen", val: finans.kaybedilen, sub: "%" + kaybPct + " kayip", color: "text-red-400", border: "border-red-500/20" },
   ];
+
+  const desktopKpis = [
+    { label: "Bugünkü Operasyon", value: String(atelye.bugunOperasyon ?? operasyonPlan.length), sub: `${operasyonKpi.tamamlanan} tamamlandı`, tone: "text-slate-950" },
+    { label: "İşlemde", value: String(liveToplamAktif || operasyonKpi.islemde || 0), sub: liveToplamPaused > 0 ? `${liveToplamPaused} beklemede` : "canlı takip", tone: "text-blue-600" },
+    { label: "Takılan İş", value: String(liveToplamBlocked), sub: liveToplamBlocked > 0 ? "kontrol gerekli" : "engel yok", tone: liveToplamBlocked > 0 ? "text-red-600" : "text-emerald-600" },
+    { label: "Vadesi Gelen", value: String(vadesiGelenler.length), sub: "tahsilat", tone: vadesiGelenler.length > 0 ? "text-amber-600" : "text-emerald-600" },
+    { label: "Sıcak Teklif", value: String(sicakTeklifler.length), sub: "satış fırsatı", tone: "text-violet-600" },
+    { label: "Aylık Onaylanan", value: "₺" + fmt(finans.onaylanan), sub: `%${finans.donusumOrani} dönüşüm`, tone: "text-emerald-600" },
+  ];
+
+  const desktopActions = [
+    { label: "Yeni İş", href: "/dashboard/yeni-is-v3", target: "dashboard-action-new-job" },
+    { label: "İş Programı", href: "/dashboard/is-programi", target: "dashboard-action-schedule" },
+    { label: "Tahsilatlar", href: "/dashboard/tahsilatlar", target: "dashboard-action-tahsilat" },
+    { label: "Müşteriler", href: "/dashboard/musteriler" },
+    { label: "Atölye", href: "/dashboard/atolye" },
+    { label: "Raporlar", href: "/dashboard" },
+  ];
+
+  const dashboardTabs = [
+    { id: "live" as const, label: "Canlı Operasyon Akışı", target: "dashboard-tab-live" },
+    { id: "operations" as const, label: "Günün Operasyonları", target: "dashboard-tab-operations" },
+    { id: "sales" as const, label: "Satış Sinyali", target: "dashboard-tab-sales" },
+    { id: "cash" as const, label: "Nakit Akışı", target: "dashboard-tab-cash" },
+    { id: "reports" as const, label: "Raporlar", target: "dashboard-tab-reports" },
+  ];
+
+  const dashboardCoachSteps = [
+    {
+      target: "dashboard-kpi-strip",
+      tab: "live" as const,
+      title: "İşletmenin günlük nabzı.",
+      copy: "Operasyon, tahsilat ve satış yoğunluğunu gün içinde ilk buradan okuyun.",
+    },
+    {
+      target: "dashboard-tab-live",
+      tab: "live" as const,
+      title: "Canlı akış kontrol masasıdır.",
+      copy: "Atölyede ve sahada olan biteni gerçek zamanlı takip etmek için bu sekmeyi açık tutun.",
+    },
+    {
+      target: "dashboard-tab-operations",
+      tab: "operations" as const,
+      title: "Günün operasyonlarını yönetin.",
+      copy: "Bugünkü programı, aktif işleri ve takılan operasyonları aynı ekranda kontrol edin.",
+    },
+    {
+      target: "dashboard-tab-sales",
+      tab: "sales" as const,
+      title: "Sıcak fırsatları kaçırmayın.",
+      copy: "Görüntülenen ve hareket alan teklifler öncelikli satış fırsatlarına dönüşür.",
+    },
+    {
+      target: "dashboard-tab-cash",
+      tab: "cash" as const,
+      title: "Nakit takibini hızlandırın.",
+      copy: "Vadesi gelen ödemeleri görün ve müşterilere tek tıkla WhatsApp hatırlatması gönderin.",
+    },
+    {
+      target: "dashboard-tab-reports",
+      tab: "reports" as const,
+      title: "Yönetici raporlarını okuyun.",
+      copy: "Satış, tahsilat ve operasyon performansını tek noktadan analiz edin.",
+    },
+  ];
+
+  const activeDashboardCoachStep = dashboardCoachSteps[dashboardCoachIndex];
+
+  const bottomSummary: Record<"live" | "operations" | "sales" | "cash" | "reports", string> = {
+    live: "Canlı akışta son hareketler takip ediliyor.",
+    operations: `Bugün ${atelye.bugunOperasyon ?? operasyonPlan.length} operasyon, ${liveToplamAktif || operasyonKpi.islemde || 0} aktif, ${liveToplamBlocked} takılan iş.`,
+    sales: `Sıcak tekliflerde ${sicakTeklifler.length} fırsat takip ediliyor.`,
+    cash: `Vadesi gelen ${vadesiGelenler.length} ödeme takip ediliyor.`,
+    reports: "Yıl, ay ve performans özetleri görüntüleniyor.",
+  };
+
+  function dismissDashboardCoach() {
+    localStorage.setItem("metrix-dashboard-coach-dismissed", "1");
+    setDashboardCoachWelcome(false);
+    setDashboardCoachActive(false);
+    setDashboardCoachRect(null);
+  }
+
+  function completeDashboardCoach() {
+    localStorage.setItem("metrix-dashboard-coach-completed", "1");
+    setDashboardCoachWelcome(false);
+    setDashboardCoachActive(false);
+    setDashboardCoachRect(null);
+  }
+
+  function startDashboardCoach() {
+    localStorage.removeItem("metrix-dashboard-coach-dismissed");
+    setDashboardCoachWelcome(false);
+    setDashboardCoachIndex(0);
+    setDashboardCoachActive(true);
+  }
+
+  function teklifSicaklikSkoru(t: any) {
+    const goruntulenme = Number(t.goruntulenme || 0);
+    const pdf = Number(t.pdf || 0);
+    const tutar = Number(t.tutar || 0);
+    const mevcutSkor = Number(t.ihtimal || 0);
+    const goruntuPuan = Math.min(goruntulenme * 14 + pdf * 12, 42);
+    const tutarPuan = tutar >= 250000 ? 22 : tutar >= 100000 ? 16 : tutar >= 50000 ? 10 : tutar > 0 ? 6 : 0;
+    const aksiyonPuan = t.aksiyonTipi ? 14 : 6;
+    const fallbackPuan = mevcutSkor > 0 ? Math.round(mevcutSkor * 0.35) : 18;
+    return Math.max(0, Math.min(100, goruntuPuan + tutarPuan + aksiyonPuan + fallbackPuan));
+  }
+
+  function sicaklikMeta(score: number) {
+    if (score >= 70) return { label: "Sıcak fırsat", bar: "bg-red-400", text: "text-red-300", border: "border-red-400/20", bg: "from-red-500/[0.11]" };
+    if (score >= 40) return { label: "Isınıyor", bar: "bg-amber-400", text: "text-amber-300", border: "border-amber-400/20", bg: "from-amber-500/[0.10]" };
+    return { label: "Soğuk", bar: "bg-blue-400", text: "text-blue-300", border: "border-blue-400/20", bg: "from-blue-500/[0.09]" };
+  }
+
+  const yillikFinans = data?.finans?.yillik ?? { verilen: 0, onaylanan: 0, kaybedilen: 0, devam: 0, donusumOrani: 0, teklifSayisi: 0 };
+  const aylikFinans = data?.finans?.aylik ?? { verilen: 0, onaylanan: 0, kaybedilen: 0, devam: 0, donusumOrani: 0, teklifSayisi: 0 };
+  const vadesiGelenToplam = vadesiGelenler.reduce((s: number, v: any) => s + Number(v.tutar || 0), 0);
+  const operasyonYogunlugu = Number(atelye.doluluk ?? operasyonPlan.length ?? 0);
+  const operasyonSaglikSkoru = Math.max(0, Math.min(100,
+    58 +
+    Math.min(sicakTeklifler.length * 4, 14) -
+    Math.min(vadesiGelenler.length * 3, 18) -
+    Math.min(liveToplamBlocked * 8, 24) +
+    Math.min((liveToplamAktif || operasyonKpi.islemde || 0) * 3, 12)
+  ));
+  const performansLabel =
+    operasyonSaglikSkoru >= 85 ? "Çok Güçlü" :
+    operasyonSaglikSkoru >= 68 ? "Güçlü" :
+    operasyonSaglikSkoru >= 45 ? "Dengeli" : "Zayıf";
+  const raporDonem = `${_bugun.toLocaleDateString("tr-TR", { month: "long" })} ${_bugun.getFullYear()}`;
+  const raporRows = [
+    {
+      donem: "Bu Ay",
+      satis: `₺${fmt(aylikFinans.onaylanan)}`,
+      tahsilat: vadesiGelenler.length > 0 ? `₺${fmt(vadesiGelenToplam)} vadesi gelen` : "Risk yok",
+      uretim: `${operasyonPlan.length} operasyon`,
+      geciken: `${operasyonKpi.geciken} geciken / ${liveToplamBlocked} takılan`,
+      sicak: `${sicakTeklifler.length} fırsat`,
+      skor: operasyonSaglikSkoru,
+      degisim: "baz veri yok",
+      trend: "neutral",
+    },
+    {
+      donem: "Geçen Ay",
+      satis: "veri yok",
+      tahsilat: "veri yok",
+      uretim: "veri yok",
+      geciken: "veri yok",
+      sicak: "veri yok",
+      skor: null,
+      degisim: "karşılaştırma yok",
+      trend: "none",
+    },
+    {
+      donem: "Son 3 Ay",
+      satis: "takip başlıyor",
+      tahsilat: "takip başlıyor",
+      uretim: `${operasyonPlan.length} güncel operasyon`,
+      geciken: `${liveToplamBlocked} takılma`,
+      sicak: `${sicakTeklifler.length} sinyal`,
+      skor: operasyonSaglikSkoru,
+      degisim: "baz oluşuyor",
+      trend: "neutral",
+    },
+    {
+      donem: "Bu Yıl",
+      satis: `₺${fmt(yillikFinans.onaylanan)}`,
+      tahsilat: vadesiGelenToplam > 0 ? `₺${fmt(vadesiGelenToplam)} açık takip` : "açık takip yok",
+      uretim: `${atelye.bugunOperasyon ?? operasyonPlan.length} bugünkü operasyon`,
+      geciken: `${operasyonKpi.geciken} geciken`,
+      sicak: `${sicakTeklifler.length} aktif fırsat`,
+      skor: Math.max(0, Math.min(100, operasyonSaglikSkoru + Math.round(Number(yillikFinans.donusumOrani || 0) / 5))),
+      degisim: Number(yillikFinans.donusumOrani || 0) > 50 ? "güçlü" : "takipte",
+      trend: Number(yillikFinans.donusumOrani || 0) > 50 ? "up" : "neutral",
+    },
+    {
+      donem: "Geçen Yıl",
+      satis: "veri yok",
+      tahsilat: "veri yok",
+      uretim: "veri yok",
+      geciken: "veri yok",
+      sicak: "veri yok",
+      skor: null,
+      degisim: "karşılaştırma yok",
+      trend: "none",
+    },
+    {
+      donem: "Genel Toplam",
+      satis: `₺${fmt(yillikFinans.onaylanan + yillikFinans.devam)}`,
+      tahsilat: `₺${fmt(vadesiGelenToplam)} izleniyor`,
+      uretim: `${operasyonPlan.length} plan satırı`,
+      geciken: `${operasyonKpi.geciken + liveToplamBlocked} risk`,
+      sicak: `${sicakTeklifler.length} fırsat`,
+      skor: operasyonSaglikSkoru,
+      degisim: "anlık görünüm",
+      trend: "neutral",
+    },
+  ];
+
+  useEffect(() => {
+    if (!dashboardCoachActive || !activeDashboardCoachStep) {
+      setDashboardCoachRect(null);
+      return;
+    }
+
+    setActiveDashboardTab(activeDashboardCoachStep.tab);
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    function updateTargetRect() {
+      const el = document.querySelector(
+        `[data-onboarding-target="${activeDashboardCoachStep.target}"]`
+      ) as HTMLElement | null;
+      if (!el) {
+        setDashboardCoachRect(null);
+        return;
+      }
+      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      setDashboardCoachRect(el.getBoundingClientRect());
+    }
+
+    timeout = setTimeout(updateTargetRect, 180);
+    window.addEventListener("resize", updateTargetRect);
+    window.addEventListener("scroll", updateTargetRect, true);
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      window.removeEventListener("resize", updateTargetRect);
+      window.removeEventListener("scroll", updateTargetRect, true);
+    };
+  }, [dashboardCoachActive, dashboardCoachIndex, activeDashboardCoachStep?.target, activeDashboardCoachStep?.tab]);
 
   if (!data && !error) {
     return (
@@ -504,24 +749,763 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#030712] px-3 pb-tab-bar pt-0 md:px-6 md:pb-8 md:pt-0">
+    <main className="min-h-screen bg-[#030712] px-3 pb-tab-bar pt-0 md:h-[100dvh] md:overflow-hidden md:bg-[radial-gradient(circle_at_12%_8%,rgba(37,99,235,0.18),transparent_28%),radial-gradient(circle_at_78%_0%,rgba(16,185,129,0.12),transparent_26%),#07111f] md:px-4 md:pb-0 md:pt-3 lg:px-6">
       <InAppToast />
-      <div className="mx-auto max-w-4xl">
+
+      <div className="mx-auto hidden h-full min-h-0 w-full max-w-[1840px] flex-col gap-3 md:flex">
+        <header
+          data-onboarding-target="dashboard-header"
+          className="flex shrink-0 items-center justify-between gap-5 rounded-[28px] border border-white/10 bg-slate-950/42 px-5 py-3.5 shadow-[0_24px_90px_rgba(0,0,0,0.24)] backdrop-blur-xl"
+        >
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Metrix Cockpit</p>
+            <h1 className="mt-1 text-2xl font-black tracking-[-0.03em] text-white">Operasyon Merkezi</h1>
+            <p className="mt-1 max-w-2xl text-sm text-slate-400">
+              Bugünkü üretim, tahsilat ve satış akışını tek ekrandan yönetin.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <span className="rounded-2xl border border-blue-400/20 bg-blue-500/10 px-3 py-2 text-xs font-black text-blue-300 shadow-[0_0_24px_rgba(59,130,246,0.12)]">
+              {liveToplamAktif} aktif operasyon
+            </span>
+            <span className={`rounded-2xl border px-3 py-2 text-xs font-black ${liveToplamBlocked > 0 ? "border-red-400/25 bg-red-500/10 text-red-300 shadow-[0_0_24px_rgba(239,68,68,0.12)]" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"}`}>
+              {liveToplamBlocked} takılan iş
+            </span>
+            <span className={`rounded-2xl border px-3 py-2 text-xs font-black ${vadesiGelenler.length > 0 ? "border-amber-400/25 bg-amber-500/10 text-amber-300 shadow-[0_0_24px_rgba(245,158,11,0.12)]" : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"}`}>
+              {vadesiGelenler.length} vadesi gelen ödeme
+            </span>
+          </div>
+        </header>
+
+        <section data-onboarding-target="dashboard-kpi-strip" className="grid shrink-0 grid-cols-6 gap-2">
+          {desktopKpis.map((kpi, index) => (
+            <div key={kpi.label} className="group relative min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.055] p-3 shadow-[0_16px_50px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+              <div className={`absolute -right-7 -top-7 h-20 w-20 rounded-full blur-2xl ${
+                index === 1 ? "bg-blue-500/20" :
+                index === 2 ? "bg-red-500/18" :
+                index === 3 ? "bg-amber-500/18" :
+                index === 4 ? "bg-violet-500/18" :
+                index === 5 ? "bg-emerald-500/18" : "bg-sky-500/16"
+              }`} />
+              <p className="relative truncate text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">{kpi.label}</p>
+              <p className={`relative mt-2 truncate text-[clamp(17px,1.25vw,25px)] font-black leading-none tabular-nums ${
+                index === 1 ? "text-blue-300" :
+                index === 2 ? "text-red-300" :
+                index === 3 ? "text-amber-300" :
+                index === 4 ? "text-violet-300" :
+                index === 5 ? "text-emerald-300" : "text-white"
+              }`}>
+                {kpi.value}
+              </p>
+              <p className="relative mt-1 truncate text-[10px] font-semibold text-slate-500">{kpi.sub}</p>
+            </div>
+          ))}
+        </section>
+
+        <nav className="grid shrink-0 grid-cols-5 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] p-1 shadow-[0_14px_45px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+          {dashboardTabs.map((tab) => (
+            <button key={tab.id} type="button" data-onboarding-target={tab.target}
+              onClick={() => setActiveDashboardTab(tab.id)}
+              className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                activeDashboardTab === tab.id
+                  ? "bg-blue-500/18 text-white shadow-[inset_0_0_0_1px_rgba(96,165,250,0.25)]"
+                  : "text-slate-400 hover:bg-white/[0.055] hover:text-slate-100"
+              }`}>
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        {activeDashboardTab === "live" && (
+          <section data-onboarding-target="dashboard-live-full" className="flex min-h-0 flex-1 flex-col rounded-[30px] border border-white/10 bg-slate-950/48 p-5 shadow-[0_26px_90px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Canlı Operasyon Akışı</p>
+                <h2 className="mt-1 text-2xl font-black tracking-[-0.02em] text-white">Ekip Hareketleri</h2>
+                <p className="mt-1 text-sm text-slate-500">Son hareketler, üretim ve finans sinyalleri geniş operasyon zaman çizelgesinde akar.</p>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-black text-emerald-300">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                Canlı
+              </span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              {anaAkis.length === 0 ? (
+                <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.035] text-sm font-semibold text-slate-500">
+                  Henüz aktivite yok. İşlemler başladıkça burada görünecek.
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  {anaAkis.map((a: any, i: number) => (
+                    <button key={a.id || i} type="button" onClick={() => setSelectedActivity(a)}
+                      className="grid grid-cols-[72px_28px_minmax(0,1fr)_auto] gap-4 rounded-2xl border border-white/[0.075] bg-white/[0.045] px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-blue-400/25 hover:bg-blue-500/[0.06]">
+                      <span className="pt-0.5 text-[12px] font-black tabular-nums text-slate-500">{timeAgo(a.createdAt)}</span>
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-slate-900">
+                        <span className="h-3 w-3 rounded-full shadow-[0_0_18px_currentColor]" style={{ background: activityColor(a.type), color: activityColor(a.type) }} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-semibold leading-snug text-slate-100">{a.message || "Dashboard hareketi"}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          {a.actorAdi && <span className="rounded-full border border-white/8 bg-white/[0.055] px-2 py-0.5 text-[10px] font-bold text-slate-400">{a.actorAdi}</span>}
+                          <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">{a.type?.replace(/_/g, " ") || "activity"}</span>
+                        </div>
+                      </div>
+                      <span className="mt-1 h-px w-10 bg-gradient-to-r from-white/20 to-transparent" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {activeDashboardTab === "operations" && (
+          <section data-onboarding-target="dashboard-operations-full" className="grid min-h-0 flex-1 grid-cols-3 gap-3 overflow-hidden">
+            <div data-onboarding-target="dashboard-today-plan" className="flex min-h-0 flex-col rounded-[28px] border border-white/10 bg-white/[0.055] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Program</p>
+                  <h2 className="mt-1 text-lg font-black text-white">Bugünün Programı</h2>
+                </div>
+                <Link href="/dashboard/is-programi" className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-xs font-bold text-slate-300">Program</Link>
+              </div>
+              <div className="mb-3 grid grid-cols-4 gap-2">
+                {[
+                  ["Plan", operasyonKpi.planlanan, "text-slate-100"],
+                  ["Aktif", operasyonKpi.islemde, "text-blue-300"],
+                  ["Bitti", operasyonKpi.tamamlanan, "text-emerald-300"],
+                  ["Geç", operasyonKpi.geciken, operasyonKpi.geciken > 0 ? "text-red-300" : "text-slate-500"],
+                ].map(([label, value, color]) => (
+                  <div key={String(label)} className="rounded-2xl border border-white/8 bg-slate-950/38 px-2 py-2">
+                    <p className="text-[8px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p>
+                    <p className={`mt-1 text-lg font-black tabular-nums ${color}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {operasyonPlan.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 p-4 text-sm font-semibold text-slate-500">Bugün için plan yok.</div>
+                ) : operasyonPlan.map((o: any) => (
+                  <div key={o.id} className="flex items-start gap-3 border-b border-white/[0.055] py-3 last:border-0">
+                    <span className="w-12 shrink-0 pt-0.5 text-[12px] font-black tabular-nums text-slate-500">{o.saat}</span>
+                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_18px_currentColor]" style={{ background: phaseColor(o.phase), color: phaseColor(o.phase) }} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-black text-slate-100">{o.tip}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-500">{o.musteri}{o.urun ? " · " + o.urun : ""}</p>
+                    </div>
+                    {o.tamamlandi && <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[9px] font-black text-emerald-300">Tamam</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div data-onboarding-target="dashboard-active-ops" className="flex min-h-0 flex-col rounded-[28px] border border-blue-400/15 bg-white/[0.055] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-300">Canlı</p>
+                  <h2 className="mt-1 text-lg font-black text-white">Aktif Operasyonlar</h2>
+                </div>
+                <span className="text-xs font-black text-emerald-300">{liveToplamAktif} canlı</span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {aktifEkip.length === 0 ? (
+                  <p className="rounded-2xl border border-white/8 bg-slate-950/30 p-4 text-sm font-semibold text-slate-500">Şu an çalışan operasyon yok.</p>
+                ) : aktifEkip.map((e) => (
+                  <button key={e.execId} onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
+                    className="mb-2 w-full rounded-2xl border border-blue-400/15 bg-slate-950/58 px-4 py-3 text-left text-white last:mb-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black">{e.musteriAdi}</p>
+                        <p className="mt-0.5 truncate text-xs text-slate-500">{e.personelAd} · {e.phaseType}</p>
+                      </div>
+                      <p className="shrink-0 text-xl font-black tabular-nums text-blue-200">{e.elapsedMinutes}<span className="text-[10px] text-slate-500"> dk</span></p>
+                    </div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-blue-400" style={{ width: `${Math.min(Math.round((e.progressRatio ?? 0.42) * 100), 100)}%` }} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div data-onboarding-target="dashboard-blocked-jobs" className="flex min-h-0 flex-col rounded-[28px] border border-red-400/20 bg-red-950/[0.20] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-300">Alarm</p>
+                  <h2 className="mt-1 text-lg font-black text-white">Takılan İşler</h2>
+                </div>
+                <span className={`text-xs font-black ${liveToplamBlocked > 0 ? "text-red-300" : "text-emerald-300"}`}>{liveToplamBlocked} kayıt</span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {blockedItems.length === 0 ? (
+                  <p className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4 text-sm font-bold text-emerald-300">Kritik takılma yok.</p>
+                ) : blockedItems.map((item) => (
+                  <button key={item.execId} onClick={() => setLiveTask({ id: item.phaseId, phase: item.phaseType, title: item.musteriAdi, subtitle: item.urunAdi, completed: false, schedule: {} })}
+                    className="mb-2 flex w-full items-center justify-between gap-3 rounded-2xl border border-red-400/15 bg-red-500/10 px-4 py-3 text-left last:mb-0">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-black text-slate-100">{item.musteriAdi}</span>
+                      <span className="block truncate text-xs font-semibold text-red-300">{item.cannotStartReason ? (CANNOT_START_REASON_LABELS[item.cannotStartReason] ?? item.cannotStartReason) : "Kontrol gerekli"}</span>
+                    </span>
+                    <span className="shrink-0 text-sm font-black text-red-300">{item.elapsedBlockedMinutes} dk</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeDashboardTab === "sales" && (
+          <section data-onboarding-target="dashboard-sales-full" className="flex min-h-0 flex-1 flex-col rounded-[30px] border border-violet-400/15 bg-white/[0.055] p-5 shadow-[0_26px_90px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-300">Satış Sinyali</p>
+                <h2 className="mt-1 text-2xl font-black text-white">Sıcak Teklifler</h2>
+              </div>
+              <Link href="/dashboard/isler" className="rounded-full border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-xs font-black text-violet-300">İşlere Git</Link>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              {sicakTeklifler.length === 0 ? (
+                <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-white/10 bg-slate-950/30 text-sm font-semibold text-slate-500">Takip gerektiren teklif yok.</div>
+              ) : (
+                <div className="grid gap-3">
+                  {sicakTeklifler.map((t: any) => {
+                    const score = teklifSicaklikSkoru(t);
+                    const heat = sicaklikMeta(score);
+                    const phone = phoneClean(t.telefon);
+                    const goruntulenme = Number(t.goruntulenme || 0);
+                    const durum = t.aksiyonMesaji || t.aksiyonTipi || "Takip bekliyor";
+                    const msg = `Merhaba ${t.musteri || "müşterimiz"}, Metrix üzerinden hazırladığımız teklifinizle ilgili sizi bilgilendirmek istedim. Uygunsa detayları birlikte netleştirebiliriz.`;
+                    return (
+                      <div key={t.teklifNo} className={`rounded-3xl border ${heat.border} bg-gradient-to-r ${heat.bg} to-white/[0.035] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]`}>
+                        <div className="grid grid-cols-[minmax(0,1fr)_140px_120px_auto] items-start gap-4">
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-black text-slate-100">{t.musteri || "Müşteri"}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">{t.urun || "İş adı yok"} · {t.teklifNo || "Teklif kodu yok"}</p>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              <span className="rounded-full border border-white/10 bg-white/[0.055] px-2 py-1 text-[10px] font-black text-slate-400">{durum}</span>
+                              <span className="rounded-full border border-white/10 bg-white/[0.055] px-2 py-1 text-[10px] font-black text-slate-400">
+                                {goruntulenme > 0 ? `${goruntulenme} görüntülenme` : "Görüntülenme verisi yok"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-600">Teklif</p>
+                            <p className="mt-1 text-base font-black tabular-nums text-slate-100">₺{fmt(t.tutar)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-sm font-black ${heat.text}`}>%{score}</p>
+                            <p className="mt-0.5 text-[10px] font-bold text-slate-500">{heat.label}</p>
+                          </div>
+                          {phone.length > 0 ? (
+                            <a href={waHref(phone, msg)} target="_blank" rel="noopener noreferrer" className="rounded-full bg-violet-500/20 px-4 py-2 text-xs font-black text-violet-100">WhatsApp mesajı</a>
+                          ) : (
+                            <span className="rounded-full border border-white/10 bg-white/[0.035] px-4 py-2 text-xs font-black text-slate-500">telefon yok</span>
+                          )}
+                        </div>
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-950/70">
+                          <div className={`h-full rounded-full ${heat.bar} shadow-[0_0_20px_currentColor]`} style={{ width: `${score}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {activeDashboardTab === "cash" && (
+          <section data-onboarding-target="dashboard-cash-full" className="flex min-h-0 flex-1 flex-col rounded-[30px] border border-amber-400/15 bg-white/[0.055] p-5 shadow-[0_26px_90px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">Nakit Akışı</p>
+                <h2 className="mt-1 text-2xl font-black text-white">Vadesi Gelen Ödemeler</h2>
+              </div>
+              <Link href="/dashboard/tahsilatlar" className="rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-xs font-black text-amber-300">Tahsilatlara Git</Link>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              {vadesiGelenler.length === 0 ? (
+                <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-white/10 bg-slate-950/30 text-sm font-semibold text-slate-500">Vadesi gelen ödeme yok.</div>
+              ) : (
+                <div className="grid gap-2">
+                  {vadesiGelenler.map((v: any) => {
+                    const phone = phoneClean(v.musteriTelefon);
+                    const isGecmis = v.durum === "gecmis";
+                    const msg = `Merhaba ${v.musteriAdi || "müşterimiz"}, Metrix kayıtlarımıza göre ₺${fmt(Number(v.tutar || 0))} tutarındaki ödemenizin vadesi geçmiş görünüyor. Uygun olduğunuzda ödeme planınızı netleştirebilir miyiz?`;
+                    return (
+                      <div key={v.id} className="grid grid-cols-[minmax(0,1fr)_120px_90px_120px_auto] items-center gap-4 rounded-2xl border border-white/[0.075] bg-gradient-to-r from-amber-500/[0.08] to-white/[0.035] p-4">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-slate-100">{v.musteriAdi}</p>
+                          <p className="mt-0.5 truncate text-xs text-slate-500">{v.teklifNo || "Genel"} · {new Date(v.vadeTarihi).toLocaleDateString("tr-TR")}</p>
+                        </div>
+                        <p className="text-sm font-bold text-slate-400">{new Date(v.vadeTarihi).toLocaleDateString("tr-TR")}</p>
+                        <p className={`text-right text-sm font-black ${isGecmis ? "text-red-300" : "text-amber-300"}`}>{isGecmis ? `${v.gecenGun}g` : "Bugün"}</p>
+                        <p className="text-right text-base font-black tabular-nums text-amber-300">₺{fmt(v.tutar)}</p>
+                        {phone.length > 0 ? (
+                          <a href={waHref(phone, msg)} target="_blank" rel="noopener noreferrer" className="rounded-full bg-amber-500/15 px-4 py-2 text-xs font-black text-amber-200">WhatsApp hatırlat</a>
+                        ) : (
+                          <span className="rounded-full border border-white/10 bg-white/[0.035] px-4 py-2 text-xs font-black text-slate-500">telefon yok</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {activeDashboardTab === "reports" && (
+          <section data-onboarding-target="dashboard-reports-full" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-[30px] border border-white/10 bg-slate-950/44 p-5 shadow-[0_26px_90px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+            <div className="flex shrink-0 items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Executive Insight</p>
+                <h2 className="mt-1 text-2xl font-black text-white">Yönetici Rapor Tablosu</h2>
+                <p className="mt-1 text-sm text-slate-500">Satış, tahsilat, üretim ve performans değişimlerini tek tabloda izleyin.</p>
+              </div>
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-black text-emerald-300">{raporDonem}</span>
+            </div>
+            <div className="grid shrink-0 grid-cols-4 gap-2">
+              {[
+                ["Yıl Toplam Onaylanan", yillikFinans.onaylanan, "text-emerald-300", "satış"],
+                ["Ay Toplam Onaylanan", aylikFinans.onaylanan, "text-blue-300", "aylık"],
+                ["Vadesi Gelen Tahsilat", vadesiGelenToplam, "text-amber-300", `${vadesiGelenler.length} kayıt`],
+                ["Operasyon Yoğunluğu", operasyonYogunlugu, "text-violet-300", "anlık"],
+              ].map(([label, value, color, sub]) => (
+                <div key={String(label)} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
+                  <p className={`mt-1 text-xl font-black tabular-nums ${color}`}>{typeof value === "number" && String(label) !== "Operasyon Yoğunluğu" ? `₺${fmt(value)}` : String(value)}</p>
+                  <p className="mt-0.5 text-[10px] font-bold text-slate-600">{String(sub || "")}</p>
+                </div>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035]">
+              <div className="grid grid-cols-[1fr_1.15fr_1.15fr_1.1fr_1.05fr_.9fr_.9fr_.9fr] gap-0 border-b border-white/10 bg-slate-950/70 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                <span>Dönem</span>
+                <span>Satış / Onaylanan</span>
+                <span>Tahsilat / Vadesi Gelen</span>
+                <span>Üretim / Operasyon</span>
+                <span>Geciken / Takılan</span>
+                <span>Sıcak Teklif</span>
+                <span>Performans</span>
+                <span>Değişim</span>
+              </div>
+              <div className="max-h-full overflow-y-auto">
+                {raporRows.map((row) => {
+                  const score = typeof row.skor === "number" ? row.skor : null;
+                  const scoreLabel = score == null ? "veri yok" : score >= 85 ? "Çok Güçlü" : score >= 68 ? "Güçlü" : score >= 45 ? "Dengeli" : "Zayıf";
+                  const trendCls =
+                    row.trend === "up" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300" :
+                    row.trend === "down" ? "border-red-400/20 bg-red-500/10 text-red-300" :
+                    row.trend === "none" ? "border-slate-400/10 bg-white/[0.035] text-slate-500" :
+                    "border-amber-400/20 bg-amber-500/10 text-amber-300";
+                  const trendIcon = row.trend === "up" ? "↑" : row.trend === "down" ? "↓" : row.trend === "none" ? "–" : "→";
+                  return (
+                    <div key={row.donem} className="grid grid-cols-[1fr_1.15fr_1.15fr_1.1fr_1.05fr_.9fr_.9fr_.9fr] gap-0 border-b border-white/[0.055] px-3 py-3 text-sm text-slate-300 transition hover:bg-white/[0.045] last:border-0">
+                      <strong className="text-slate-100">{row.donem}</strong>
+                      <span className="tabular-nums">{row.satis}</span>
+                      <span className="tabular-nums">{row.tahsilat}</span>
+                      <span>{row.uretim}</span>
+                      <span>{row.geciken}</span>
+                      <span>{row.sicak}</span>
+                      <span>
+                        {score == null ? (
+                          <span className="text-slate-500">veri yok</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="font-black tabular-nums text-white">{score}</span>
+                            <span className="text-[11px] text-slate-500">{scoreLabel}</span>
+                          </span>
+                        )}
+                      </span>
+                      <span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${trendCls}`}>{trendIcon} {row.degisim}</span></span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="grid shrink-0 grid-cols-3 gap-3">
+              {[
+                ["Satış Yorumu", sicakTeklifler.length > 0 ? "Satış tarafında takip edilmesi gereken fırsatlar var." : "Satış sinyalleri düşük; yeni teklif hareketleri takip edilmeli."],
+                ["Nakit Yorumu", vadesiGelenler.length > 0 ? "Nakit tarafında takip gerektiren açık ödeme var." : "Nakit tarafında vadesi gelen açık ödeme görünmüyor."],
+                ["Operasyon Yorumu", liveToplamBlocked > 0 ? "Operasyon tarafında darboğaz oluşmuş görünüyor." : "Operasyon akışında kritik takılma görünmüyor."],
+              ].map(([title, copy]) => (
+                <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{title}</p>
+                  <p className="mt-2 text-sm font-semibold leading-5 text-slate-300">{copy}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {false && (
+        <section data-onboarding-target="dashboard-operations-full" className="grid min-h-0 flex-1 grid-cols-3 gap-3 overflow-hidden">
+          <aside data-onboarding-target="dashboard-operation-panel" className="flex min-h-0 flex-col gap-3 overflow-hidden">
+            <div data-onboarding-target="dashboard-today-plan" className="flex min-h-0 flex-[1.08] flex-col rounded-[26px] border border-white/10 bg-white/[0.055] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Günün Operasyonu</p>
+                  <h2 className="mt-1 text-base font-black text-white">Bugünün Programı</h2>
+                </div>
+                <Link href="/dashboard/is-programi" className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/10 hover:text-white">
+                  Program
+                </Link>
+              </div>
+              <div className="mb-3 grid grid-cols-4 gap-1.5">
+                {[
+                  ["Plan", operasyonKpi.planlanan, "text-slate-100"],
+                  ["Aktif", operasyonKpi.islemde, "text-blue-300"],
+                  ["Bitti", operasyonKpi.tamamlanan, "text-emerald-300"],
+                  ["Geç", operasyonKpi.geciken, operasyonKpi.geciken > 0 ? "text-red-300" : "text-slate-500"],
+                ].map(([label, value, color]) => (
+                  <div key={String(label)} className="rounded-2xl border border-white/8 bg-slate-950/38 px-2 py-2">
+                    <p className="text-[8px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p>
+                    <p className={`mt-1 text-base font-black tabular-nums ${color}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {operasyonPlan.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 p-4 text-sm font-semibold text-slate-500">
+                    Bugün için plan yok. İş programından operasyon ekleyebilirsin.
+                  </div>
+                ) : (
+                  operasyonPlan.map((o: any) => (
+                    <div key={o.id} className="flex items-start gap-3 border-b border-white/[0.055] py-2.5 last:border-0">
+                      <span className="w-10 shrink-0 pt-0.5 text-[11px] font-black tabular-nums text-slate-500">{o.saat}</span>
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: phaseColor(o.phase) }} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-black text-slate-100">{o.tip}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-slate-500">{o.musteri}{o.urun ? " · " + o.urun : ""}</p>
+                      </div>
+                      {o.tamamlandi && <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[9px] font-black text-emerald-300">Tamam</span>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div data-onboarding-target="dashboard-active-ops" className="rounded-[26px] border border-white/10 bg-white/[0.055] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-300">Aktif Operasyonlar</p>
+                <span className="text-xs font-black text-emerald-300">{liveToplamAktif} canlı</span>
+              </div>
+              {aktifEkip.length === 0 ? (
+                <p className="rounded-2xl border border-white/8 bg-slate-950/30 p-3 text-xs font-semibold text-slate-500">Şu an çalışan operasyon yok.</p>
+              ) : (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {aktifEkip.slice(0, 5).map((e) => (
+                    <button key={e.execId} onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
+                      className="min-w-[142px] rounded-2xl border border-blue-400/15 bg-slate-950/72 px-3 py-3 text-left text-white shadow-[0_12px_35px_rgba(0,0,0,0.20)]">
+                      <p className="truncate text-[11px] font-black">{e.musteriAdi}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-slate-400">{e.personelAd}</p>
+                      <p className="mt-2 text-2xl font-black tabular-nums text-blue-200">{e.elapsedMinutes}<span className="text-[10px] text-slate-500"> dk</span></p>
+                      <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-blue-400" style={{ width: `${Math.min(Math.round((e.progressRatio ?? 0.42) * 100), 100)}%` }} />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div data-onboarding-target="dashboard-blocked-jobs" className="rounded-[26px] border border-red-400/15 bg-red-950/[0.18] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-300">Takılan İşler</p>
+                <span className={`text-xs font-black ${liveToplamBlocked > 0 ? "text-red-300" : "text-emerald-300"}`}>{liveToplamBlocked} kayıt</span>
+              </div>
+              {blockedItems.length === 0 ? (
+                <p className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-3 text-xs font-bold text-emerald-300">Kritik takılma yok.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {blockedItems.slice(0, 3).map((item) => (
+                    <button key={item.execId} onClick={() => setLiveTask({ id: item.phaseId, phase: item.phaseType, title: item.musteriAdi, subtitle: item.urunAdi, completed: false, schedule: {} })}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-left">
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-black text-slate-100">{item.musteriAdi}</span>
+                        <span className="block truncate text-[10px] font-semibold text-red-300">{item.cannotStartReason ? (CANNOT_START_REASON_LABELS[item.cannotStartReason] ?? item.cannotStartReason) : "Kontrol gerekli"}</span>
+                      </span>
+                      <span className="shrink-0 text-[11px] font-black text-red-300">{item.elapsedBlockedMinutes} dk</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+
+          <section data-onboarding-target="dashboard-activity-feed" className="flex min-h-0 flex-col rounded-[30px] border border-white/10 bg-slate-950/48 p-4 shadow-[0_26px_90px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Canlı Operasyon Akışı</p>
+                <h2 className="mt-1 text-xl font-black tracking-[-0.02em] text-white">Ekip Hareketleri</h2>
+                <p className="mt-1 text-sm text-slate-500">Son hareketler, üretim ve finans sinyalleri burada akar.</p>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-black text-emerald-300">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                Canlı
+              </span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              {anaAkis.length === 0 ? (
+                <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.035] text-sm font-semibold text-slate-500">
+                  Henüz aktivite yok. İşlemler başladıkça burada görünecek.
+                </div>
+              ) : (
+                <div className="grid gap-1.5">
+                  {anaAkis.map((a: any, i: number) => (
+                    <div key={a.id || i} className="grid grid-cols-[54px_24px_minmax(0,1fr)_auto] gap-3 rounded-2xl border border-white/[0.075] bg-white/[0.045] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                      <span className="pt-0.5 text-[11px] font-black tabular-nums text-slate-500">{timeAgo(a.createdAt)}</span>
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-slate-900">
+                        <span className="h-2.5 w-2.5 rounded-full shadow-[0_0_18px_currentColor]" style={{ background: activityColor(a.type), color: activityColor(a.type) }} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold leading-snug text-slate-100">{a.message}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          {a.actorAdi && <span className="rounded-full border border-white/8 bg-white/[0.055] px-2 py-0.5 text-[10px] font-bold text-slate-400">{a.actorAdi}</span>}
+                          <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">{a.type?.replace(/_/g, " ")}</span>
+                        </div>
+                      </div>
+                      <span className="mt-1 h-px w-5 bg-gradient-to-r from-white/20 to-transparent" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <aside className="flex min-h-0 flex-col gap-3 overflow-hidden">
+            <div data-onboarding-target="dashboard-cash-panel" className="flex min-h-0 flex-[1.22] flex-col rounded-[26px] border border-amber-400/15 bg-white/[0.055] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Nakit Akışı</p>
+                  <h2 className="mt-1 text-base font-black text-white">Vadesi Gelen Ödemeler</h2>
+                </div>
+                <Link href="/dashboard/tahsilatlar" className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/15">
+                  Tümü
+                </Link>
+              </div>
+              <div data-onboarding-target="dashboard-due-payments" className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {vadesiGelenler.length === 0 ? (
+                  <p className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-3 text-xs font-bold text-emerald-300">Vadesi gelen ödeme yok.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {vadesiGelenler.slice(0, 6).map((v: any) => {
+                      const phone = phoneClean(v.musteriTelefon);
+                      const isGecmis = v.durum === "gecmis";
+                      return (
+                        <div key={v.id} className="rounded-2xl border border-white/[0.075] bg-gradient-to-r from-amber-500/[0.08] to-white/[0.035] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-[13px] font-black text-slate-100">{v.musteriAdi}</p>
+                              <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">{new Date(v.vadeTarihi).toLocaleDateString("tr-TR")}{v.teklifNo ? " · " + v.teklifNo : ""}</p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className={`text-[15px] font-black tabular-nums ${isGecmis ? "text-red-300" : "text-amber-300"}`}>₺{fmt(v.tutar)}</p>
+                              <p className={`text-[10px] font-black ${isGecmis ? "text-red-400" : "text-amber-400"}`}>{isGecmis ? `${v.gecenGun}g geçti` : "Bugün"}</p>
+                            </div>
+                          </div>
+                          <div className="mt-2">
+                            {phone.length > 0 ? (
+                              <AiWaButon
+                                label="WA Mesaj"
+                                phone={phone}
+                                payload={{ musteriAdi: v.musteriAdi, tutar: v.tutar, vadeTarihi: v.vadeTarihi, gecenGun: v.gecenGun, teklifNo: v.teklifNo }}
+                                tip="tahsilat"
+                                className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1.5 text-[10px] font-black text-amber-300 hover:bg-amber-500/15 disabled:opacity-50"
+                              />
+                            ) : (
+                              <Link href={v.musteriId ? `/dashboard/musteriler?musteriId=${v.musteriId}&duzenle=1` : "/dashboard/musteriler"} className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-[10px] font-black text-slate-400">
+                                Telefon ekle
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div data-onboarding-target="dashboard-sales-panel" className="flex min-h-0 flex-1 flex-col rounded-[26px] border border-violet-400/15 bg-white/[0.055] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-300">Satış Sinyali</p>
+                  <h2 className="mt-1 text-base font-black text-white">Sıcak Teklifler</h2>
+                </div>
+                <Link href="/dashboard/isler" className="rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1.5 text-xs font-bold text-violet-300 hover:bg-violet-500/15">
+                  Tümü
+                </Link>
+              </div>
+              <div data-onboarding-target="dashboard-hot-leads" className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {sicakTeklifler.length === 0 ? (
+                  <p className="rounded-2xl border border-white/8 bg-slate-950/30 p-3 text-xs font-semibold text-slate-500">Takip gerektiren teklif yok.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {sicakTeklifler.slice(0, 5).map((t: any) => {
+                      const score = Number(t.ihtimal || 0);
+                      const phone = phoneClean(t.telefon);
+                      return (
+                        <div key={t.teklifNo} className="rounded-2xl border border-white/[0.075] bg-gradient-to-r from-violet-500/[0.08] to-white/[0.035] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-[13px] font-black text-slate-100">{t.musteri}</p>
+                              <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">{t.teklifNo}</p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="text-sm font-black text-violet-300">%{score}</p>
+                              <p className="text-[11px] font-bold text-slate-300">₺{fmt(t.tutar)}</p>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {phone.length > 0 && (
+                              <AiWaButon
+                                label="AI WhatsApp"
+                                phone={phone}
+                                payload={{ musteri: t.musteri, tutar: t.tutar, goruntulenme: t.goruntulenme, pdf: t.pdf, aksiyonTipi: t.aksiyonTipi, aksiyonSaati: t.aksiyonSaati, ihtimal: score }}
+                                tip="satis"
+                                className="rounded-full bg-violet-500/20 px-3 py-1.5 text-[10px] font-black text-violet-100 disabled:opacity-50"
+                              />
+                            )}
+                            <Link href="/dashboard/isler" className="rounded-full border border-violet-400/20 bg-white/[0.055] px-3 py-1.5 text-[10px] font-black text-violet-300">
+                              Detay
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </aside>
+        </section>
+        )}
+
+        <footer data-onboarding-target="dashboard-action-bar" className="flex shrink-0 items-center justify-between gap-4 rounded-[22px] border border-white/10 bg-slate-950/48 px-4 py-2.5 shadow-[0_16px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+          <p className="min-w-0 truncate text-sm font-bold text-slate-400">
+            {bottomSummary[activeDashboardTab]}
+          </p>
+          <div className="flex shrink-0 gap-2">
+            {desktopActions.slice(0, 3).map((action) => (
+              <Link key={action.label} href={action.href} data-onboarding-target={action.target}
+                className="rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-xs font-black text-slate-200 shadow-sm transition hover:bg-blue-500/20 hover:text-white">
+                {action.label}
+              </Link>
+            ))}
+          </div>
+        </footer>
+      </div>
+
+      {dashboardCoachWelcome && (
+        <div className="fixed bottom-6 right-6 z-[240] hidden w-[390px] rounded-[30px] border border-blue-300/20 bg-slate-950/92 p-5 text-white shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl md:block">
+          <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-blue-500/20 blur-3xl" />
+          <div className="relative">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">Dashboard Coach</p>
+            <h3 className="mt-2 text-2xl font-black tracking-[-0.03em]">Metrix Operasyon Merkezi</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Bugünkü operasyon, tahsilat, satış ve darboğazları tek ekrandan yönetin.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button type="button" onClick={startDashboardCoach}
+                className="rounded-full bg-blue-500 px-4 py-2 text-xs font-black text-white shadow-[0_0_28px_rgba(59,130,246,0.28)]">
+                Dashboard'u Tanı
+              </button>
+              <button type="button" onClick={dismissDashboardCoach}
+                className="rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-xs font-black text-slate-300">
+                Daha Sonra
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dashboardCoachActive && activeDashboardCoachStep && (
+        <div className="pointer-events-none fixed inset-0 z-[250] hidden md:block">
+          <div className="absolute inset-0 bg-black/18" />
+          {dashboardCoachRect && (
+            <div
+              className="absolute rounded-2xl border border-blue-300/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.20),0_0_34px_rgba(96,165,250,0.75)] transition-all duration-200"
+              style={{
+                left: dashboardCoachRect.left - 6,
+                top: dashboardCoachRect.top - 6,
+                width: dashboardCoachRect.width + 12,
+                height: dashboardCoachRect.height + 12,
+              }}
+            />
+          )}
+          <div
+            className="pointer-events-auto absolute w-[360px] rounded-[26px] border border-white/10 bg-slate-950/95 p-4 text-white shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+            style={{
+              left: dashboardCoachRect
+                ? Math.min(Math.max(16, dashboardCoachRect.right + 16), Math.max(16, window.innerWidth - 376))
+                : undefined,
+              top: dashboardCoachRect
+                ? Math.min(Math.max(16, dashboardCoachRect.top), Math.max(16, window.innerHeight - 260))
+                : 96,
+              right: dashboardCoachRect ? undefined : 24,
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">
+                  {dashboardCoachIndex + 1}/{dashboardCoachSteps.length}
+                </p>
+                <h3 className="mt-1 text-lg font-black tracking-[-0.02em]">{activeDashboardCoachStep.title}</h3>
+              </div>
+              <button type="button" onClick={dismissDashboardCoach}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.055] text-lg text-slate-400 hover:text-white">
+                ×
+              </button>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-300">{activeDashboardCoachStep.copy}</p>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-blue-400 transition-all" style={{ width: `${((dashboardCoachIndex + 1) / dashboardCoachSteps.length) * 100}%` }} />
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <button type="button" disabled={dashboardCoachIndex === 0}
+                onClick={() => setDashboardCoachIndex((i) => Math.max(0, i - 1))}
+                className="rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-xs font-black text-slate-300 disabled:opacity-35">
+                Geri
+              </button>
+              <button type="button"
+                onClick={() => {
+                  if (dashboardCoachIndex >= dashboardCoachSteps.length - 1) {
+                    completeDashboardCoach();
+                    return;
+                  }
+                  setDashboardCoachIndex((i) => i + 1);
+                }}
+                className="rounded-full bg-blue-500 px-4 py-2 text-xs font-black text-white">
+                {dashboardCoachIndex >= dashboardCoachSteps.length - 1 ? "Tamamla" : "İleri"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto max-w-4xl md:hidden">
 
         <div className="sticky top-0 z-30 -mx-3 flex items-center justify-between border-b border-white/[0.06] bg-[#030712]/90 px-3 py-3 backdrop-blur-md md:-mx-6 md:px-6 md:py-4">
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Operasyon Merkezi</p>
             <h1 className="mt-0.5 text-lg font-bold text-white">Dashboard</h1>
           </div>
-          <div className="text-right">
-            <p className="text-xs font-semibold capitalize text-white">{gunAdi}</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">{tamTarih}</p>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="text-xs font-semibold capitalize text-white">{gunAdi}</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">{tamTarih}</p>
+            </div>
           </div>
         </div>
 
         <div className="space-y-4 pt-4">
+        <OnboardingChecklist />
+
         {/* ── 1. GÜNÜN PROGRAMI ────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
+        <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4" data-onboarding-target="is-programi">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Gunluk Operasyon</p>
@@ -948,6 +1932,35 @@ export default function DashboardPage() {
             fetchDashboardRef.current?.();
           }}
         />
+      )}
+
+      {selectedActivity && (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setSelectedActivity(null)}>
+          <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-slate-950 p-5 text-white shadow-[0_28px_90px_rgba(0,0,0,0.45)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Activity Detail</p>
+                <h3 className="mt-1 text-xl font-black tracking-[-0.02em]">{selectedActivity.message || "Operasyon hareketi"}</h3>
+              </div>
+              <button type="button" onClick={() => setSelectedActivity(null)} className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.055] text-xl text-slate-400 hover:text-white">
+                ×
+              </button>
+            </div>
+            <div className="mt-5 grid gap-2">
+              {[
+                ["Kişi", selectedActivity.actorAdi || "Sistem"],
+                ["Event Türü", selectedActivity.type?.replace(/_/g, " ") || "activity"],
+                ["Zaman", selectedActivity.createdAt ? new Date(selectedActivity.createdAt).toLocaleString("tr-TR") : "Zaman yok"],
+                ["Açıklama", selectedActivity.message || "Detay bilgisi bulunmuyor"],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-white/8 bg-white/[0.045] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-200">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
