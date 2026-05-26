@@ -77,6 +77,7 @@ function defaultTaksitler(musteriTipi: string, toplamTutar: number, baslangic: D
 }
 
 type Sekme = "musteri" | "tahsilat" | "plan" | "sablon";
+type DesktopSekme = "genel" | "musteri" | "plan" | "tahsilat" | "gecmis" | "sablon";
 
 export default function TahsilatlarPage() {
   const router = useRouter();
@@ -102,6 +103,7 @@ export default function TahsilatlarPage() {
   const [draftTaksitler, setDraftTaksitler] = useState<any[]>([]);
   const [planKaydediliyor, setPlanKaydediliyor] = useState(false);
   const [aktifSekme, setAktifSekme]         = useState<Sekme>("musteri");
+  const [aktifDesktopSekme, setAktifDesktopSekme] = useState<DesktopSekme>("genel");
   const [sablonlar, setSablonlar]           = useState<any[]>([]);
   const [sablonYukleniyor, setSablonYukleniyor] = useState(false);
   const [sablonDuzenle, setSablonDuzenle]   = useState<any | null>(null);
@@ -355,6 +357,26 @@ export default function TahsilatlarPage() {
       .includes(musteriArama.toLocaleLowerCase("tr-TR"))
   );
   const gosterilecekTaksitler = taksitDuzenle ? draftTaksitler : (odemePlani?.taksitler || []);
+  const seciliMusteriAdi = seciliMusteri ? (seciliMusteri.firmaAdi || seciliMusteri.ad) : "Genel mod";
+  const bekleyenTaksitSayisi = odemePlani?.taksitler.filter(t => !t.odendiMi).length || bugunListesi.length;
+  const gecikenTaksitSayisi = odemePlani?.taksitler.filter(t => !t.odendiMi && gunFarki(t.vadeTarihi) < 0).length || 0;
+
+  function whatsappHatirlat() {
+    if (!seciliMusteri?.telefon) return;
+    let phone = seciliMusteri.telefon.replace(/\D/g, "");
+    if (phone.startsWith("0")) phone = "90" + phone.slice(1);
+    if (phone && !phone.startsWith("90")) phone = "90" + phone;
+    const ad = seciliMusteri.firmaAdi || seciliMusteri.ad;
+    const mesaj = `Merhaba ${ad}, ödeme planınız hakkında bilgi vermek için ulaşıyoruz.`;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
 
   // ── İÇERİK PANELLERİ ────────────────────────────────────────────────────
   const PanelMusteri = (
@@ -362,7 +384,7 @@ export default function TahsilatlarPage() {
       <div className="kart">
         <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"8px", color:"#9ca3af" }}>👤 MÜŞTERİ</p>
         <div style={{ position:"relative" }}>
-          <input className="yi-inp" placeholder="İsim veya firma..."
+          <input data-onboarding-target="tahsilat-musteri-search" className="yi-inp" placeholder="İsim veya firma..."
             value={seciliMusteri ? (seciliMusteri.firmaAdi || seciliMusteri.ad) : musteriArama}
             onFocus={() => setListeAcik(true)}
             onChange={e => { setMusteriArama(e.target.value); setSeciliMusteri(null); setListeAcik(true); }} />
@@ -370,7 +392,7 @@ export default function TahsilatlarPage() {
             <div style={{ position:"absolute", top:"100%", left:0, right:0, marginTop:"4px", background:"#111827", border:"1px solid #374151", borderRadius:"13px", zIndex:100, maxHeight:"220px", overflowY:"auto", boxShadow:"0 16px 40px rgba(0,0,0,0.8)" }}
               onMouseLeave={() => setListeAcik(false)}>
               {filtreli.slice(0,10).map(m => (
-                <button key={m.id} onClick={() => musteriSec(m)}
+                <button key={m.id} data-onboarding-target="tahsilat-musteri-option" onClick={() => musteriSec(m)}
                   style={{ width:"100%", padding:"10px 14px", textAlign:"left", background:"transparent", border:"none", borderBottom:"1px solid #1f2937", cursor:"pointer", color:"#f9fafb" }}
                   onMouseOver={e => (e.currentTarget.style.background="#1f2937")}
                   onMouseOut={e => (e.currentTarget.style.background="transparent")}>
@@ -384,11 +406,12 @@ export default function TahsilatlarPage() {
         {seciliMusteri && (
           <div style={{ marginTop:"10px" }}>
             <div style={{ fontSize:"15px", fontWeight:900, color:"#10b981" }}>{seciliMusteri.firmaAdi||seciliMusteri.ad}</div>
-            <div style={{ fontSize:"12px", color:"#6b7280", marginTop:"2px" }}>
+            <div data-onboarding-target="tahsilat-musteri-phone-status" style={{ fontSize:"12px", color:"#6b7280", marginTop:"2px" }}>
               {MUSTERI_TIP[seciliMusteri.musteriTipi]} · {seciliMusteri.telefon || <span style={{ color:"#ef4444" }}>Telefon kayıtlı değil</span>}
             </div>
             {seciliMusteri.telefon ? (
               <button
+                data-onboarding-target="tahsilat-wa-message"
                 onClick={() => {
                   let phone = seciliMusteri.telefon!.replace(/\D/g, "")
                   if (phone.startsWith("0")) phone = "90" + phone.slice(1)
@@ -430,7 +453,8 @@ export default function TahsilatlarPage() {
           {!yukleniyor && isler.length === 0 && <p style={{ fontSize:"13px", color:"#4b5563" }}>Bu müşteriye ait iş bulunamadı.</p>}
           {isler.map(is => (
             <button key={is.id}
-              onClick={() => { isSec(is); setAktifSekme("plan"); }}
+              data-onboarding-target="tahsilat-job-select"
+              onClick={() => { isSec(is); setAktifSekme("plan"); setAktifDesktopSekme("plan"); }}
               className={`is-btn${aktifIs?.id===is.id?" aktif":""}`}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <span style={{ fontSize:"13px", fontWeight:700, textTransform:"capitalize" }}>{is.urunAdi}</span>
@@ -453,24 +477,24 @@ export default function TahsilatlarPage() {
         </div>
       ) : (
         <>
-          <div className="kart">
+          <div className="kart" data-onboarding-target="tahsilat-tab-payment">
             <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"12px", color:"#9ca3af" }}>💳 TAHSİLAT GİR</p>
             <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
               <div>
                 <span className="yi-label">Tutar (₺)</span>
-                <input className="yi-inp" type="text" inputMode="decimal" placeholder="0,00"
+                <input data-onboarding-target="tahsilat-amount-input" className="yi-inp" type="text" inputMode="decimal" placeholder="0,00"
                   value={yeniTutar} onChange={e => setYeniTutar(e.target.value)} />
               </div>
               <div>
                 <span className="yi-label">Tarih</span>
-                <input className="yi-inp" type="date" value={yeniTarih} onChange={e => setYeniTarih(e.target.value)} />
+                <input data-onboarding-target="tahsilat-date-input" className="yi-inp" type="date" value={yeniTarih} onChange={e => setYeniTarih(e.target.value)} />
               </div>
               {aktifIs && (
                 <div style={{ fontSize:"12px", color:"#10b981", background:"rgba(16,185,129,0.07)", borderRadius:"9px", padding:"8px 12px" }}>
                   ✓ {aktifIs.urunAdi}
                 </div>
               )}
-              <button onClick={tahsilatKaydet} disabled={kaydediliyor||!yeniTutar}
+              <button data-onboarding-target="tahsilat-save" onClick={tahsilatKaydet} disabled={kaydediliyor||!yeniTutar}
                 style={{ padding:"13px", background:!yeniTutar?"#1f2937":"#10b981", border:"none", borderRadius:"12px", color:"#fff", fontSize:"14px", fontWeight:900, cursor:"pointer" }}>
                 {kaydediliyor ? "..." : "✓ Tahsilat Kaydet"}
               </button>
@@ -478,7 +502,7 @@ export default function TahsilatlarPage() {
           </div>
 
           {tahsilatlar.length > 0 && (
-            <div className="kart">
+            <div className="kart" data-onboarding-target="tahsilat-history">
               <p style={{ fontSize:"12px", fontWeight:700, marginBottom:"10px", color:"#9ca3af" }}>📊 CARİ HAREKETLER</p>
               {tahsilatlar.map(t => (
                 <div key={t.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 0", borderBottom:"1px solid #0d1117" }}>
@@ -535,7 +559,7 @@ export default function TahsilatlarPage() {
           <p>Müşteri & iş seçin</p>
         </div>
       ) : (
-        <div className="kart">
+        <div className="kart" data-onboarding-target="tahsilat-plan-panel">
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"14px" }}>
             <div>
               <p style={{ fontSize:"14px", fontWeight:900, margin:0 }}>📅 Ödeme Planı</p>
@@ -608,8 +632,8 @@ export default function TahsilatlarPage() {
             );
 
             return (
-              <div key={taksit.id||idx} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"12px 14px", borderRadius:"13px", border:`1px solid ${gecti?"rgba(239,68,68,0.4)":bugun?"rgba(251,191,36,0.4)":taksit.odendiMi?"rgba(16,185,129,0.25)":"#1f2937"}`, background:"#0d1117", marginBottom:"8px" }}>
-                <button onClick={() => taksit.id && taksitCheckboxTiklandi(taksit)}
+              <div key={taksit.id||idx} data-onboarding-target="tahsilat-installment-row" style={{ display:"flex", alignItems:"center", gap:"10px", padding:"12px 14px", borderRadius:"13px", border:`1px solid ${gecti?"rgba(239,68,68,0.4)":bugun?"rgba(251,191,36,0.4)":taksit.odendiMi?"rgba(16,185,129,0.25)":"#1f2937"}`, background:"#0d1117", marginBottom:"8px" }}>
+                <button data-onboarding-target="tahsilat-installment-paid" onClick={() => taksit.id && taksitCheckboxTiklandi(taksit)}
                   style={{ width:"28px", height:"28px", borderRadius:"8px", flexShrink:0, border:"none", cursor:"pointer", background:taksit.odendiMi?"#10b981":"#1f2937", color:"#fff", fontSize:"14px" }}>
                   {taksit.odendiMi?"✓":""}
                 </button>
@@ -768,6 +792,158 @@ export default function TahsilatlarPage() {
     </div>
   );
 
+  const desktopSekmeler: { id: DesktopSekme; label: string; hint: string }[] = [
+    { id: "genel", label: "Genel Bakış", hint: "Operasyon" },
+    { id: "musteri", label: "Müşteri", hint: `${isler.length} açık iş` },
+    { id: "plan", label: "Ödeme Planı", hint: `${bekleyenTaksitSayisi} bekleyen` },
+    { id: "tahsilat", label: "Tahsilat", hint: "Manuel giriş" },
+    { id: "gecmis", label: "Geçmiş", hint: `${tahsilatlar.length} hareket` },
+    { id: "sablon", label: "Şablonlar", hint: "Plan dili" },
+  ];
+
+  const desktopKpi = [
+    { label: "Çalışma Modu", value: seciliMusteriAdi, tone: "#f9fafb", sub: seciliMusteri ? MUSTERI_TIP[seciliMusteri.musteriTipi] : "Müşteri seçilmedi" },
+    { label: "Tahsil Edilen", value: tl(toplamTahsilat), tone: "#34d399", sub: `${tahsilatlar.length} cari hareket` },
+    { label: "Kalan Bakiye", value: tl(bakiye), tone: bakiye > 0 ? "#fbbf24" : "#34d399", sub: bakiye > 0 ? "Takipte" : "Dengede" },
+    { label: "Açık İş", value: String(isler.length), tone: "#93c5fd", sub: aktifIs ? aktifIs.urunAdi : "İş seçimi bekliyor" },
+    { label: "Vade", value: String(bekleyenTaksitSayisi), tone: gecikenTaksitSayisi > 0 ? "#fb7185" : "#fbbf24", sub: gecikenTaksitSayisi > 0 ? `${gecikenTaksitSayisi} geciken` : "Bekleyen ödeme" },
+  ];
+
+  const DesktopMusteriPanel = (
+    <div className="desktop-customer-panel">
+      <div className="desktop-customer-card desktop-search-card">
+        <div className="desktop-section-label">Müşteri</div>
+        <input data-onboarding-target="tahsilat-musteri-search" className="desktop-customer-input" placeholder="İsim veya firma..."
+          value={seciliMusteri ? (seciliMusteri.firmaAdi || seciliMusteri.ad) : musteriArama}
+          onFocus={() => setListeAcik(true)}
+          onChange={e => { setMusteriArama(e.target.value); setSeciliMusteri(null); setListeAcik(true); }} />
+        <div className="desktop-customer-list">
+          {(listeAcik || !seciliMusteri ? filtreli : filtreli.slice(0, 8)).map(m => (
+            <button key={m.id} data-onboarding-target="tahsilat-musteri-option" onClick={() => musteriSec(m)}
+              className={`desktop-customer-row${seciliMusteri?.id === m.id ? " aktif" : ""}`}>
+              <span className="desktop-customer-row-top">
+                <span className="desktop-customer-name">{m.firmaAdi || m.ad}</span>
+                <span className="desktop-customer-badge">{seciliMusteri?.id === m.id ? `${isler.length} iş` : "Borçlu"}</span>
+              </span>
+              <span className="desktop-customer-meta">{MUSTERI_TIP[m.musteriTipi]} · {m.telefon ? "Telefon var" : "Telefon yok"}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const DesktopCustomerWorkspace = (
+    <div className="desktop-workspace">
+      {!seciliMusteri ? (
+        <div className="desktop-workspace-empty">
+          <div className="desktop-empty-icon">₺</div>
+          <h2>Tahsilat operasyonuna başlamak için soldan müşteri seç.</h2>
+          <p>Müşteri seçildiğinde ödeme bekleyen işler burada görünür.</p>
+        </div>
+      ) : (
+        <>
+          <div className="desktop-workspace-head">
+            <div className="desktop-summary-top">
+              <div style={{ minWidth:0 }}>
+                <div className="desktop-section-label">Ödeme Bekleyen İşler</div>
+                <h2>{seciliMusteri.firmaAdi || seciliMusteri.ad}</h2>
+              </div>
+              <div data-onboarding-target="tahsilat-musteri-phone-status" className={`desktop-phone-badge${seciliMusteri.telefon ? " ok" : " warn"}`}>
+                {seciliMusteri.telefon ? "Telefon kayıtlı" : "Telefon yok"}
+              </div>
+            </div>
+            <div className="desktop-summary-meta">
+              <span>{MUSTERI_TIP[seciliMusteri.musteriTipi]}</span>
+              <span>{seciliMusteri.telefon || "Telefon kayıtlı değil"}</span>
+              <span>{isler.length} açık iş</span>
+              <span>{tahsilatlar.length} cari hareket</span>
+            </div>
+            <div className="desktop-workspace-money">
+              {[
+                { l:"Toplam Borç", v:tl(toplamBorc), c:"#fb7185" },
+                { l:"Ödenen", v:tl(toplamTahsilat), c:"#34d399" },
+                { l:"Bakiye", v:tl(Math.abs(bakiye)), c:"#fbbf24" },
+              ].map(x => (
+                <div key={x.l} className="desktop-workspace-chip">
+                  <span>{x.l}</span>
+                  <strong style={{ color:x.c }}>{x.v}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="desktop-workspace-list">
+            {yukleniyor && <div className="desktop-workspace-empty compact">İşler yükleniyor...</div>}
+            {!yukleniyor && isler.length === 0 && (
+              <div className="desktop-workspace-empty compact">Bu müşteriye ait ödeme bekleyen açık iş bulunamadı.</div>
+            )}
+            {isler.map(is => {
+              const satis = Number(is.satisFiyati);
+              const odenen = Number(is.tahsilat || 0);
+              const kalan = Math.max(0, satis - odenen);
+              const aktif = aktifIs?.id === is.id;
+              const bekleyen = aktif && odemePlani ? odemePlani.taksitler.filter(t => !t.odendiMi) : [];
+              const siradaki = bekleyen[0];
+
+              return (
+                <div key={is.id} data-onboarding-target="tahsilat-job-select"
+                  onClick={() => isSec(is)}
+                  className={`desktop-work-card${aktif ? " aktif" : ""}`}>
+                  <div className="desktop-work-card-main">
+                    <div style={{ minWidth:0 }}>
+                      <div className="desktop-work-title">{is.urunAdi}</div>
+                      <div className="desktop-work-sub">#{is.teklifNo} · {is.durum}</div>
+                    </div>
+                    <span className={`desktop-status-badge${kalan > 0 ? " warning" : ""}`}>{kalan > 0 ? "Açık" : "Kapandı"}</span>
+                  </div>
+
+                  <div className="desktop-work-money-row">
+                    <span>Toplam <strong>{tl(satis)}</strong></span>
+                    <span>Ödenen <strong>{tl(odenen)}</strong></span>
+                    <span>Kalan <strong>{tl(kalan)}</strong></span>
+                  </div>
+
+                  <div className="desktop-work-footer">
+                    <div className="desktop-due-note">
+                      {aktif && odemePlani
+                        ? (siradaki ? `${bekleyen.length} bekleyen taksit · ${tarihFmt(siradaki.vadeTarihi)}` : "Plan tamamen ödenmiş görünüyor")
+                        : "Plan bilgisi için işi seç"}
+                    </div>
+                    <div className="desktop-work-actions">
+                      <button onClick={(e) => { e.stopPropagation(); isSec(is); setAktifDesktopSekme("plan"); }} className="desktop-mini-action">
+                        Ödeme Planı
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); isSec(is); setAktifDesktopSekme("tahsilat"); }} className="desktop-mini-action primary">
+                        Tahsilat Gir
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const DesktopPanel = () => {
+    if (aktifDesktopSekme === "musteri") return <div className="desktop-single-panel">{DesktopMusteriPanel}</div>;
+    if (aktifDesktopSekme === "plan") return <div className="desktop-single-panel">{PanelPlan}</div>;
+    if (aktifDesktopSekme === "tahsilat") return <div className="desktop-single-panel">{PanelTahsilat}</div>;
+    if (aktifDesktopSekme === "gecmis") return <div className="desktop-single-panel">{PanelTahsilat}</div>;
+    if (aktifDesktopSekme === "sablon") return <div className="desktop-single-panel">{PanelSablon}</div>;
+
+    return (
+      <div className="desktop-work-grid">
+        <section className="desktop-panel">{DesktopMusteriPanel}</section>
+        <section className="desktop-panel desktop-panel-main">{DesktopCustomerWorkspace}</section>
+        <section className="desktop-panel">{PanelTahsilat}</section>
+      </div>
+    );
+  };
+
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
     <>
@@ -798,7 +974,7 @@ export default function TahsilatlarPage() {
         </div>
       </div>
     )}
-    <div style={{ height:"100dvh", background:"#030712", color:"#f9fafb", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+    <div className="tahsilat-page-root" style={{ height:"100dvh", background:"#030712", color:"#f9fafb", display:"flex", flexDirection:"column", overflow:"hidden" }}>
       <style>{`
         .kart{background:#0a0f1a;border:1px solid #1f2937;border-radius:18px;padding:16px;}
         .yi-inp{width:100%;box-sizing:border-box;background:#111827;border:1.5px solid #1f2937;border-radius:11px;padding:10px 13px;color:#f9fafb;font-size:15px;outline:none;}
@@ -809,11 +985,182 @@ export default function TahsilatlarPage() {
         .is-btn.aktif{border-color:#10b981!important;background:rgba(16,185,129,0.08)!important;}
         .sekme-btn{flex:1;padding:10px 4px;background:transparent;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:#6b7280;font-size:10px;font-weight:700;transition:color .15s;}
         .sekme-btn.aktif{color:#10b981;}
+        .desktop-cockpit{display:none;}
+        .desktop-shell{width:min(100%,1760px);margin:0 auto;padding:18px 22px 0;box-sizing:border-box;}
+        .desktop-glass{background:linear-gradient(180deg,rgba(15,23,42,.86),rgba(2,6,23,.92));border:1px solid rgba(148,163,184,.16);box-shadow:0 24px 80px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);}
+        .desktop-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;}
+        .desktop-kpi{min-width:0;border-radius:20px;padding:13px 14px;background:rgba(15,23,42,.74);border:1px solid rgba(148,163,184,.13);}
+        .desktop-kpi-value{font-size:clamp(12px,1.05vw,20px);line-height:1.12;font-weight:950;margin-top:8px;font-variant-numeric:tabular-nums;}
+        .desktop-kpi-value.numeric{white-space:nowrap;letter-spacing:-.02em;}
+        .desktop-kpi-value.text{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .desktop-tabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;padding:6px;border-radius:22px;background:rgba(15,23,42,.58);border:1px solid rgba(148,163,184,.13);}
+        .desktop-tab{min-width:0;border:0;border-radius:17px;padding:10px 12px;background:transparent;color:#94a3b8;text-align:left;cursor:pointer;transition:all .16s ease;}
+        .desktop-tab:hover{background:rgba(148,163,184,.08);color:#f8fafc;}
+        .desktop-tab.aktif{background:rgba(16,185,129,.14);color:#ecfdf5;box-shadow:inset 0 0 0 1px rgba(16,185,129,.22);}
+        .desktop-canvas{min-height:0;flex:1;border-radius:28px;overflow:hidden;}
+        .desktop-work-grid{height:100%;display:grid;grid-template-columns:minmax(238px,.62fr) minmax(460px,1.55fr) minmax(300px,.88fr);gap:14px;padding:14px;}
+        .desktop-panel{min-width:0;min-height:0;overflow:hidden;border-radius:24px;background:rgba(2,6,23,.38);border:1px solid rgba(148,163,184,.10);}
+        .desktop-panel-main{background:rgba(15,23,42,.48);}
+        .desktop-single-panel{height:100%;min-height:0;overflow:hidden;padding:14px;box-sizing:border-box;}
+        .desktop-customer-panel{height:100%;min-width:0;display:flex;flex-direction:column;gap:10px;padding:12px;box-sizing:border-box;overflow:hidden;}
+        .desktop-customer-card{min-width:0;border-radius:18px;background:rgba(15,23,42,.66);border:1px solid rgba(148,163,184,.12);padding:12px;box-sizing:border-box;}
+        .desktop-search-card{flex:1;min-height:0;display:flex;flex-direction:column;}
+        .desktop-summary-card{flex-shrink:0;}
+        .desktop-section-label{margin:0 0 8px;color:#94a3b8;font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;}
+        .desktop-customer-input{width:100%;box-sizing:border-box;background:rgba(2,6,23,.76);border:1px solid rgba(148,163,184,.18);border-radius:13px;padding:9px 11px;color:#f8fafc;font-size:13px;outline:none;}
+        .desktop-customer-input:focus{border-color:rgba(16,185,129,.55);box-shadow:0 0 0 3px rgba(16,185,129,.10);}
+        .desktop-customer-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;min-width:0;min-height:0;flex:1;overflow-y:auto;overflow-x:hidden;padding-right:2px;}
+        .desktop-customer-row{width:100%;min-width:0;border:1px solid rgba(148,163,184,.10);background:rgba(2,6,23,.42);border-radius:12px;padding:8px 9px;color:#e2e8f0;text-align:left;cursor:pointer;display:grid;gap:2px;}
+        .desktop-customer-row:hover,.desktop-customer-row.aktif{border-color:rgba(16,185,129,.32);background:rgba(16,185,129,.08);}
+        .desktop-customer-row-top{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
+        .desktop-customer-badge{border:1px solid rgba(16,185,129,.20);background:rgba(16,185,129,.08);border-radius:999px;padding:2px 6px;color:#86efac;font-size:9px;font-weight:900;white-space:nowrap;}
+        .desktop-customer-name,.desktop-customer-meta,.desktop-job-name,.desktop-job-code,.desktop-job-price{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .desktop-customer-name{font-size:12px;font-weight:900;}
+        .desktop-customer-meta{font-size:10px;color:#64748b;}
+        .desktop-customer-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:950;color:#34d399;}
+        .desktop-customer-phone{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#94a3b8;margin-top:3px;}
+        .desktop-wa-compact{width:100%;margin-top:8px;border:1px solid rgba(34,197,94,.24);background:rgba(34,197,94,.08);border-radius:12px;color:#86efac;padding:8px 9px;font-size:12px;font-weight:850;cursor:pointer;}
+        .desktop-money-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:9px;min-width:0;}
+        .desktop-money-chip{min-width:0;border-radius:11px;background:rgba(2,6,23,.50);border:1px solid rgba(148,163,184,.09);padding:7px 6px;display:grid;gap:2px;}
+        .desktop-money-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#64748b;font-size:9px;font-weight:800;}
+        .desktop-money-chip strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:950;font-variant-numeric:tabular-nums;}
+        .desktop-jobs-card{flex:1;min-height:132px;display:flex;flex-direction:column;gap:7px;overflow:hidden;}
+        .desktop-jobs-list{min-height:0;max-height:clamp(128px,22vh,230px);overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:7px;padding-right:2px;}
+        .desktop-job-row{width:100%;min-width:0;border:1px solid rgba(148,163,184,.10);background:rgba(2,6,23,.48);border-radius:13px;padding:9px 10px;color:#f8fafc;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left;cursor:pointer;}
+        .desktop-job-row:hover,.desktop-job-row.aktif{border-color:rgba(16,185,129,.38);background:rgba(16,185,129,.08);}
+        .desktop-job-main{min-width:0;display:grid;gap:2px;}
+        .desktop-job-name{font-size:12px;font-weight:900;text-transform:capitalize;}
+        .desktop-job-code{font-size:10px;color:#64748b;}
+        .desktop-job-price{font-size:11px;font-weight:950;color:#34d399;font-variant-numeric:tabular-nums;max-width:96px;}
+        .desktop-more-note,.desktop-empty-note{font-size:11px;color:#64748b;margin:0;}
+        .desktop-empty-state{margin-top:auto;}
+        .desktop-workspace{height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;padding:14px;box-sizing:border-box;overflow:hidden;}
+        .desktop-workspace-empty{height:100%;border:1px dashed rgba(148,163,184,.20);border-radius:24px;background:rgba(15,23,42,.42);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:26px;color:#94a3b8;box-sizing:border-box;}
+        .desktop-workspace-empty.compact{height:auto;min-height:130px;}
+        .desktop-workspace-empty h2{margin:0;color:#f8fafc;font-size:20px;font-weight:950;letter-spacing:-.02em;}
+        .desktop-workspace-empty p{margin:8px 0 0;max-width:420px;font-size:13px;color:#64748b;}
+        .desktop-empty-icon{width:48px;height:48px;border-radius:18px;margin-bottom:14px;display:grid;place-items:center;background:rgba(16,185,129,.10);border:1px solid rgba(16,185,129,.20);color:#34d399;font-size:24px;font-weight:950;}
+        .desktop-workspace-head{flex-shrink:0;display:flex;flex-direction:column;gap:7px;border-radius:20px;background:rgba(15,23,42,.64);border:1px solid rgba(148,163,184,.12);padding:11px 12px;box-sizing:border-box;}
+        .desktop-summary-top{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;}
+        .desktop-workspace-head h2{margin:0;color:#f8fafc;font-size:clamp(15px,1.15vw,19px);line-height:1.05;font-weight:950;letter-spacing:-.025em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .desktop-phone-badge{border-radius:999px;padding:4px 8px;font-size:10px;font-weight:900;white-space:nowrap;border:1px solid rgba(148,163,184,.18);background:rgba(2,6,23,.44);color:#cbd5e1;}
+        .desktop-phone-badge.ok{border-color:rgba(52,211,153,.24);background:rgba(52,211,153,.08);color:#86efac;}
+        .desktop-phone-badge.warn{border-color:rgba(251,113,133,.24);background:rgba(251,113,133,.08);color:#fda4af;}
+        .desktop-summary-meta{min-width:0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;color:#94a3b8;font-size:11px;line-height:1.2;}
+        .desktop-summary-meta span{white-space:nowrap;}
+        .desktop-summary-meta span:not(:last-child)::after{content:"•";margin-left:6px;color:#475569;}
+        .desktop-workspace-money{min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+        .desktop-workspace-chip{min-width:0;border-radius:12px;background:rgba(2,6,23,.40);border:1px solid rgba(148,163,184,.09);padding:7px 8px;display:grid;grid-template-columns:minmax(0,.78fr) auto;gap:8px;align-items:baseline;}
+        .desktop-workspace-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#64748b;font-size:9px;font-weight:850;}
+        .desktop-workspace-chip strong{min-width:0;white-space:nowrap;font-size:clamp(10px,.78vw,13px);line-height:1.05;font-weight:950;font-variant-numeric:tabular-nums;letter-spacing:-.03em;}
+        .desktop-workspace-list{min-height:0;flex:1;overflow-y:auto;overflow-x:hidden;display:grid;align-content:start;gap:10px;padding-right:3px;}
+        .desktop-work-card{min-width:0;border:1px solid rgba(148,163,184,.13);background:linear-gradient(180deg,rgba(15,23,42,.72),rgba(2,6,23,.54));border-radius:20px;padding:14px;cursor:pointer;transition:all .16s ease;}
+        .desktop-work-card:hover,.desktop-work-card.aktif{border-color:rgba(16,185,129,.36);background:rgba(16,185,129,.08);}
+        .desktop-work-card-main{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;}
+        .desktop-work-title{min-width:0;color:#f8fafc;font-size:clamp(13px,1vw,15px);line-height:1.15;font-weight:950;text-transform:capitalize;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .desktop-work-sub{margin-top:3px;color:#64748b;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .desktop-status-badge{border-radius:999px;border:1px solid rgba(52,211,153,.24);background:rgba(52,211,153,.08);color:#86efac;padding:4px 8px;font-size:10px;font-weight:900;}
+        .desktop-status-badge.warning{border-color:rgba(251,191,36,.26);background:rgba(251,191,36,.08);color:#fbbf24;}
+        .desktop-work-money-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;}
+        .desktop-work-money-row span{min-width:0;border-radius:13px;background:rgba(2,6,23,.42);padding:8px 9px;color:#64748b;font-size:10px;font-weight:800;white-space:normal;}
+        .desktop-work-money-row strong{display:block;margin-top:3px;color:#e2e8f0;font-size:clamp(10px,.82vw,13px);line-height:1.1;font-weight:950;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap;}
+        .desktop-work-footer{margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;}
+        .desktop-due-note{min-width:0;color:#94a3b8;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .desktop-work-actions{display:flex;gap:7px;align-items:center;}
+        .desktop-mini-action{border:1px solid rgba(148,163,184,.16);background:rgba(15,23,42,.92);color:#cbd5e1;border-radius:12px;padding:8px 10px;font-size:11px;font-weight:900;cursor:pointer;white-space:nowrap;}
+        .desktop-mini-action.primary{border-color:rgba(16,185,129,.34);background:rgba(16,185,129,.13);color:#86efac;}
+        .desktop-bottom-bar{flex-shrink:0;border-top:1px solid rgba(148,163,184,.14);background:rgba(2,6,23,.86);backdrop-filter:blur(18px);}
+        .desktop-action{border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.9);color:#e5e7eb;border-radius:16px;padding:10px 14px;font-size:13px;font-weight:800;cursor:pointer;transition:all .15s ease;white-space:nowrap;}
+        .desktop-action:hover:not(:disabled){border-color:rgba(16,185,129,.42);color:#ecfdf5;background:rgba(16,185,129,.10);}
+        .desktop-action.primary{background:#10b981;border-color:#10b981;color:#03110c;}
+        .desktop-action:disabled{opacity:.42;cursor:not-allowed;}
         ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#374151;border-radius:4px;}
+        @media (min-width: 768px) {
+          .tahsilat-page-root{margin-bottom:calc(-72px - env(safe-area-inset-bottom, 0px));}
+          .desktop-cockpit{display:flex;}
+          .mobile-header{display:none!important;}
+        }
+        @media (max-width: 1320px) {
+          .desktop-shell{padding-left:14px;padding-right:14px;}
+          .desktop-work-grid{grid-template-columns:minmax(220px,.58fr) minmax(390px,1.35fr) minmax(270px,.9fr);gap:10px;}
+          .desktop-workspace-head{gap:7px;}
+          .desktop-workspace-chip{grid-template-columns:1fr;gap:2px;}
+          .desktop-kpi{padding:11px 12px;}
+          .desktop-tab{padding:9px 10px;}
+        }
       `}</style>
 
+      <div className="desktop-cockpit" style={{ height:"100dvh", background:"radial-gradient(circle at top left, rgba(16,185,129,0.13), transparent 28%), radial-gradient(circle at 82% 8%, rgba(59,130,246,0.10), transparent 30%), #030712", color:"#f9fafb", flexDirection:"column", overflow:"hidden" }}>
+        <div className="desktop-shell" style={{ flex:"1 1 auto", minHeight:0, display:"flex", flexDirection:"column", gap:"12px" }}>
+          <header data-onboarding-target="tahsilat-header" className="desktop-glass" style={{ flexShrink:0, borderRadius:"28px", padding:"16px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"18px" }}>
+            <div style={{ minWidth:0, display:"flex", alignItems:"center", gap:"14px" }}>
+              <button onClick={() => router.push("/dashboard/isler")} className="desktop-action" style={{ padding:"9px 13px" }}>
+                ← Geri
+              </button>
+              <div style={{ minWidth:0 }}>
+                <p style={{ fontSize:"10px", color:"#64748b", letterSpacing:".22em", textTransform:"uppercase", margin:"0 0 4px", fontWeight:800 }}>Finans & Cari</p>
+                <h1 style={{ fontSize:"24px", lineHeight:1.05, fontWeight:950, margin:0, letterSpacing:"-.02em" }}>Tahsilat & Cari</h1>
+                <p style={{ fontSize:"13px", color:"#94a3b8", margin:"6px 0 0", maxWidth:"680px" }}>
+                  Müşteri, ödeme planı, WhatsApp hatırlatma ve cari hareketleri tek çalışma alanında yönet.
+                </p>
+              </div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:"10px", flexShrink:0 }}>
+              {bugunListesi.length > 0 && (
+                <div style={{ border:"1px solid rgba(248,113,113,.28)", background:"rgba(127,29,29,.20)", color:"#fecaca", borderRadius:"16px", padding:"9px 12px", fontSize:"12px", fontWeight:850 }}>
+                  {bugunListesi.length} bekleyen vade
+                </div>
+              )}
+            </div>
+          </header>
+
+          <div className="desktop-kpi-grid" style={{ flexShrink:0 }}>
+            {desktopKpi.map(kpi => (
+              <div key={kpi.label} className="desktop-kpi">
+                <div style={{ color:"#64748b", fontSize:"10px", fontWeight:850, letterSpacing:".14em", textTransform:"uppercase", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{kpi.label}</div>
+                <div className={`desktop-kpi-value${kpi.label === "Çalışma Modu" ? " text" : " numeric"}`} style={{ color:kpi.tone }}>{kpi.value}</div>
+                <div style={{ color:"#94a3b8", fontSize:"11px", marginTop:"5px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{kpi.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          <nav className="desktop-tabs" style={{ flexShrink:0 }}>
+            {desktopSekmeler.map(sekme => (
+              <button key={sekme.id} onClick={() => setAktifDesktopSekme(sekme.id)}
+                className={`desktop-tab${aktifDesktopSekme === sekme.id ? " aktif" : ""}`}>
+                <div style={{ fontSize:"13px", fontWeight:900, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sekme.label}</div>
+                <div style={{ fontSize:"10px", marginTop:"3px", color:"inherit", opacity:.62, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sekme.hint}</div>
+              </button>
+            ))}
+          </nav>
+
+          <main className="desktop-canvas desktop-glass">
+            <DesktopPanel />
+          </main>
+        </div>
+
+        <div className="desktop-bottom-bar">
+          <div style={{ width:"min(100%,1760px)", margin:"0 auto", padding:"12px 22px 14px", boxSizing:"border-box", display:"flex", alignItems:"center", justifyContent:"space-between", gap:"16px" }}>
+            <div style={{ minWidth:0 }}>
+              <div style={{ color:"#f8fafc", fontSize:"13px", fontWeight:900, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {seciliMusteri ? seciliMusteriAdi : "Tahsilat operasyonu için müşteri seçimi bekleniyor"}
+              </div>
+              <div style={{ color:"#64748b", fontSize:"11px", marginTop:"2px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {aktifIs ? `${aktifIs.urunAdi} · ${tl(Number(aktifIs.satisFiyati))}` : "Ödeme planı ve tahsilat kaydı seçili işe bağlanabilir."}
+              </div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:"8px", flexShrink:0 }}>
+              <button className="desktop-action" onClick={whatsappHatirlat} disabled={!seciliMusteri?.telefon}>WhatsApp Hatırlat</button>
+              <button className="desktop-action primary" onClick={() => setAktifDesktopSekme("tahsilat")} disabled={!seciliMusteri}>Tahsilat Kaydet</button>
+              <button className="desktop-action" onClick={() => setAktifDesktopSekme("plan")} disabled={!aktifIs}>Ödeme Planı</button>
+              <button className="desktop-action" onClick={() => setAktifDesktopSekme("sablon")}>Şablonlar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* HEADER */}
-      <div style={{ flexShrink:0, borderBottom:"1px solid #1f2937", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      <div className="mobile-header" data-onboarding-target="tahsilat-header" style={{ flexShrink:0, borderBottom:"1px solid #1f2937", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
           <button onClick={() => router.push("/dashboard/isler")}
             style={{ background:"#0d1117", border:"1px solid #1f2937", borderRadius:"10px", color:"#9ca3af", padding:"7px 13px", fontSize:"13px", cursor:"pointer" }}>
@@ -832,13 +1179,13 @@ export default function TahsilatlarPage() {
       </div>
 
       {/* MASAÜSTÜ: 3 kolon | MOBİL: tek panel + alt sekme */}
-      <div style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" }}>
+      <div className="mobile-content" style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" }}>
 
         {/* Masaüstü 3 kolon */}
         <div className="desktop-cols" style={{ flex:1, display:"grid", gridTemplateColumns:"280px 260px 1fr", overflow:"hidden" }}>
-          <div style={{ borderRight:"1px solid #1f2937", overflow:"hidden" }}>{PanelMusteri}</div>
-          <div style={{ borderRight:"1px solid #1f2937", overflow:"hidden" }}>{PanelTahsilat}</div>
-          <div style={{ overflow:"hidden" }}>{PanelPlan}</div>
+          <div data-onboarding-target="tahsilat-mobile-tab-musteri" style={{ borderRight:"1px solid #1f2937", overflow:"hidden" }}>{PanelMusteri}</div>
+          <div data-onboarding-target="tahsilat-mobile-tab-tahsilat" style={{ borderRight:"1px solid #1f2937", overflow:"hidden" }}>{PanelTahsilat}</div>
+          <div data-onboarding-target="tahsilat-mobile-tab-plan" style={{ overflow:"hidden" }}>{PanelPlan}</div>
           <div style={{ borderLeft:"1px solid #1f2937", overflow:"hidden" }}>{PanelSablon}</div>
         </div>
 
@@ -853,12 +1200,12 @@ export default function TahsilatlarPage() {
         {/* Mobil alt sekme çubuğu */}
         <div className="mobile-tabs" style={{ position:"fixed", bottom:"72px", left:0, right:0, zIndex:85, borderTop:"1px solid #1f2937", borderBottom:"1px solid #1f2937", background:"rgba(3,7,18,0.97)", backdropFilter:"blur(16px)", display:"flex", paddingBottom:"env(safe-area-inset-bottom, 0px)" }}>
           {([
-            { id:"musteri" as Sekme, icon:"👤", label:"Müşteri", badge: seciliMusteri ? isler.length : 0 },
-            { id:"tahsilat" as Sekme, icon:"💳", label:"Tahsilat", badge: tahsilatlar.length },
-            { id:"plan" as Sekme, icon:"📅", label:"Ödeme Planı", badge: odemePlani?.taksitler.filter(t=>!t.odendiMi).length || 0 },
-            { id:"sablon" as Sekme, icon:"⚙️", label:"Şablonlar", badge: 0 },
+            { id:"musteri" as Sekme, icon:"👤", label:"Müşteri", badge: seciliMusteri ? isler.length : 0, target: "tahsilat-mobile-tab-musteri" },
+            { id:"tahsilat" as Sekme, icon:"💳", label:"Tahsilat", badge: tahsilatlar.length, target: "tahsilat-mobile-tab-tahsilat" },
+            { id:"plan" as Sekme, icon:"📅", label:"Ödeme Planı", badge: odemePlani?.taksitler.filter(t=>!t.odendiMi).length || 0, target: "tahsilat-mobile-tab-plan" },
+            { id:"sablon" as Sekme, icon:"⚙️", label:"Şablonlar", badge: 0, target: undefined },
           ] as const).map(s => (
-            <button key={s.id} onClick={() => setAktifSekme(s.id)}
+            <button key={s.id} data-onboarding-target={s.target} onClick={() => setAktifSekme(s.id)}
               className={`sekme-btn${aktifSekme===s.id?" aktif":""}`}>
               <div style={{ position:"relative" }}>
                 <span style={{ fontSize:"20px" }}>{s.icon}</span>
@@ -878,11 +1225,13 @@ export default function TahsilatlarPage() {
       {/* Responsive CSS */}
       <style>{`
         @media (min-width: 768px) {
-          .desktop-cols { display: grid !important; }
+          .mobile-content { display: none !important; }
+          .desktop-cols { display: none !important; }
           .mobile-panel { display: none !important; }
           .mobile-tabs  { display: none !important; }
         }
         @media (max-width: 767px) {
+          .mobile-content { display: flex !important; }
           .desktop-cols { display: none !important; }
           .mobile-panel { display: block !important; }
           .mobile-tabs  { display: flex !important; }

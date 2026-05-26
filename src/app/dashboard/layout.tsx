@@ -4,6 +4,10 @@ import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DailyPlanPopup from "@/components/dashboard/DailyPlanPopup";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
+import GuideReturnBar from "@/components/onboarding/GuideReturnBar";
+import OnboardingTourController from "@/components/onboarding/OnboardingTourController";
+import DashboardGuideLauncher from "@/components/onboarding/DashboardGuideLauncher";
+import PageActionCoach from "@/components/onboarding/PageActionCoach";
 
 export default function DashboardLayout({
   children,
@@ -101,10 +105,14 @@ export default function DashboardLayout({
     <div className="min-h-[100dvh] bg-[#0B1120] overflow-x-hidden">
       <InAppToast />
       <Sidebar />
+      <DashboardGuideLauncher />
       <main className="min-h-[100dvh] md:ml-72 bg-[#0B1120] overflow-x-hidden" id="dashboard-main"
         style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}>
         <div className="min-h-[100dvh] w-full md:[padding-bottom:0]" id="dashboard-inner">
           <DailyPlanPopup />
+          <GuideReturnBar />
+          <OnboardingTourController />
+          <PageActionCoach />
           {children}
         </div>
       </main>
