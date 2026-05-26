@@ -77,7 +77,7 @@ function defaultTaksitler(musteriTipi: string, toplamTutar: number, baslangic: D
 }
 
 type Sekme = "musteri" | "tahsilat" | "plan" | "sablon";
-type DesktopSekme = "genel" | "musteri" | "plan" | "tahsilat" | "gecmis" | "sablon";
+type DesktopSekme = "genel" | "plan" | "cari" | "sablon";
 
 export default function TahsilatlarPage() {
   const router = useRouter();
@@ -793,20 +793,25 @@ export default function TahsilatlarPage() {
   );
 
   const desktopSekmeler: { id: DesktopSekme; label: string; hint: string }[] = [
-    { id: "genel", label: "Genel Bakış", hint: "Operasyon" },
-    { id: "musteri", label: "Müşteri", hint: `${isler.length} açık iş` },
+    { id: "genel", label: "Genel Bakış", hint: "İş seçimi" },
     { id: "plan", label: "Ödeme Planı", hint: `${bekleyenTaksitSayisi} bekleyen` },
-    { id: "tahsilat", label: "Tahsilat", hint: "Manuel giriş" },
-    { id: "gecmis", label: "Geçmiş", hint: `${tahsilatlar.length} hareket` },
+    { id: "cari", label: "Cari Hareketler", hint: `${tahsilatlar.length} hareket` },
     { id: "sablon", label: "Şablonlar", hint: "Plan dili" },
   ];
 
   const desktopKpi = [
-    { label: "Çalışma Modu", value: seciliMusteriAdi, tone: "#f9fafb", sub: seciliMusteri ? MUSTERI_TIP[seciliMusteri.musteriTipi] : "Müşteri seçilmedi" },
-    { label: "Tahsil Edilen", value: tl(toplamTahsilat), tone: "#34d399", sub: `${tahsilatlar.length} cari hareket` },
-    { label: "Kalan Bakiye", value: tl(bakiye), tone: bakiye > 0 ? "#fbbf24" : "#34d399", sub: bakiye > 0 ? "Takipte" : "Dengede" },
-    { label: "Açık İş", value: String(isler.length), tone: "#93c5fd", sub: aktifIs ? aktifIs.urunAdi : "İş seçimi bekliyor" },
-    { label: "Vade", value: String(bekleyenTaksitSayisi), tone: gecikenTaksitSayisi > 0 ? "#fb7185" : "#fbbf24", sub: gecikenTaksitSayisi > 0 ? `${gecikenTaksitSayisi} geciken` : "Bekleyen ödeme" },
+    {
+      label: seciliMusteri ? "Seçili Müşteri" : "Çalışma Modu",
+      value: seciliMusteriAdi,
+      tone: "#f9fafb",
+      sub: seciliMusteri
+        ? `${MUSTERI_TIP[seciliMusteri.musteriTipi]} · ${seciliMusteri.telefon || "Telefon yok"}`
+        : "Soldan müşteri seç",
+    },
+    { label: "Toplam Borç", value: tl(toplamBorc), tone: "#fb7185", sub: `${isler.length} açık iş` },
+    { label: "Ödenen", value: tl(toplamTahsilat), tone: "#34d399", sub: `${tahsilatlar.length} cari hareket` },
+    { label: "Bakiye", value: tl(bakiye), tone: bakiye > 0 ? "#fbbf24" : "#34d399", sub: bakiye > 0 ? "Tahsilat bekliyor" : "Dengede" },
+    { label: "Ödeme Bekleyen İş", value: String(isler.length), tone: "#93c5fd", sub: aktifIs ? aktifIs.urunAdi : "İş seçimi bekliyor" },
   ];
 
   const DesktopMusteriPanel = (
@@ -844,32 +849,12 @@ export default function TahsilatlarPage() {
       ) : (
         <>
           <div className="desktop-workspace-head">
-            <div className="desktop-summary-top">
-              <div style={{ minWidth:0 }}>
-                <div className="desktop-section-label">Ödeme Bekleyen İşler</div>
-                <h2>{seciliMusteri.firmaAdi || seciliMusteri.ad}</h2>
-              </div>
-              <div data-onboarding-target="tahsilat-musteri-phone-status" className={`desktop-phone-badge${seciliMusteri.telefon ? " ok" : " warn"}`}>
-                {seciliMusteri.telefon ? "Telefon kayıtlı" : "Telefon yok"}
-              </div>
+            <div>
+              <div className="desktop-section-label">Ödeme Bekleyen İşler</div>
+              <h2>Kimden ne almam gerekiyor?</h2>
             </div>
-            <div className="desktop-summary-meta">
-              <span>{MUSTERI_TIP[seciliMusteri.musteriTipi]}</span>
-              <span>{seciliMusteri.telefon || "Telefon kayıtlı değil"}</span>
-              <span>{isler.length} açık iş</span>
-              <span>{tahsilatlar.length} cari hareket</span>
-            </div>
-            <div className="desktop-workspace-money">
-              {[
-                { l:"Toplam Borç", v:tl(toplamBorc), c:"#fb7185" },
-                { l:"Ödenen", v:tl(toplamTahsilat), c:"#34d399" },
-                { l:"Bakiye", v:tl(Math.abs(bakiye)), c:"#fbbf24" },
-              ].map(x => (
-                <div key={x.l} className="desktop-workspace-chip">
-                  <span>{x.l}</span>
-                  <strong style={{ color:x.c }}>{x.v}</strong>
-                </div>
-              ))}
+            <div data-onboarding-target="tahsilat-musteri-phone-status" className={`desktop-phone-badge${seciliMusteri.telefon ? " ok" : " warn"}`}>
+              {seciliMusteri.telefon ? `Telefon: ${seciliMusteri.telefon}` : "Telefon kayıtlı değil"}
             </div>
           </div>
 
@@ -885,6 +870,11 @@ export default function TahsilatlarPage() {
               const aktif = aktifIs?.id === is.id;
               const bekleyen = aktif && odemePlani ? odemePlani.taksitler.filter(t => !t.odendiMi) : [];
               const siradaki = bekleyen[0];
+              const planBadge = aktif && odemePlani
+                ? `${bekleyen.length} bekleyen taksit`
+                : aktif
+                  ? "Ödeme planı yok"
+                  : "Planı görmek için seç";
 
               return (
                 <div key={is.id} data-onboarding-target="tahsilat-job-select"
@@ -895,7 +885,7 @@ export default function TahsilatlarPage() {
                       <div className="desktop-work-title">{is.urunAdi}</div>
                       <div className="desktop-work-sub">#{is.teklifNo} · {is.durum}</div>
                     </div>
-                    <span className={`desktop-status-badge${kalan > 0 ? " warning" : ""}`}>{kalan > 0 ? "Açık" : "Kapandı"}</span>
+                    <span className={`desktop-risk-badge${aktif && odemePlani ? " planned" : " muted"}`}>{planBadge}</span>
                   </div>
 
                   <div className="desktop-work-money-row">
@@ -914,7 +904,7 @@ export default function TahsilatlarPage() {
                       <button onClick={(e) => { e.stopPropagation(); isSec(is); setAktifDesktopSekme("plan"); }} className="desktop-mini-action">
                         Ödeme Planı
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); isSec(is); setAktifDesktopSekme("tahsilat"); }} className="desktop-mini-action primary">
+                      <button onClick={(e) => { e.stopPropagation(); isSec(is); setAktifDesktopSekme("genel"); }} className="desktop-mini-action primary">
                         Tahsilat Gir
                       </button>
                     </div>
@@ -928,18 +918,111 @@ export default function TahsilatlarPage() {
     </div>
   );
 
+  const DesktopTahsilatActionPanel = (
+    <div className="desktop-action-panel" data-onboarding-target="tahsilat-tab-payment">
+      <div className="desktop-action-card">
+        <div className="desktop-action-head">
+          <div className="desktop-section-label">Tahsilat Aksiyonu</div>
+          <h3>Tahsilat Gir</h3>
+          <p>Tahsilat kaydı seçili müşteri ve iş ile ilişkilendirilir.</p>
+        </div>
+        {seciliMusteri ? (
+          <div className="desktop-context-box">
+            <strong>{seciliMusteri.firmaAdi || seciliMusteri.ad}</strong>
+            <span>{aktifIs ? `${aktifIs.urunAdi} · #${aktifIs.teklifNo}` : "Önce ödeme alınacak işi seç"}</span>
+          </div>
+        ) : (
+          <div className="desktop-context-box muted">
+            <strong>Müşteri seçilmedi</strong>
+            <span>Soldaki listeden müşteri seçerek tahsilata başla.</span>
+          </div>
+        )}
+        <div className="desktop-action-form">
+          <div className="desktop-action-input-grid">
+          <div className="desktop-action-field">
+            <span className="yi-label">Tutar (₺)</span>
+            <input data-onboarding-target="tahsilat-amount-input" className="yi-inp" type="text" inputMode="decimal" placeholder="0,00"
+              value={yeniTutar} onChange={e => setYeniTutar(e.target.value)} />
+          </div>
+          <div className="desktop-action-field">
+            <span className="yi-label">Tarih</span>
+            <input data-onboarding-target="tahsilat-date-input" className="yi-inp" type="date" value={yeniTarih} onChange={e => setYeniTarih(e.target.value)} />
+          </div>
+          </div>
+          <button data-onboarding-target="tahsilat-save" onClick={tahsilatKaydet} disabled={kaydediliyor || !seciliMusteri || !yeniTutar}
+            className="desktop-save-action">
+            {kaydediliyor ? "Kaydediliyor..." : "Tahsilat Kaydet"}
+          </button>
+          <button data-onboarding-target="tahsilat-wa-message" onClick={whatsappHatirlat} disabled={!seciliMusteri?.telefon}
+            className="desktop-wa-action">
+            WhatsApp Hatırlat
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const DesktopCariHareketlerPanel = (
+    <div className="desktop-single-panel">
+      <div className="desktop-history-panel" data-onboarding-target="tahsilat-history">
+        <div>
+          <div className="desktop-section-label">Cari Hareketler</div>
+          <h3>{seciliMusteri ? (seciliMusteri.firmaAdi || seciliMusteri.ad) : "Müşteri seçilmedi"}</h3>
+        </div>
+        {!seciliMusteri ? (
+          <div className="desktop-workspace-empty compact">Cari hareketleri görmek için müşteri seç.</div>
+        ) : tahsilatlar.length === 0 ? (
+          <div className="desktop-workspace-empty compact">Bu müşteri için kayıtlı tahsilat hareketi yok.</div>
+        ) : (
+          <div className="desktop-history-list">
+            {tahsilatlar.map(t => (
+              <div key={t.id} className="desktop-history-row">
+                <div>
+                  <strong>{tl(Number(t.tutar))}</strong>
+                  <span>{tarihFmt(t.tarih)}{t.is ? ` · ${t.is.urunAdi}` : " · Genel"}</span>
+                </div>
+                <button onClick={() => tahsilatSil(t.id)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const DesktopPlanPanel = (
+    <div className="desktop-single-panel">
+      {!aktifIs ? (
+        <div className="desktop-plan-empty" data-onboarding-target="tahsilat-plan-panel">
+          <div className="desktop-section-label">Ödeme Planı</div>
+          <h3>Önce ödeme alınacak işi seç.</h3>
+          <p>Genel Bakış içindeki iş kartından ödeme planını açabilirsin.</p>
+        </div>
+      ) : !odemePlani ? (
+        <div className="desktop-plan-empty" data-onboarding-target="tahsilat-plan-panel">
+          <div className="desktop-section-label">Ödeme Planı</div>
+          <h3>Bu müşteri/iş için tanımlı ödeme planı yok.</h3>
+          <p>Ödeme şablonlarından plan oluşturabilirsin.</p>
+          <button onClick={() => setAktifDesktopSekme("sablon")} className="desktop-mini-action primary">
+            Şablonlara Git
+          </button>
+        </div>
+      ) : (
+        PanelPlan
+      )}
+    </div>
+  );
+
   const DesktopPanel = () => {
-    if (aktifDesktopSekme === "musteri") return <div className="desktop-single-panel">{DesktopMusteriPanel}</div>;
-    if (aktifDesktopSekme === "plan") return <div className="desktop-single-panel">{PanelPlan}</div>;
-    if (aktifDesktopSekme === "tahsilat") return <div className="desktop-single-panel">{PanelTahsilat}</div>;
-    if (aktifDesktopSekme === "gecmis") return <div className="desktop-single-panel">{PanelTahsilat}</div>;
+    if (aktifDesktopSekme === "plan") return DesktopPlanPanel;
+    if (aktifDesktopSekme === "cari") return DesktopCariHareketlerPanel;
     if (aktifDesktopSekme === "sablon") return <div className="desktop-single-panel">{PanelSablon}</div>;
 
     return (
       <div className="desktop-work-grid">
         <section className="desktop-panel">{DesktopMusteriPanel}</section>
         <section className="desktop-panel desktop-panel-main">{DesktopCustomerWorkspace}</section>
-        <section className="desktop-panel">{PanelTahsilat}</section>
+        <section className="desktop-panel">{DesktopTahsilatActionPanel}</section>
       </div>
     );
   };
@@ -993,7 +1076,7 @@ export default function TahsilatlarPage() {
         .desktop-kpi-value{font-size:clamp(12px,1.05vw,20px);line-height:1.12;font-weight:950;margin-top:8px;font-variant-numeric:tabular-nums;}
         .desktop-kpi-value.numeric{white-space:nowrap;letter-spacing:-.02em;}
         .desktop-kpi-value.text{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-        .desktop-tabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;padding:6px;border-radius:22px;background:rgba(15,23,42,.58);border:1px solid rgba(148,163,184,.13);}
+        .desktop-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:6px;border-radius:22px;background:rgba(15,23,42,.58);border:1px solid rgba(148,163,184,.13);}
         .desktop-tab{min-width:0;border:0;border-radius:17px;padding:10px 12px;background:transparent;color:#94a3b8;text-align:left;cursor:pointer;transition:all .16s ease;}
         .desktop-tab:hover{background:rgba(148,163,184,.08);color:#f8fafc;}
         .desktop-tab.aktif{background:rgba(16,185,129,.14);color:#ecfdf5;box-shadow:inset 0 0 0 1px rgba(16,185,129,.22);}
@@ -1053,22 +1136,66 @@ export default function TahsilatlarPage() {
         .desktop-workspace-chip{min-width:0;border-radius:12px;background:rgba(2,6,23,.40);border:1px solid rgba(148,163,184,.09);padding:7px 8px;display:grid;grid-template-columns:minmax(0,.78fr) auto;gap:8px;align-items:baseline;}
         .desktop-workspace-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#64748b;font-size:9px;font-weight:850;}
         .desktop-workspace-chip strong{min-width:0;white-space:nowrap;font-size:clamp(10px,.78vw,13px);line-height:1.05;font-weight:950;font-variant-numeric:tabular-nums;letter-spacing:-.03em;}
+        .desktop-operation-strip{min-width:0;border-radius:14px;border:1px solid rgba(251,191,36,.18);background:linear-gradient(90deg,rgba(251,191,36,.10),rgba(15,23,42,.35));padding:8px 10px;display:flex;align-items:center;gap:8px;color:#f8fafc;font-size:11px;line-height:1.25;}
+        .desktop-operation-strip.danger{border-color:rgba(251,113,133,.24);background:linear-gradient(90deg,rgba(127,29,29,.30),rgba(15,23,42,.35));}
+        .desktop-operation-strip.today{border-color:rgba(251,146,60,.26);background:linear-gradient(90deg,rgba(154,52,18,.22),rgba(15,23,42,.35));}
+        .desktop-operation-strip strong{white-space:nowrap;font-weight:950;color:#fef3c7;}
+        .desktop-operation-strip span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cbd5e1;}
+        .desktop-operation-dot{width:7px;height:7px;border-radius:999px;background:#fbbf24;box-shadow:0 0 18px rgba(251,191,36,.75);flex-shrink:0;}
         .desktop-workspace-list{min-height:0;flex:1;overflow-y:auto;overflow-x:hidden;display:grid;align-content:start;gap:10px;padding-right:3px;}
-        .desktop-work-card{min-width:0;border:1px solid rgba(148,163,184,.13);background:linear-gradient(180deg,rgba(15,23,42,.72),rgba(2,6,23,.54));border-radius:20px;padding:14px;cursor:pointer;transition:all .16s ease;}
-        .desktop-work-card:hover,.desktop-work-card.aktif{border-color:rgba(16,185,129,.36);background:rgba(16,185,129,.08);}
+        .desktop-work-card{min-width:0;border:1px solid rgba(148,163,184,.13);background:linear-gradient(180deg,rgba(15,23,42,.78),rgba(2,6,23,.58));border-radius:20px;padding:13px;cursor:pointer;transition:all .16s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,.03);}
+        .desktop-work-card:hover,.desktop-work-card.aktif{border-color:rgba(16,185,129,.36);background:linear-gradient(180deg,rgba(16,185,129,.12),rgba(2,6,23,.58));}
         .desktop-work-card-main{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;}
         .desktop-work-title{min-width:0;color:#f8fafc;font-size:clamp(13px,1vw,15px);line-height:1.15;font-weight:950;text-transform:capitalize;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
         .desktop-work-sub{margin-top:3px;color:#64748b;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .desktop-status-badge{border-radius:999px;border:1px solid rgba(52,211,153,.24);background:rgba(52,211,153,.08);color:#86efac;padding:4px 8px;font-size:10px;font-weight:900;}
         .desktop-status-badge.warning{border-color:rgba(251,191,36,.26);background:rgba(251,191,36,.08);color:#fbbf24;}
-        .desktop-work-money-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;}
-        .desktop-work-money-row span{min-width:0;border-radius:13px;background:rgba(2,6,23,.42);padding:8px 9px;color:#64748b;font-size:10px;font-weight:800;white-space:normal;}
+        .desktop-risk-badge{border-radius:999px;border:1px solid rgba(148,163,184,.16);background:rgba(15,23,42,.78);color:#cbd5e1;padding:5px 9px;font-size:10px;font-weight:950;white-space:nowrap;}
+        .desktop-risk-badge.danger{border-color:rgba(251,113,133,.32);background:rgba(127,29,29,.28);color:#fda4af;}
+        .desktop-risk-badge.today{border-color:rgba(251,146,60,.34);background:rgba(154,52,18,.24);color:#fed7aa;}
+        .desktop-risk-badge.planned{border-color:rgba(59,130,246,.28);background:rgba(30,64,175,.20);color:#bfdbfe;}
+        .desktop-risk-badge.partial{border-color:rgba(52,211,153,.25);background:rgba(6,78,59,.20);color:#86efac;}
+        .desktop-risk-badge.success{border-color:rgba(52,211,153,.28);background:rgba(6,78,59,.25);color:#6ee7b7;}
+        .desktop-risk-badge.muted{border-color:rgba(148,163,184,.12);background:rgba(15,23,42,.52);color:#94a3b8;}
+        .desktop-work-money-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:11px;}
+        .desktop-work-money-row span{min-width:0;border-radius:13px;background:rgba(2,6,23,.46);border:1px solid rgba(148,163,184,.07);padding:7px 8px;color:#64748b;font-size:9px;font-weight:850;white-space:normal;}
         .desktop-work-money-row strong{display:block;margin-top:3px;color:#e2e8f0;font-size:clamp(10px,.82vw,13px);line-height:1.1;font-weight:950;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap;}
-        .desktop-work-footer{margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;}
+        .desktop-work-intel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:8px;}
+        .desktop-work-intel div{min-width:0;border-radius:13px;background:rgba(15,23,42,.55);border:1px solid rgba(148,163,184,.08);padding:7px 8px;}
+        .desktop-work-intel span{display:block;color:#64748b;font-size:9px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .desktop-work-intel strong{display:block;margin-top:3px;color:#cbd5e1;font-size:10px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .desktop-work-footer{margin-top:10px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;}
         .desktop-due-note{min-width:0;color:#94a3b8;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .desktop-work-actions{display:flex;gap:7px;align-items:center;}
-        .desktop-mini-action{border:1px solid rgba(148,163,184,.16);background:rgba(15,23,42,.92);color:#cbd5e1;border-radius:12px;padding:8px 10px;font-size:11px;font-weight:900;cursor:pointer;white-space:nowrap;}
+        .desktop-mini-action{border:1px solid rgba(148,163,184,.16);background:rgba(15,23,42,.92);color:#cbd5e1;border-radius:999px;padding:7px 10px;font-size:10px;font-weight:950;cursor:pointer;white-space:nowrap;}
         .desktop-mini-action.primary{border-color:rgba(16,185,129,.34);background:rgba(16,185,129,.13);color:#86efac;}
+        .desktop-mini-action:disabled{opacity:.42;cursor:not-allowed;}
+        .desktop-action-panel{height:100%;min-height:0;padding:clamp(8px,.9vw,12px);box-sizing:border-box;overflow:hidden;}
+        .desktop-action-card{height:100%;min-height:0;border-radius:20px;background:rgba(15,23,42,.66);border:1px solid rgba(148,163,184,.12);padding:clamp(14px,1.5vw,22px);box-sizing:border-box;display:grid;grid-template-rows:auto auto minmax(0,auto);align-content:start;gap:clamp(8px,1vh,14px);overflow:hidden;}
+        .desktop-action-head{display:grid;gap:2px;min-width:0;min-height:0;}
+        .desktop-action-card h3,.desktop-history-panel h3,.desktop-plan-empty h3{margin:0;color:#f8fafc;font-size:clamp(14px,1vw,17px);line-height:1.05;font-weight:950;letter-spacing:-.02em;}
+        .desktop-action-card p,.desktop-plan-empty p{margin:0;color:#64748b;font-size:10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .desktop-context-box{border-radius:13px;background:rgba(2,6,23,.46);border:1px solid rgba(148,163,184,.10);padding:8px 9px;display:grid;gap:2px;min-width:0;min-height:0;}
+        .desktop-context-box strong,.desktop-context-box span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .desktop-context-box strong{color:#e2e8f0;font-size:12px;font-weight:950;}
+        .desktop-context-box span{color:#94a3b8;font-size:10px;}
+        .desktop-context-box.muted strong{color:#94a3b8;}
+        .desktop-action-form{display:grid;grid-template-rows:auto auto auto;gap:clamp(8px,1vh,12px);min-height:0;align-content:start;}
+        .desktop-action-input-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0;min-height:0;}
+        .desktop-action-field{min-width:0;min-height:0;}
+        .desktop-action-form .yi-label{font-size:9px;margin-bottom:3px;line-height:1;}
+        .desktop-action-form .yi-inp{border-radius:10px;padding:0 10px;font-size:13px;height:clamp(42px,5vh,56px);min-height:0;box-sizing:border-box;}
+        .desktop-save-action,.desktop-wa-action{width:100%;border:0;border-radius:12px;padding:0 10px;height:clamp(42px,5vh,54px);min-height:0;font-size:12px;font-weight:950;cursor:pointer;}
+        .desktop-save-action{background:#10b981;color:#03110c;}
+        .desktop-wa-action{border:1px solid rgba(34,197,94,.22);background:rgba(34,197,94,.08);color:#86efac;}
+        .desktop-save-action:disabled,.desktop-wa-action:disabled{opacity:.42;cursor:not-allowed;}
+        .desktop-history-panel{height:100%;min-height:0;border-radius:24px;background:rgba(15,23,42,.62);border:1px solid rgba(148,163,184,.12);padding:16px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;overflow:hidden;}
+        .desktop-history-list{min-height:0;overflow-y:auto;display:grid;align-content:start;gap:8px;padding-right:3px;}
+        .desktop-history-row{border-radius:16px;background:rgba(2,6,23,.44);border:1px solid rgba(148,163,184,.09);padding:11px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;}
+        .desktop-history-row strong{display:block;color:#34d399;font-size:14px;font-weight:950;font-variant-numeric:tabular-nums;}
+        .desktop-history-row span{display:block;margin-top:3px;color:#94a3b8;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .desktop-history-row button{border:0;background:transparent;color:#64748b;font-size:20px;cursor:pointer;}
+        .desktop-plan-empty{height:100%;border-radius:24px;background:rgba(15,23,42,.58);border:1px solid rgba(148,163,184,.12);padding:18px;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:10px;}
         .desktop-bottom-bar{flex-shrink:0;border-top:1px solid rgba(148,163,184,.14);background:rgba(2,6,23,.86);backdrop-filter:blur(18px);}
         .desktop-action{border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.9);color:#e5e7eb;border-radius:16px;padding:10px 14px;font-size:13px;font-weight:800;cursor:pointer;transition:all .15s ease;white-space:nowrap;}
         .desktop-action:hover:not(:disabled){border-color:rgba(16,185,129,.42);color:#ecfdf5;background:rgba(16,185,129,.10);}
@@ -1085,8 +1212,34 @@ export default function TahsilatlarPage() {
           .desktop-work-grid{grid-template-columns:minmax(220px,.58fr) minmax(390px,1.35fr) minmax(270px,.9fr);gap:10px;}
           .desktop-workspace-head{gap:7px;}
           .desktop-workspace-chip{grid-template-columns:1fr;gap:2px;}
+          .desktop-work-intel{grid-template-columns:1fr;gap:5px;}
+          .desktop-work-footer{grid-template-columns:1fr;gap:8px;}
+          .desktop-work-actions{flex-wrap:wrap;}
           .desktop-kpi{padding:11px 12px;}
           .desktop-tab{padding:9px 10px;}
+        }
+        @media (min-width: 768px) and (max-height: 820px) {
+          .desktop-action-panel{padding:8px;}
+          .desktop-action-card{border-radius:18px;padding:10px;gap:7px;}
+          .desktop-action-card p{display:none;}
+          .desktop-context-box{padding:7px 8px;}
+          .desktop-action-form{gap:7px;}
+          .desktop-action-input-grid{gap:6px;}
+          .desktop-action-form .yi-label{margin-bottom:2px;}
+          .desktop-action-form .yi-inp{height:38px;padding:0 9px;font-size:13px;}
+          .desktop-save-action,.desktop-wa-action{height:38px;padding:0 9px;}
+        }
+        @media (min-width: 768px) and (max-height: 740px) {
+          .desktop-action-card{padding:8px;gap:5px;border-radius:16px;}
+          .desktop-action-head{gap:1px;}
+          .desktop-action-card h3{font-size:14px;}
+          .desktop-context-box{display:block;padding:6px 7px;}
+          .desktop-context-box span{display:none;}
+          .desktop-action-form{gap:5px;}
+          .desktop-action-input-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;}
+          .desktop-action-form .yi-label{font-size:8px;margin-bottom:2px;}
+          .desktop-action-form .yi-inp{height:34px;font-size:12px;border-radius:9px;}
+          .desktop-save-action,.desktop-wa-action{height:34px;border-radius:10px;font-size:11px;}
         }
       `}</style>
 
@@ -1118,7 +1271,7 @@ export default function TahsilatlarPage() {
             {desktopKpi.map(kpi => (
               <div key={kpi.label} className="desktop-kpi">
                 <div style={{ color:"#64748b", fontSize:"10px", fontWeight:850, letterSpacing:".14em", textTransform:"uppercase", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{kpi.label}</div>
-                <div className={`desktop-kpi-value${kpi.label === "Çalışma Modu" ? " text" : " numeric"}`} style={{ color:kpi.tone }}>{kpi.value}</div>
+                <div className={`desktop-kpi-value${kpi.label === "Çalışma Modu" || kpi.label === "Seçili Müşteri" ? " text" : " numeric"}`} style={{ color:kpi.tone }}>{kpi.value}</div>
                 <div style={{ color:"#94a3b8", fontSize:"11px", marginTop:"5px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{kpi.sub}</div>
               </div>
             ))}
@@ -1151,7 +1304,7 @@ export default function TahsilatlarPage() {
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:"8px", flexShrink:0 }}>
               <button className="desktop-action" onClick={whatsappHatirlat} disabled={!seciliMusteri?.telefon}>WhatsApp Hatırlat</button>
-              <button className="desktop-action primary" onClick={() => setAktifDesktopSekme("tahsilat")} disabled={!seciliMusteri}>Tahsilat Kaydet</button>
+              <button className="desktop-action primary" onClick={() => setAktifDesktopSekme("genel")} disabled={!seciliMusteri}>Tahsilat Kaydet</button>
               <button className="desktop-action" onClick={() => setAktifDesktopSekme("plan")} disabled={!aktifIs}>Ödeme Planı</button>
               <button className="desktop-action" onClick={() => setAktifDesktopSekme("sablon")}>Şablonlar</button>
             </div>
