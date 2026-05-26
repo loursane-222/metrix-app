@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import TeklifClient from "@/components/teklif/TeklifClient";
 import { TeklifViewTracker, PdfTrackButton } from "@/components/teklif/TeklifTracking";
 import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
+import type { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 function para(v: any) {
@@ -17,6 +18,198 @@ function telTemizle(v: string) {
   if (r.startsWith("90")) return r;
   if (r.startsWith("0")) return "9" + r;
   return "90" + r;
+}
+
+function guvenliFirmaAdi(atolye: any) {
+  return String(atolye?.atolyeAdi || "").trim() || "Firma";
+}
+
+function initials(v: string) {
+  const parts = String(v || "Firma")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  return (parts.map((p) => p[0]).join("") || "F").toLocaleUpperCase("tr-TR");
+}
+
+function norm(v: any) {
+  return String(v || "")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .replace(/İ/g, "i")
+    .replace(/ş/g, "s")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/[-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type TeklifSatiri = {
+  id: string;
+  kalem: string;
+  urun: string;
+  miktar: number;
+  birimFiyat: number;
+  toplam: number;
+};
+
+type LayoutSatiri = {
+  piece: any;
+  index: number;
+  tip: string;
+  miktar: number;
+  katsayi: number;
+};
+
+function parcaTipi(piece: any) {
+  const raw = norm(`${piece?.parcaTuru || ""} ${piece?.label || ""}`);
+  if (raw.includes("on alin")) return "on_alin";
+  if (raw.includes("tezgah arasi")) return "tezgah_arasi";
+  if (raw.includes("ada tezgah")) return "ada_tezgah";
+  if (raw.includes("ada ayak")) return "ada_ayak";
+  if (raw.includes("tezgah") && !raw.includes("arasi")) return "tezgah";
+  if (raw.includes("supurgelik")) return "supurgelik";
+  return "diger";
+}
+
+function parcaKatsayi(tip: string) {
+  if (tip === "tezgah_arasi") return 0.75;
+  if (tip === "ada_tezgah") return 1.5;
+  if (tip === "ada_ayak") return 1.2;
+  if (tip === "on_alin") return 0.35;
+  return 1;
+}
+
+function kalemAdi(piece: any, tip: string) {
+  const label = String(piece?.label || "")
+    .replace(/\s+#\d+$/g, "")
+    .trim();
+  if (label) return label;
+  if (tip === "on_alin") return "Ön Alın";
+  if (tip === "tezgah_arasi") return "Tezgah Arası";
+  if (tip === "ada_tezgah") return "Ada Tezgah";
+  if (tip === "ada_ayak") return "Ada Ayak";
+  if (tip === "supurgelik") return "Süpürgelik";
+  return "Tezgah";
+}
+
+function layoutParcalari(plakaLayoutJson: any) {
+  const slabs = Array.isArray(plakaLayoutJson?.slabs) ? plakaLayoutJson.slabs : [];
+  return slabs.flatMap((slab: any) => Array.isArray(slab?.yerlesim) ? slab.yerlesim : [])
+    .filter((piece: any) => Number(piece?.genislik || 0) > 0);
+}
+
+function teklifSatirlariOlustur(
+  is: any,
+  satis: number,
+  fiyatlar: { tezgah: number; arasi: number; ada: number },
+  overrides: { tezgah: number; arasi: number; ada: number }
+) {
+  const pieces = layoutParcalari(is.plakaLayoutJson);
+
+  if (pieces.length > 0) {
+    const enriched: LayoutSatiri[] = pieces.map((piece: any, index: number) => {
+      const tip = parcaTipi(piece);
+      const miktar = Number(piece?.genislik || 0) / 100;
+      const katsayi = parcaKatsayi(tip);
+      return { piece, index, tip, miktar, katsayi };
+    }).filter((row: LayoutSatiri) => row.miktar > 0);
+
+    const weightedTotal = enriched.reduce((acc: number, row: LayoutSatiri) => acc + row.miktar * row.katsayi, 0);
+    const baseFiyat = weightedTotal > 0 ? satis / weightedTotal : 0;
+
+    return enriched.map((row: LayoutSatiri) => {
+      const birimFiyat =
+        row.tip === "tezgah_arasi" && overrides.arasi > 0 ? overrides.arasi :
+        row.tip === "ada_tezgah" && overrides.ada > 0 ? overrides.ada :
+        row.tip === "tezgah" && overrides.tezgah > 0 ? overrides.tezgah :
+        baseFiyat * row.katsayi;
+
+      return {
+        id: `${row.piece?.id || row.index}-${row.tip}`,
+        kalem: kalemAdi(row.piece, row.tip),
+        urun: is.urunAdi || "-",
+        miktar: row.miktar,
+        birimFiyat,
+        toplam: row.miktar * birimFiyat,
+      };
+    });
+  }
+
+  return [
+    normalizeMtulInput(is.metrajMtul || 0) > 0
+      ? {
+          id: "tezgah",
+          kalem: "Tezgah",
+          urun: is.urunAdi || "-",
+          miktar: normalizeMtulInput(is.metrajMtul || 0),
+          birimFiyat: fiyatlar.tezgah,
+          toplam: normalizeMtulInput(is.metrajMtul || 0) * fiyatlar.tezgah,
+        }
+      : null,
+    normalizeMtulInput(is.tezgahArasiMtul || 0) > 0
+      ? {
+          id: "tezgah-arasi",
+          kalem: "Tezgah Arası",
+          urun: is.urunAdi || "-",
+          miktar: normalizeMtulInput(is.tezgahArasiMtul || 0),
+          birimFiyat: fiyatlar.arasi,
+          toplam: normalizeMtulInput(is.tezgahArasiMtul || 0) * fiyatlar.arasi,
+        }
+      : null,
+    normalizeMtulInput(is.adaTezgahMtul || 0) > 0
+      ? {
+          id: "ada",
+          kalem: "Ada",
+          urun: is.urunAdi || "-",
+          miktar: normalizeMtulInput(is.adaTezgahMtul || 0),
+          birimFiyat: fiyatlar.ada,
+          toplam: normalizeMtulInput(is.adaTezgahMtul || 0) * fiyatlar.ada,
+        }
+      : null,
+  ].filter(Boolean) as TeklifSatiri[];
+}
+
+export async function generateMetadata({ params }: any): Promise<Metadata> {
+  const resolvedParams = await params;
+  const teklifNo = resolvedParams.teklifNo;
+  const is = await prisma.is.findFirst({
+    where: { teklifNo },
+    include: { atolye: true },
+  });
+
+  if (!is) {
+    return {
+      title: "Teklif bulunamadı",
+      description: "Teklif bağlantısı geçerli değil veya kaldırılmış olabilir.",
+    };
+  }
+
+  const firmaAdi = guvenliFirmaAdi(is.atolye);
+  const logoUrl = String(is.atolye?.logoUrl || "").trim();
+  const title = `${firmaAdi} — Teklifiniz hazır`;
+  const description = "Teklifinizi inceleyip onaylayabilirsiniz.";
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      images: logoUrl ? [{ url: logoUrl, alt: firmaAdi }] : undefined,
+    },
+    twitter: {
+      card: logoUrl ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: logoUrl ? [logoUrl] : undefined,
+    },
+  };
 }
 
 export default async function Page({ params }: any) {
@@ -46,6 +239,8 @@ export default async function Page({ params }: any) {
   });
 
   const atolye: any = is.atolye;
+  const firmaAdi = guvenliFirmaAdi(atolye);
+  const firmaInitials = initials(firmaAdi);
   const tel = telTemizle(atolye?.telefon || "");
 
   const toplamMetraj =
@@ -85,29 +280,15 @@ export default async function Page({ params }: any) {
     ? `${kurulusYili} yılından bu yana porselen, doğal taş ve tezgah uygulamaları gerçekleştiriyoruz.`
     : "Porselen, doğal taş ve tezgah uygulamalarında profesyonel üretim yaklaşımıyla çalışıyoruz.";
 
-  const teklifSatirlari = [
-    normalizeMtulInput(is.metrajMtul || 0) > 0
-      ? {
-          kalem: "Tezgah",
-          urun: is.urunAdi || "-",
-          miktar: normalizeMtulInput(is.metrajMtul || 0),
-        }
-      : null,
-    normalizeMtulInput(is.tezgahArasiMtul || 0) > 0
-      ? {
-          kalem: "Tezgah Arası",
-          urun: is.urunAdi || "-",
-          miktar: normalizeMtulInput(is.tezgahArasiMtul || 0),
-        }
-      : null,
-    normalizeMtulInput(is.adaTezgahMtul || 0) > 0
-      ? {
-          kalem: "Ada",
-          urun: is.urunAdi || "-",
-          miktar: normalizeMtulInput(is.adaTezgahMtul || 0),
-        }
-      : null,
-  ].filter(Boolean) as Array<{ kalem: string; urun: string; miktar: number }>;
+  const teklifSatirlari = teklifSatirlariOlustur(is, satis, {
+    tezgah: fiyatTezgah,
+    arasi: fiyatArasi,
+    ada: fiyatAda,
+  }, {
+    tezgah: overrideTezgah,
+    arasi: overrideArasi,
+    ada: overrideAda,
+  });
 
   return (
 
@@ -119,9 +300,13 @@ export default async function Page({ params }: any) {
         <div className="hero">
           <div className="top">
             <div className="brand">
-              {atolye?.logoUrl ? <img src={atolye.logoUrl} className="logo" alt="" /> : null}
+              {atolye?.logoUrl ? (
+                <img src={atolye.logoUrl} className="logo" alt={firmaAdi} />
+              ) : (
+                <div className="logoFallback" aria-label={firmaAdi}>{firmaInitials}</div>
+              )}
               <div>
-                <h1>{atolye?.atolyeAdi || "Firma"}</h1>
+                <h1>{firmaAdi}</h1>
                 <p>PROFESYONEL ÜRETİM TEKLİFİ</p>
               </div>
             </div>
@@ -179,16 +364,12 @@ export default async function Page({ params }: any) {
             <tbody>
               {teklifSatirlari.length > 0 ? (
                 teklifSatirlari.map((row) => (
-                  <tr key={row.kalem}>
+                  <tr key={row.id}>
                     <td>{row.kalem}</td>
                     <td>{row.urun}</td>
                     <td>{row.miktar.toFixed(2)} mtül</td>
-                    <td>{para(
-    row.kalem === "Tezgah" ? fiyatTezgah : row.kalem === "Tezgah Arası" ? fiyatArasi : fiyatAda
-  )}</td>
-                    <td>{para(row.miktar * (
-    row.kalem === "Tezgah" ? fiyatTezgah : row.kalem === "Tezgah Arası" ? fiyatArasi : fiyatAda
-  ))}</td>
+                    <td>{para(row.birimFiyat)}</td>
+                    <td>{para(row.toplam)}</td>
                   </tr>
                 ))
               ) : (
@@ -227,6 +408,8 @@ export default async function Page({ params }: any) {
         <a className="whatsappSecondary" href={whatsapp} target="_blank">
           WhatsApp ile soru sor
         </a>
+
+        <div className="powered">powered by Metrix</div>
       </section>
 
       <style>{`
@@ -270,6 +453,19 @@ export default async function Page({ params }: any) {
           background:white;
           padding:6px;
           object-fit:contain;
+        }
+        .logoFallback {
+          width:62px;
+          height:62px;
+          border-radius:18px;
+          background:rgba(255,255,255,.14);
+          border:1px solid rgba(255,255,255,.24);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          color:white;
+          font-weight:900;
+          letter-spacing:.04em;
         }
         h1 {
           margin:0;
@@ -383,6 +579,9 @@ export default async function Page({ params }: any) {
           letter-spacing:-1px;
         }
         .pdfBtn {
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
           background:#0f172a;
           color:white;
           text-decoration:none;
@@ -390,6 +589,11 @@ export default async function Page({ params }: any) {
           border-radius:16px;
           font-weight:800;
           white-space:nowrap;
+        }
+        .pdfBtn.disabled {
+          background:#e2e8f0;
+          color:#64748b;
+          cursor:not-allowed;
         }
         .approve {
           margin-top:18px;
@@ -413,6 +617,15 @@ export default async function Page({ params }: any) {
           color:#16a34a;
           text-decoration:none;
           font-weight:800;
+        }
+        .powered {
+          margin-top:14px;
+          text-align:center;
+          color:#94a3b8;
+          font-size:11px;
+          font-weight:700;
+          letter-spacing:.08em;
+          text-transform:uppercase;
         }
         @media (max-width: 760px) {
           .page { padding:14px; }

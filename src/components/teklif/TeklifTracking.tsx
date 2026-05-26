@@ -32,18 +32,23 @@ export function PdfTrackButton({
   teklifNo: string;
   pdfUrl: string;
 }) {
+  if (!pdfUrl) {
+    return <span className="pdfBtn disabled">PDF hazırlanıyor</span>;
+  }
+
   return (
-    <button
-      type="button"
+    <a
+      href={pdfUrl}
+      target="_blank"
+      rel="noopener noreferrer"
       className="pdfBtn"
-      onClick={async () => {
-        await sendEvent(teklifNo, "pdf_acildi", {
+      onClick={() => {
+        sendEvent(teklifNo, "pdf_acildi", {
           source: "teklif_page_button",
         });
-        window.open(pdfUrl, "_blank", "noopener,noreferrer");
       }}
     >
       PDF Teklifi Aç
-    </button>
+    </a>
   );
 }
