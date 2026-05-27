@@ -10,6 +10,9 @@ import ScheduleAiInsight from "./ScheduleAiInsight";
 import { PHASE_META, WEEKDAYS } from "./premium/constants";
 import { formatTaskTime, trDateRange, weekStartMonday } from "./premium/date-utils";
 import { LiveOpsCard } from "./premium/LiveOpsCard";
+import { MobileRisksTab } from "./premium/MobileRisksTab";
+import { MobileTeamTab } from "./premium/MobileTeamTab";
+import { MobileTodayTab } from "./premium/MobileTodayTab";
 import { OperationsCockpitShell } from "./premium/OperationsCockpitShell";
 import type { LiveOpsData, MobileSeg, ViewMode } from "./premium/types";
 
@@ -850,40 +853,6 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
     );
   }
 
-  function MobileTodayTab() {
-    const todayTasks = tasks.filter(t => dayjs(t.date).isSame(dayjs(), "day"));
-    const todayCompleted = todayTasks.filter(t => t.completed).length;
-    const todayPending = todayTasks.filter(t => !t.completed).length;
-    return (
-      <div className="mt-3 space-y-3">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-3">
-            <div className="text-[10px] text-blue-300">Bugün Plan</div>
-            <div className="mt-0.5 text-2xl font-black text-blue-300">{todayTasks.length}</div>
-          </div>
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-            <div className="text-[10px] text-emerald-300">Tamamlanan</div>
-            <div className="mt-0.5 text-2xl font-black text-emerald-300">{todayCompleted}</div>
-          </div>
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3">
-            <div className="text-[10px] text-amber-300">Bekleyen</div>
-            <div className="mt-0.5 text-2xl font-black text-amber-300">{todayPending}</div>
-          </div>
-        </div>
-        {todayTasks.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-slate-500">
-            <div className="text-2xl">📅</div>
-            <div className="mt-2 text-sm">Bugüne planlanmış iş yok</div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {todayTasks.map(task => <TaskCard key={task.id} task={task} />)}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   function MobileMonthSummary() {
     const monthStart = currentDate.startOf("month");
     const monthEnd = currentDate.endOf("month");
@@ -974,210 +943,6 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
     );
   }
 
-  function MobileTeamTab() {
-    const personelMap = new Map<string, { ad: string; gorevler: any[] }>();
-    tasks.forEach(task => {
-      if (task.fazAtamalari?.length > 0) {
-        task.fazAtamalari.forEach((a: any) => {
-          const key = String(a?.personelId || a?.personel?.id || "bilinmiyor");
-          const ad = [a?.personel?.ad, a?.personel?.soyad].filter(Boolean).join(" ") || "Bilinmiyor";
-          if (!personelMap.has(key)) personelMap.set(key, { ad, gorevler: [] });
-          personelMap.get(key)!.gorevler.push(task);
-        });
-      }
-    });
-    const personelList = Array.from(personelMap.entries()).map(([id, val]) => ({ id, ...val })).sort((a, b) => b.gorevler.length - a.gorevler.length);
-
-    return (
-      <div className="mt-3 space-y-3">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-3">
-            <div className="text-[10px] text-blue-300">Personel</div>
-            <div className="mt-0.5 text-2xl font-black text-blue-300">{personelSayisi}</div>
-          </div>
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3">
-            <div className="text-[10px] text-amber-300">Atanmış</div>
-            <div className="mt-0.5 text-2xl font-black text-amber-300">{personelList.length}</div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-            <div className="text-[10px] text-slate-400">Toplam İş</div>
-            <div className="mt-0.5 text-2xl font-black text-white">{tasks.length}</div>
-          </div>
-        </div>
-        {personelList.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-slate-500">
-            <div className="text-2xl">👥</div>
-            <div className="mt-2 text-sm">Henüz personel ataması yok</div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {personelList.map(p => (
-              <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/20 text-sm font-bold text-blue-300">
-                      {p.ad.charAt(0)}
-                    </div>
-                    <div className="text-sm font-semibold text-white">{p.ad}</div>
-                  </div>
-                  <div className="text-xs text-slate-400">{p.gorevler.length} iş</div>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {p.gorevler.slice(0, 3).map((t: any) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setSelectedTask(t)}
-                      className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] text-slate-300"
-                    >
-                      {t.title}
-                    </button>
-                  ))}
-                  {p.gorevler.length > 3 && (
-                    <span className="rounded-md bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-500">
-                      +{p.gorevler.length - 3} daha
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function MobileRisksTab() {
-    const geciken = tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day"));
-    const paused = tasks.filter(t => t.executionStatus === "PAUSED");
-    const tasAlinacak = tasks.filter(t => t.phase === "TAS_ALINACAK");
-    const todayUnfinished = tasks.filter(t => dayjs(t.date).isSame(dayjs(), "day") && !t.completed);
-    const criticalCount = geciken.length;
-    const highCount = paused.length;
-    const mediumCount = tasAlinacak.length;
-    const lowCount = todayUnfinished.length;
-    const totalRisk = criticalCount + highCount + mediumCount;
-
-    return (
-      <div className="mt-3 space-y-3">
-        {/* Severity KPI strip */}
-        <div className="grid grid-cols-4 gap-1.5">
-          <div className={["rounded-2xl border p-2.5 text-center", criticalCount > 0 ? "border-red-500/20 bg-red-500/10" : "border-white/10 bg-white/[0.04]"].join(" ")}>
-            <div className={["text-[9px] font-bold uppercase tracking-wide", criticalCount > 0 ? "text-red-400" : "text-slate-600"].join(" ")}>Kritik</div>
-            <div className={["mt-0.5 text-xl font-black", criticalCount > 0 ? "text-red-300" : "text-slate-600"].join(" ")}>{criticalCount}</div>
-          </div>
-          <div className={["rounded-2xl border p-2.5 text-center", highCount > 0 ? "border-yellow-500/20 bg-yellow-500/10" : "border-white/10 bg-white/[0.04]"].join(" ")}>
-            <div className={["text-[9px] font-bold uppercase tracking-wide", highCount > 0 ? "text-yellow-400" : "text-slate-600"].join(" ")}>Yüksek</div>
-            <div className={["mt-0.5 text-xl font-black", highCount > 0 ? "text-yellow-300" : "text-slate-600"].join(" ")}>{highCount}</div>
-          </div>
-          <div className={["rounded-2xl border p-2.5 text-center", mediumCount > 0 ? "border-orange-500/20 bg-orange-500/10" : "border-white/10 bg-white/[0.04]"].join(" ")}>
-            <div className={["text-[9px] font-bold uppercase tracking-wide", mediumCount > 0 ? "text-orange-400" : "text-slate-600"].join(" ")}>Orta</div>
-            <div className={["mt-0.5 text-xl font-black", mediumCount > 0 ? "text-orange-300" : "text-slate-600"].join(" ")}>{mediumCount}</div>
-          </div>
-          <div className={["rounded-2xl border p-2.5 text-center", lowCount > 0 ? "border-blue-500/20 bg-blue-500/10" : "border-white/10 bg-white/[0.04]"].join(" ")}>
-            <div className={["text-[9px] font-bold uppercase tracking-wide", lowCount > 0 ? "text-blue-400" : "text-slate-600"].join(" ")}>Düşük</div>
-            <div className={["mt-0.5 text-xl font-black", lowCount > 0 ? "text-blue-300" : "text-slate-600"].join(" ")}>{lowCount}</div>
-          </div>
-        </div>
-
-        {totalRisk === 0 && lowCount === 0 ? (
-          <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-6 text-center">
-            <div className="text-2xl">✅</div>
-            <div className="mt-2 text-sm font-semibold text-green-400">Kritik risk yok</div>
-            <div className="mt-1 text-xs text-slate-500">Tüm işler yolunda görünüyor</div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {/* CRITICAL */}
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {criticalCount > 0 && <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />}
-                  <div className="text-xs font-bold text-red-300">KRİTİK — GECİKEN ({criticalCount})</div>
-                </div>
-                {criticalCount === 0 && <span className="text-[10px] text-green-500">Yok ✓</span>}
-              </div>
-              {criticalCount > 0 && (
-                <div className="space-y-1">
-                  {geciken.slice(0, 4).map(t => (
-                    <button key={t.id} onClick={() => setSelectedTask(t)}
-                      className="flex w-full items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2 text-left">
-                      <div>
-                        <div className="text-xs font-semibold text-white">{t.title}</div>
-                        <div className="text-[10px] text-slate-400">{dayjs(t.date).format("DD MMM")} · {meta(t.phase).label} · {dayjs().diff(dayjs(t.date), "day")} gün gecikti</div>
-                      </div>
-                      <div className="text-slate-500">›</div>
-                    </button>
-                  ))}
-                  {geciken.length > 4 && <div className="text-center text-[10px] text-slate-500">+{geciken.length - 4} daha</div>}
-                </div>
-              )}
-            </div>
-
-            {/* HIGH */}
-            <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {highCount > 0 && <div className="h-2 w-2 rounded-full bg-yellow-400" />}
-                  <div className="text-xs font-bold text-yellow-300">YÜKSEK — OPERASYON DURDU ({highCount})</div>
-                </div>
-                {highCount === 0 && <span className="text-[10px] text-green-500">Yok ✓</span>}
-              </div>
-              {highCount > 0 && (
-                <div className="space-y-1">
-                  {paused.slice(0, 3).map(t => (
-                    <button key={t.id} onClick={() => setSelectedTask(t)}
-                      className="flex w-full items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2 text-left">
-                      <div>
-                        <div className="text-xs font-semibold text-white">{t.title}</div>
-                        <div className="text-[10px] text-slate-400">{meta(t.phase).label}</div>
-                      </div>
-                      <div className="text-slate-500">›</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* MEDIUM */}
-            <div className="rounded-2xl border border-orange-500/20 bg-orange-500/5 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {mediumCount > 0 && <div className="h-2 w-2 rounded-full bg-orange-400" />}
-                  <div className="text-xs font-bold text-orange-300">ORTA — MALZEME RİSKİ ({mediumCount})</div>
-                </div>
-                {mediumCount === 0 && <span className="text-[10px] text-green-500">Yok ✓</span>}
-              </div>
-              {mediumCount > 0 && (
-                <div className="space-y-1">
-                  {tasAlinacak.slice(0, 3).map(t => (
-                    <div key={t.id} className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2">
-                      <div>
-                        <div className="text-xs font-semibold text-white">{t.title}</div>
-                        <div className="text-[10px] text-slate-400">{dayjs(t.date).format("DD MMM")} hedefi</div>
-                      </div>
-                      <div className="text-[10px] text-orange-300">Taş alınacak</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* LOW */}
-            {lowCount > 0 && (
-              <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-3">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-blue-400" />
-                  <div className="text-xs font-bold text-blue-300">DÜŞÜK — BUGÜN BİTMEYEN ({lowCount})</div>
-                </div>
-                <div className="mt-1 text-[10px] text-slate-400">Bugün tamamlanmamış {lowCount} iş var.</div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="h-full w-full md:overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,#0f2a4a_0%,#07111f_35%,#030712_75%)] p-4 text-white shadow-2xl md:p-6">
       <div className="mb-5 hidden md:flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -1250,10 +1015,10 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
         hasRiskAlerts={hasRiskAlerts}
       >
         {mobileSeg === "live" && <MobileLiveTab />}
-        {mobileSeg === "today" && <MobileTodayTab />}
+        {mobileSeg === "today" && <MobileTodayTab tasks={tasks} renderTask={(task) => <TaskCard task={task} />} />}
         {mobileSeg === "calendar" && <MobileCalendarTab />}
-        {mobileSeg === "team" && <MobileTeamTab />}
-        {mobileSeg === "risks" && <MobileRisksTab />}
+        {mobileSeg === "team" && <MobileTeamTab tasks={tasks} personelSayisi={personelSayisi} onSelectTask={setSelectedTask} />}
+        {mobileSeg === "risks" && <MobileRisksTab tasks={tasks} onSelectTask={setSelectedTask} />}
       </OperationsCockpitShell>
       {/* ── END MOBILE COCKPIT ────────────────────────────────────────── */}
       <div className="mt-5 hidden md:grid grid-cols-1 gap-3 md:grid-cols-4">
