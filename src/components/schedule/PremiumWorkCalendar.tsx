@@ -7,10 +7,10 @@ import "dayjs/locale/tr";
 import ScheduleCreateModal from "./ScheduleCreateModal";
 import TaskDetailModal from "./TaskDetailModal";
 import ScheduleAiInsight from "./ScheduleAiInsight";
-import MetrixGuideLauncher from "@/components/onboarding/MetrixGuideLauncher";
 import { PHASE_META, WEEKDAYS } from "./premium/constants";
 import { formatTaskTime, trDateRange, weekStartMonday } from "./premium/date-utils";
 import { LiveOpsCard } from "./premium/LiveOpsCard";
+import { OperationsCockpitShell } from "./premium/OperationsCockpitShell";
 import type { LiveOpsData, MobileSeg, ViewMode } from "./premium/types";
 
 dayjs.locale("tr");
@@ -253,6 +253,37 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
     montaj: montajKapasiteHafta > 0 ? Math.min(100, Math.round((stats.montaj / montajKapasiteHafta) * 100)) : 0,
     genel: genelKapasiteHafta > 0 ? Math.min(100, Math.round((stats.total / genelKapasiteHafta) * 100)) : 0,
   };
+
+  const mobileTitle =
+    mobileSeg === "live" ? "Aktif Üretim" :
+    mobileSeg === "today" ? "Bugünün Planı" :
+    mobileSeg === "calendar" ? "Takvim" :
+    mobileSeg === "team" ? "Ekip Durumu" :
+    "Riskler & Uyarılar";
+
+  const mobileSubtitle = (() => {
+    if (mobileSeg === "live") {
+      const n = liveOpsData ? (liveOpsData.toplamAktif + liveOpsData.toplamPaused) : tasks.filter(t => t.executionStatus === "STARTED" || t.executionStatus === "PAUSED").length;
+      const bl = liveOpsData?.toplamBlocked ?? 0;
+      return n > 0 ? `${n} iş devam ediyor${bl > 0 ? ` · ${bl} bloke` : ""}` : "Şu an aktif iş yok";
+    }
+    if (mobileSeg === "today") {
+      const tod = tasks.filter(t => dayjs(t.date).isSame(dayjs(), "day"));
+      return `${tod.filter(t => t.completed).length}/${tod.length} tamamlandı`;
+    }
+    if (mobileSeg === "calendar") {
+      return view === "week" ? trDateRange(startOfWeek)
+        : view === "day" ? currentDate.format("DD MMMM YYYY dddd")
+        : currentDate.format("MMMM YYYY");
+    }
+    if (mobileSeg === "team") return `${personelSayisi} personel`;
+
+    const delayedCount = tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length;
+    return delayedCount > 0 ? `${delayedCount} geciken iş` : "Kritik risk yok";
+  })();
+
+  const hasLiveAlerts = (liveOpsData?.toplamAktif ?? tasks.filter(t => t.executionStatus === "STARTED").length) > 0;
+  const hasRiskAlerts = (tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length + tasks.filter(t => t.executionStatus === "PAUSED").length) > 0;
 
   function meta(phase: string) {
     return PHASE_META[phase] || PHASE_META.OLCU;
@@ -1210,74 +1241,20 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
 
 
       {/* ── MOBILE COCKPIT SHELL ──────────────────────────────────────── */}
-      <div className="md:hidden">
-        <div className="sticky top-0 z-30 -mx-4 border-b border-white/[0.06] bg-[#030712]/95 backdrop-blur-md">
-          <div className="px-4 pb-2 pt-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-blue-400">Metrix · İş Programı</p>
-                <h1 className="mt-0.5 text-lg font-black text-white">
-                  {mobileSeg === "live" && "Aktif Üretim"}
-                  {mobileSeg === "today" && "Bugünün Planı"}
-                  {mobileSeg === "calendar" && "Takvim"}
-                  {mobileSeg === "team" && "Ekip Durumu"}
-                  {mobileSeg === "risks" && "Riskler & Uyarılar"}
-                </h1>
-              </div>
-              <MetrixGuideLauncher compact className="mt-0.5 shrink-0 min-h-[28px] bg-white/[0.04] px-2.5 py-1 text-[10px] border-white/[0.08]" />
-            </div>
-            <p className="text-[11px] text-slate-400">
-              {mobileSeg === "live" && (() => {
-                const n = liveOpsData ? (liveOpsData.toplamAktif + liveOpsData.toplamPaused) : tasks.filter(t => t.executionStatus === "STARTED" || t.executionStatus === "PAUSED").length;
-                const bl = liveOpsData?.toplamBlocked ?? 0;
-                return n > 0 ? `${n} iş devam ediyor${bl > 0 ? ` · ${bl} bloke` : ""}` : "Şu an aktif iş yok";
-              })()}
-              {mobileSeg === "today" && (() => {
-                const tod = tasks.filter(t => dayjs(t.date).isSame(dayjs(), "day"));
-                return `${tod.filter(t => t.completed).length}/${tod.length} tamamlandı`;
-              })()}
-              {mobileSeg === "calendar" && (
-                view === "week" ? trDateRange(startOfWeek)
-                : view === "day" ? currentDate.format("DD MMMM YYYY dddd")
-                : currentDate.format("MMMM YYYY")
-              )}
-              {mobileSeg === "team" && `${personelSayisi} personel`}
-              {mobileSeg === "risks" && (
-                tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length > 0
-                  ? `${tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length} geciken iş`
-                  : "Kritik risk yok"
-              )}
-            </p>
-            <div className="mt-2 flex gap-1 rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1">
-              {(["live", "today", "calendar", "team", "risks"] as const).map((id, i) => {
-                const liveActive = id === "live" && ((liveOpsData?.toplamAktif ?? tasks.filter(t => t.executionStatus === "STARTED").length) > 0);
-                const riskActive = id === "risks" && (tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length + tasks.filter(t => t.executionStatus === "PAUSED").length) > 0;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => setMobileSeg(id)}
-                    className={[
-                      "relative flex-1 rounded-xl py-1.5 text-[11px] font-bold transition-all",
-                      mobileSeg === id ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40" : "text-slate-400 hover:text-white",
-                    ].join(" ")}
-                  >
-                    {["Canlı", "Bugün", "Takvim", "Ekip", "Riskler"][i]}
-                    {liveActive && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />}
-                    {riskActive && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        <div className="pb-[calc(88px+env(safe-area-inset-bottom,0px))]">
-          {mobileSeg === "live" && <MobileLiveTab />}
-          {mobileSeg === "today" && <MobileTodayTab />}
-          {mobileSeg === "calendar" && <MobileCalendarTab />}
-          {mobileSeg === "team" && <MobileTeamTab />}
-          {mobileSeg === "risks" && <MobileRisksTab />}
-        </div>
-      </div>
+      <OperationsCockpitShell
+        mobileSeg={mobileSeg}
+        onSegmentChange={setMobileSeg}
+        title={mobileTitle}
+        subtitle={mobileSubtitle}
+        hasLiveAlerts={hasLiveAlerts}
+        hasRiskAlerts={hasRiskAlerts}
+      >
+        {mobileSeg === "live" && <MobileLiveTab />}
+        {mobileSeg === "today" && <MobileTodayTab />}
+        {mobileSeg === "calendar" && <MobileCalendarTab />}
+        {mobileSeg === "team" && <MobileTeamTab />}
+        {mobileSeg === "risks" && <MobileRisksTab />}
+      </OperationsCockpitShell>
       {/* ── END MOBILE COCKPIT ────────────────────────────────────────── */}
       <div className="mt-5 hidden md:grid grid-cols-1 gap-3 md:grid-cols-4">
         <DensityCard title="Ölçü Yoğunluğu" value={density.olcu} tone="text-blue-300" helper={`${stats.olcu} iş / ${olcuKapasiteHafta} kapasite`} />
