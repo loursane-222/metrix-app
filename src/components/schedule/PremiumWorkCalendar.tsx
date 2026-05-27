@@ -8,73 +8,18 @@ import ScheduleCreateModal from "./ScheduleCreateModal";
 import TaskDetailModal from "./TaskDetailModal";
 import ScheduleAiInsight from "./ScheduleAiInsight";
 import MetrixGuideLauncher from "@/components/onboarding/MetrixGuideLauncher";
+import { PHASE_META, WEEKDAYS } from "./premium/constants";
+import { formatTaskTime, trDateRange, weekStartMonday } from "./premium/date-utils";
+import { LiveOpsCard } from "./premium/LiveOpsCard";
+import type { LiveOpsData, MobileSeg, ViewMode } from "./premium/types";
 
 dayjs.locale("tr");
-
-type ViewMode = "day" | "week" | "month";
-type MobileSeg = "live" | "today" | "calendar" | "team" | "risks";
 
 type PremiumWorkCalendarProps = {
   initialSchedules?: any[];
   initialYear?: number;
   initialMonth?: number;
 };
-
-const PHASE_META: Record<string, any> = {
-  OLCU: {
-    label: "Ölçü",
-    icon: "📏",
-    text: "text-blue-300",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500",
-    dot: "bg-blue-500",
-    soft: "from-blue-500/25 to-blue-500/5",
-  },
-  IMALAT: {
-    label: "İmalat",
-    icon: "⚙️",
-    text: "text-amber-300",
-    bg: "bg-amber-500/10",
-    border: "border-amber-400",
-    dot: "bg-amber-400",
-    soft: "from-amber-500/25 to-amber-500/5",
-  },
-  MONTAJ: {
-    label: "Montaj",
-    icon: "🔧",
-    text: "text-emerald-300",
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-400",
-    dot: "bg-emerald-400",
-    soft: "from-emerald-500/25 to-emerald-500/5",
-  },
-  TAS_ALINACAK: {
-    label: "Taş Alınacak",
-    icon: "🪨",
-    text: "text-orange-300",
-    bg: "bg-orange-500/10",
-    border: "border-orange-400",
-    dot: "bg-orange-400",
-    soft: "from-orange-500/20 to-orange-500/5",
-  },
-};
-
-const WEEKDAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
-
-function weekStartMonday(date: dayjs.Dayjs) {
-  const diff = (date.day() + 6) % 7;
-  return date.startOf("day").subtract(diff, "day");
-}
-
-function trDateRange(startOfWeek: dayjs.Dayjs) {
-  return `${startOfWeek.format("DD MMMM")} - ${startOfWeek.add(6, "day").format("DD MMMM YYYY")}`;
-}
-
-function formatTaskTime(dateValue: any) {
-  const d = dayjs(dateValue);
-  const hhmm = d.format("HH:mm");
-  return hhmm === "03:00" || hhmm === "00:00" ? "Planlı" : hhmm;
-}
 
 export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initialMonth }: PremiumWorkCalendarProps) {
   const searchParams = useSearchParams();
@@ -105,13 +50,7 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
   const [personelSayisi, setPersonelSayisi] = useState(1);
   const [personelTipleri, setPersonelTipleri] = useState({ olcucu: 0, usta: 0, montajci: 0 });
   const autoOpenedRef = useRef(false);
-  const [liveOpsData, setLiveOpsData] = useState<{
-    aktifEkip: any[];
-    blockedItems: any[];
-    toplamAktif: number;
-    toplamPaused: number;
-    toplamBlocked: number;
-  } | null>(null);
+  const [liveOpsData, setLiveOpsData] = useState<LiveOpsData | null>(null);
   const liveOpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Modal açıkken body scroll/zoom kilit
@@ -782,71 +721,6 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
             );
           })}
         </div>
-      </div>
-    );
-  }
-
-
-  function LiveOpsCard({ ex }: { ex: any }) {
-    const m = meta(ex.phaseType ?? "IMALAT");
-    const isStarted = ex.status === "STARTED";
-    const fmtMins = (mins: number) => {
-      const h = Math.floor(mins / 60);
-      const r = mins % 60;
-      return h > 0 ? `${h}s ${r}dk` : `${r}dk`;
-    };
-    const RISK_STYLE: Record<string, string> = {
-      OVERRUN: "text-amber-300 bg-amber-500/10",
-      CRITICAL: "text-red-300 bg-red-500/10",
-      STALE: "text-slate-400 bg-white/[0.06]",
-    };
-    const RISK_LABEL: Record<string, string> = {
-      OVERRUN: "Süre Aşımı",
-      CRITICAL: "Kritik Gecikme",
-      STALE: "Durdu?",
-    };
-    const showRisk = ex.riskState && ex.riskState !== "NORMAL" && ex.riskState !== "NO_PLAN";
-
-    return (
-      <div className={["rounded-2xl overflow-hidden border border-white/[0.08] bg-white/[0.04] border-l-4 p-3", isStarted ? "border-l-green-500" : "border-l-yellow-400"].join(" ")}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1">
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${m.bg} ${m.text}`}>{m.icon} {m.label}</span>
-              <span className={["rounded px-1.5 py-0.5 text-[10px] font-bold", isStarted ? "bg-green-500/10 text-green-300" : "bg-yellow-500/10 text-yellow-300"].join(" ")}>
-                {isStarted ? "ÇALIŞIYOR" : "DURAKLADI"}
-              </span>
-              {showRisk && (
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${RISK_STYLE[ex.riskState] ?? ""}`}>
-                  {RISK_LABEL[ex.riskState] ?? ex.riskState}
-                </span>
-              )}
-            </div>
-            <div className="mt-1.5 text-sm font-semibold text-white">{ex.musteriAdi}</div>
-            {ex.urunAdi && <div className="text-[11px] text-slate-400">{ex.urunAdi}</div>}
-            <div className="mt-0.5 text-[11px] text-slate-500">{ex.personelAd}</div>
-          </div>
-          <div className="shrink-0 text-right">
-            <div className="text-lg font-black text-white">{fmtMins(ex.elapsedMinutes ?? 0)}</div>
-            {ex.expectedMinutes && (
-              <div className="text-[10px] text-slate-500">/ {fmtMins(ex.expectedMinutes)}</div>
-            )}
-            {(ex.varianceMinutes ?? 0) > 0 && (
-              <div className="text-[10px] text-amber-400">+{fmtMins(ex.varianceMinutes)} sapma</div>
-            )}
-          </div>
-        </div>
-        {ex.progressRatio != null && (
-          <div className="mt-2.5">
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-              <div
-                className={["h-full rounded-full transition-all", ex.progressRatio > 1.25 ? "bg-red-500" : ex.progressRatio > 1.0 ? "bg-amber-400" : "bg-green-500"].join(" ")}
-                style={{ width: `${Math.min(100, Math.round((ex.progressRatio ?? 0) * 100))}%` }}
-              />
-            </div>
-            <div className="mt-0.5 text-right text-[10px] text-slate-500">%{Math.round((ex.progressRatio ?? 0) * 100)}</div>
-          </div>
-        )}
       </div>
     );
   }
