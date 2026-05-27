@@ -22,7 +22,7 @@ export default function ScheduleCreateModal({
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (schedule: any) => void;
 }) {
   const [jobs, setJobs] = useState<any[]>([]);
   const [personeller, setPersoneller] = useState<any[]>([]);
@@ -44,6 +44,13 @@ export default function ScheduleCreateModal({
   const [manualPersonel, setManualPersonel] = useState<Record<string, string>>({
     OLCU: "",
     IMALAT: "",
+    MONTAJ: "",
+  });
+
+  const [selectedPersonel, setSelectedPersonel] = useState({
+    OLCU: "",
+    IMALAT_KESIM: "",
+    IMALAT_TOPLAMA: "",
     MONTAJ: "",
   });
 
@@ -78,6 +85,17 @@ export default function ScheduleCreateModal({
     });
   }
 
+  function syncPersonelFromRecommendation(rec: any) {
+    const o = rec?.personelOnerileri;
+    if (!o) return;
+    setSelectedPersonel({
+      OLCU: o.OLCU?.oneri?.personelId ?? "",
+      IMALAT_KESIM: o.IMALAT?.kesim?.oneri?.personelId ?? "",
+      IMALAT_TOPLAMA: o.IMALAT?.toplama?.oneri?.personelId ?? "",
+      MONTAJ: o.MONTAJ?.oneri?.personelId ?? "",
+    });
+  }
+
   async function getRecommendation(job: any) {
     setSelectedJob(job);
     setRecommendation(null);
@@ -97,6 +115,7 @@ export default function ScheduleCreateModal({
 
       setRecommendation(json);
       syncManualDatesFromRecommendation(json);
+      syncPersonelFromRecommendation(json);
     } catch (error: any) {
       alert(error?.message || "Plan önerisi alınamadı");
       setSelectedJob(null);
@@ -151,7 +170,18 @@ export default function ScheduleCreateModal({
       const res = await fetch("/api/schedule/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isId: selectedJob.id, plan }),
+        body: JSON.stringify({
+          isId: selectedJob.id,
+          plan,
+          ...(!useManual && {
+            personelOnerisi: {
+              OLCU: selectedPersonel.OLCU || null,
+              IMALAT_KESIM: selectedPersonel.IMALAT_KESIM || null,
+              IMALAT_TOPLAMA: selectedPersonel.IMALAT_TOPLAMA || null,
+              MONTAJ: selectedPersonel.MONTAJ || null,
+            },
+          }),
+        }),
       });
 
       const json = await res.json();
@@ -161,7 +191,7 @@ export default function ScheduleCreateModal({
         await assignPersonelToCreatedSchedule(json.schedule);
       }
 
-      onCreated();
+      onCreated(json.schedule);
     } catch (error: any) {
       alert(error?.message || "İş programa eklenemedi");
     } finally {
@@ -224,6 +254,7 @@ export default function ScheduleCreateModal({
                   return (
                     <button
                       key={job.id}
+                      data-onboarding-target="is-programi-is-sec"
                       disabled={recommendingId === job.id}
                       onClick={() => getRecommendation(job)}
                       className={[
@@ -294,29 +325,253 @@ export default function ScheduleCreateModal({
               <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
                 {mode === "ai" ? (
                   <div className="space-y-3 pb-24 md:pb-4">
-                    {PHASES.map((phase) => {
-                      const value = recommendation.plan?.[phase];
 
-                      return (
-                        <div key={phase} className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <div className="text-sm text-slate-400">{PHASE_LABELS[phase]}</div>
-                              <div className="mt-1 text-xl font-black">{value ? dayjs(value).format("DD MMMM YYYY dddd") : "-"}</div>
-                            </div>
-
-                            <input
-                              type="date"
-                              value={value ? dayjs(value).format("YYYY-MM-DD") : ""}
-                              onChange={(e) => updateAiPlan(phase, e.target.value)}
-                              onClick={(e) => { try { (e.target as any).showPicker?.() } catch {} }}
-                              className="w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none sm:w-auto"
-                            />
+                    {/* ── Ölçü ──────────────────────────────────────────────── */}
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm text-slate-400">Ölçü</div>
+                          <div className="mt-1 text-xl font-black">
+                            {recommendation.plan?.OLCU ? dayjs(recommendation.plan.OLCU).format("DD MMMM YYYY dddd") : "-"}
                           </div>
                         </div>
-                      );
-                    })}
+                        <input
+                          type="date"
+                          value={recommendation.plan?.OLCU ? dayjs(recommendation.plan.OLCU).format("YYYY-MM-DD") : ""}
+                          onChange={(e) => updateAiPlan("OLCU", e.target.value)}
+                          onClick={(e) => { try { (e.target as any).showPicker?.() } catch {} }}
+                          className="w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none sm:w-auto"
+                        />
+                      </div>
+                      <div className="mt-3 border-t border-white/10 pt-3">
+                        {recommendation.personelOnerileri?.OLCU?.oneri && (
+                          <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-2xl bg-blue-500/10 px-3 py-2 text-xs text-blue-300">
+                            <span>⚡</span>
+                            <span className="font-semibold">{recommendation.personelOnerileri.OLCU.oneri.ad} {recommendation.personelOnerileri.OLCU.oneri.soyad}</span>
+                            <span className="text-blue-300/50">·</span>
+                            <span className="text-blue-300/70">{recommendation.personelOnerileri.OLCU.oneri.gecrekce}</span>
+                          </div>
+                        )}
+                        {(() => {
+                          const adaylar = recommendation.personelOnerileri?.OLCU?.adaylar ?? [];
+                          const rolUygunlar = adaylar.filter((a: any) => a.rolUygun);
+                          const digerler = adaylar.filter((a: any) => !a.rolUygun);
+                          return (
+                            <>
+                              <select
+                                value={selectedPersonel.OLCU}
+                                onChange={(e) => setSelectedPersonel((p) => ({ ...p, OLCU: e.target.value }))}
+                                className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none"
+                              >
+                                <option value="">Personel atanmadı</option>
+                                {rolUygunlar.map((a: any) => (
+                                  <option key={a.personelId} value={a.personelId}>
+                                    {a.ad} {a.soyad}{a.gorevi ? ` — ${a.gorevi}` : ""}{a.mevcutYuk > 0 ? ` (${a.mevcutYuk} iş)` : ""}
+                                  </option>
+                                ))}
+                                {digerler.length > 0 && (
+                                  <optgroup label={rolUygunlar.length > 0 ? "Diğer Personel" : "Tüm Aktif Personel"}>
+                                    {digerler.map((a: any) => (
+                                      <option key={a.personelId} value={a.personelId}>
+                                        {a.ad} {a.soyad}{a.gorevi ? ` — ${a.gorevi}` : ""}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                              </select>
+                              {rolUygunlar.length === 0 && adaylar.length > 0 && (
+                                <p className="mt-1.5 text-xs text-amber-400/80">Ölçü rol grubunda personel yok — tüm aktif personeller listelendi</p>
+                              )}
+                              {adaylar.length === 0 && (
+                                <p className="mt-1.5 text-xs text-slate-500">Aktif personel bulunamadı</p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
 
+                    {/* ── İmalat ────────────────────────────────────────────── */}
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm text-slate-400">İmalat</div>
+                          <div className="mt-1 text-xl font-black">
+                            {recommendation.plan?.IMALAT ? dayjs(recommendation.plan.IMALAT).format("DD MMMM YYYY dddd") : "-"}
+                          </div>
+                        </div>
+                        <input
+                          type="date"
+                          value={recommendation.plan?.IMALAT ? dayjs(recommendation.plan.IMALAT).format("YYYY-MM-DD") : ""}
+                          onChange={(e) => updateAiPlan("IMALAT", e.target.value)}
+                          onClick={(e) => { try { (e.target as any).showPicker?.() } catch {} }}
+                          className="w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none sm:w-auto"
+                        />
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 gap-3 border-t border-white/10 pt-3 sm:grid-cols-2">
+                        <div>
+                          <div className="mb-1.5 text-xs font-bold text-amber-300/70">Kesim</div>
+                          {recommendation.personelOnerileri?.IMALAT?.kesim?.oneri && (
+                            <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-2xl bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                              <span>⚡</span>
+                              <span className="font-semibold">{recommendation.personelOnerileri.IMALAT.kesim.oneri.ad} {recommendation.personelOnerileri.IMALAT.kesim.oneri.soyad}</span>
+                              <span className="text-amber-300/50 hidden sm:inline">·</span>
+                              <span className="text-amber-300/70 hidden sm:inline">{recommendation.personelOnerileri.IMALAT.kesim.oneri.gecrekce}</span>
+                            </div>
+                          )}
+                          {(() => {
+                            const adaylar = recommendation.personelOnerileri?.IMALAT?.kesim?.adaylar ?? [];
+                            const rolUygunlar = adaylar.filter((a: any) => a.rolUygun);
+                            const digerler = adaylar.filter((a: any) => !a.rolUygun);
+                            return (
+                              <>
+                                <select
+                                  value={selectedPersonel.IMALAT_KESIM}
+                                  onChange={(e) => setSelectedPersonel((p) => ({ ...p, IMALAT_KESIM: e.target.value }))}
+                                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none"
+                                >
+                                  <option value="">Atanmadı</option>
+                                  {rolUygunlar.map((a: any) => (
+                                    <option key={a.personelId} value={a.personelId}>
+                                      {a.ad} {a.soyad}{a.mevcutYuk > 0 ? ` (${a.mevcutYuk} iş)` : ""}
+                                    </option>
+                                  ))}
+                                  {digerler.length > 0 && (
+                                    <optgroup label={rolUygunlar.length > 0 ? "Diğer Personel" : "Tüm Aktif Personel"}>
+                                      {digerler.map((a: any) => (
+                                        <option key={a.personelId} value={a.personelId}>
+                                          {a.ad} {a.soyad}{a.gorevi ? ` — ${a.gorevi}` : ""}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                </select>
+                                {rolUygunlar.length === 0 && adaylar.length > 0 && (
+                                  <p className="mt-1 text-xs text-amber-400/80">Kesim rol grubunda personel yok</p>
+                                )}
+                                {adaylar.length === 0 && (
+                                  <p className="mt-1 text-xs text-slate-500">Aktif personel bulunamadı</p>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <div>
+                          <div className="mb-1.5 text-xs font-bold text-amber-300/70">Toplama</div>
+                          {recommendation.personelOnerileri?.IMALAT?.toplama?.oneri && (
+                            <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-2xl bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                              <span>⚡</span>
+                              <span className="font-semibold">{recommendation.personelOnerileri.IMALAT.toplama.oneri.ad} {recommendation.personelOnerileri.IMALAT.toplama.oneri.soyad}</span>
+                              <span className="text-amber-300/50 hidden sm:inline">·</span>
+                              <span className="text-amber-300/70 hidden sm:inline">{recommendation.personelOnerileri.IMALAT.toplama.oneri.gecrekce}</span>
+                            </div>
+                          )}
+                          {(() => {
+                            const adaylar = recommendation.personelOnerileri?.IMALAT?.toplama?.adaylar ?? [];
+                            const rolUygunlar = adaylar.filter((a: any) => a.rolUygun);
+                            const digerler = adaylar.filter((a: any) => !a.rolUygun);
+                            return (
+                              <>
+                                <select
+                                  value={selectedPersonel.IMALAT_TOPLAMA}
+                                  onChange={(e) => setSelectedPersonel((p) => ({ ...p, IMALAT_TOPLAMA: e.target.value }))}
+                                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none"
+                                >
+                                  <option value="">Atanmadı</option>
+                                  {rolUygunlar.map((a: any) => (
+                                    <option key={a.personelId} value={a.personelId}>
+                                      {a.ad} {a.soyad}{a.mevcutYuk > 0 ? ` (${a.mevcutYuk} iş)` : ""}
+                                    </option>
+                                  ))}
+                                  {digerler.length > 0 && (
+                                    <optgroup label={rolUygunlar.length > 0 ? "Diğer Personel" : "Tüm Aktif Personel"}>
+                                      {digerler.map((a: any) => (
+                                        <option key={a.personelId} value={a.personelId}>
+                                          {a.ad} {a.soyad}{a.gorevi ? ` — ${a.gorevi}` : ""}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                </select>
+                                {rolUygunlar.length === 0 && adaylar.length > 0 && (
+                                  <p className="mt-1 text-xs text-amber-400/80">Toplama rol grubunda personel yok</p>
+                                )}
+                                {adaylar.length === 0 && (
+                                  <p className="mt-1 text-xs text-slate-500">Aktif personel bulunamadı</p>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Montaj ────────────────────────────────────────────── */}
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm text-slate-400">Montaj</div>
+                          <div className="mt-1 text-xl font-black">
+                            {recommendation.plan?.MONTAJ ? dayjs(recommendation.plan.MONTAJ).format("DD MMMM YYYY dddd") : "-"}
+                          </div>
+                        </div>
+                        <input
+                          type="date"
+                          value={recommendation.plan?.MONTAJ ? dayjs(recommendation.plan.MONTAJ).format("YYYY-MM-DD") : ""}
+                          onChange={(e) => updateAiPlan("MONTAJ", e.target.value)}
+                          onClick={(e) => { try { (e.target as any).showPicker?.() } catch {} }}
+                          className="w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none sm:w-auto"
+                        />
+                      </div>
+                      <div className="mt-3 border-t border-white/10 pt-3">
+                        {recommendation.personelOnerileri?.MONTAJ?.oneri && (
+                          <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-2xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                            <span>⚡</span>
+                            <span className="font-semibold">{recommendation.personelOnerileri.MONTAJ.oneri.ad} {recommendation.personelOnerileri.MONTAJ.oneri.soyad}</span>
+                            <span className="text-emerald-300/50">·</span>
+                            <span className="text-emerald-300/70">{recommendation.personelOnerileri.MONTAJ.oneri.gecrekce}</span>
+                          </div>
+                        )}
+                        {(() => {
+                          const adaylar = recommendation.personelOnerileri?.MONTAJ?.adaylar ?? [];
+                          const rolUygunlar = adaylar.filter((a: any) => a.rolUygun);
+                          const digerler = adaylar.filter((a: any) => !a.rolUygun);
+                          return (
+                            <>
+                              <select
+                                value={selectedPersonel.MONTAJ}
+                                onChange={(e) => setSelectedPersonel((p) => ({ ...p, MONTAJ: e.target.value }))}
+                                className="w-full rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none"
+                              >
+                                <option value="">Personel atanmadı</option>
+                                {rolUygunlar.map((a: any) => (
+                                  <option key={a.personelId} value={a.personelId}>
+                                    {a.ad} {a.soyad}{a.gorevi ? ` — ${a.gorevi}` : ""}{a.mevcutYuk > 0 ? ` (${a.mevcutYuk} iş)` : ""}
+                                  </option>
+                                ))}
+                                {digerler.length > 0 && (
+                                  <optgroup label={rolUygunlar.length > 0 ? "Diğer Personel" : "Tüm Aktif Personel"}>
+                                    {digerler.map((a: any) => (
+                                      <option key={a.personelId} value={a.personelId}>
+                                        {a.ad} {a.soyad}{a.gorevi ? ` — ${a.gorevi}` : ""}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                              </select>
+                              {rolUygunlar.length === 0 && adaylar.length > 0 && (
+                                <p className="mt-1.5 text-xs text-amber-400/80">Montaj rol grubunda personel yok — tüm aktif personeller listelendi</p>
+                              )}
+                              {adaylar.length === 0 && (
+                                <p className="mt-1.5 text-xs text-slate-500">Aktif personel bulunamadı</p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* ── Neden bu plan? ──────────────────────────────────── */}
                     <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
                       <div className="mb-3 text-sm font-bold text-slate-300">Neden bu plan?</div>
                       <div className="space-y-2">
@@ -362,6 +617,7 @@ export default function ScheduleCreateModal({
 
               <div className="shrink-0 border-t border-white/10 pt-4 pb-safe md:pb-0" style={{paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)"}}>
                 <button
+                  data-onboarding-target="is-programi-programa-al"
                   onClick={() => createSchedule(mode === "manual")}
                   disabled={creating || !selectedReady}
                   className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-900/40 hover:bg-blue-500 disabled:opacity-60"

@@ -1267,7 +1267,7 @@ export default function TahsilatlarPage() {
             </div>
           </header>
 
-          <div className="desktop-kpi-grid" style={{ flexShrink:0 }}>
+          <div className="desktop-kpi-grid" data-onboarding-target="tahsilat-kpi-strip" style={{ flexShrink:0 }}>
             {desktopKpi.map(kpi => (
               <div key={kpi.label} className="desktop-kpi">
                 <div style={{ color:"#64748b", fontSize:"10px", fontWeight:850, letterSpacing:".14em", textTransform:"uppercase", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{kpi.label}</div>
@@ -1277,7 +1277,7 @@ export default function TahsilatlarPage() {
             ))}
           </div>
 
-          <nav className="desktop-tabs" style={{ flexShrink:0 }}>
+          <nav className="desktop-tabs" data-onboarding-target="tahsilat-desktop-tabs" style={{ flexShrink:0 }}>
             {desktopSekmeler.map(sekme => (
               <button key={sekme.id} onClick={() => setAktifDesktopSekme(sekme.id)}
                 className={`desktop-tab${aktifDesktopSekme === sekme.id ? " aktif" : ""}`}>

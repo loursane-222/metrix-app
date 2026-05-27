@@ -232,6 +232,77 @@ export async function POST(req: NextRequest) {
       `Kural: Ölçü, imalat ve montaj hafta sonuna yazılmaz; aynı görev türü bir günde 5 adedi geçemez.`,
     ];
 
+    // ── Personel önerileri ────────────────────────────────────────────────────
+    const personeller = await prisma.personel.findMany({
+      where: { atolyeId, aktif: true },
+      select: {
+        id: true,
+        ad: true,
+        soyad: true,
+        gorevi: true,
+        rolGrubu: true,
+        fazAtamalar: {
+          where: {
+            schedulePhase: {
+              plannedStart: { gte: windowStart, lte: windowEnd },
+            },
+          },
+          select: {
+            schedulePhase: { select: { plannedStart: true } },
+          },
+        },
+      },
+    });
+
+    function yukOnGun(p: (typeof personeller)[0], tarih: Date) {
+      const hedefYmd = localYmd(tarih);
+      return p.fazAtamalar.filter((a) => {
+        const ps = a.schedulePhase?.plannedStart;
+        return ps && localYmd(new Date(ps)) === hedefYmd;
+      }).length;
+    }
+
+    // Tüm aktif personeli döner: rol eşleşenleri önce, sonra yük sırası.
+    // rolUygun=true → dropdown'da primary group, false → fallback group.
+    function adaylarIcin(rol: string, tarih: Date) {
+      return personeller
+        .map((p) => {
+          const yuk = yukOnGun(p, tarih);
+          const rolUygun = (p.rolGrubu as string) === rol;
+          return {
+            personelId: p.id,
+            ad: p.ad,
+            soyad: p.soyad,
+            gorevi: p.gorevi,
+            rolGrubu: p.rolGrubu as string,
+            rolUygun,
+            mevcutYuk: yuk,
+            gecrekce:
+              yuk === 0
+                ? "O gün başka işe atanmamış"
+                : `O gün ${yuk} işe atanmış`,
+          };
+        })
+        .sort((a, b) => {
+          if (a.rolUygun !== b.rolUygun) return a.rolUygun ? -1 : 1;
+          return a.mevcutYuk - b.mevcutYuk;
+        });
+    }
+
+    const olcuAdaylar = adaylarIcin("OLCU", olcu);
+    const kesimAdaylar = adaylarIcin("KESIM", imalat);
+    const toplamaAdaylar = adaylarIcin("TOPLAMA", imalat);
+    const montajAdaylar = adaylarIcin("MONTAJ", montaj);
+
+    const personelOnerileri = {
+      OLCU: { oneri: olcuAdaylar.find((a) => a.rolUygun) ?? null, adaylar: olcuAdaylar },
+      IMALAT: {
+        kesim: { oneri: kesimAdaylar.find((a) => a.rolUygun) ?? null, adaylar: kesimAdaylar },
+        toplama: { oneri: toplamaAdaylar.find((a) => a.rolUygun) ?? null, adaylar: toplamaAdaylar },
+      },
+      MONTAJ: { oneri: montajAdaylar.find((a) => a.rolUygun) ?? null, adaylar: montajAdaylar },
+    };
+
     return NextResponse.json({
       ok: true,
       job: {
@@ -241,6 +312,7 @@ export async function POST(req: NextRequest) {
       },
       plan,
       reasons,
+      personelOnerileri,
     });
   } catch (error) {
     console.error(error);

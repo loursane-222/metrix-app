@@ -34,14 +34,17 @@ function Toggle({
   label,
   value,
   onChange,
+  target,
 }: {
   label: string
   value: boolean
   onChange: (v: boolean) => void
+  target?: string
 }) {
   return (
     <button
       onClick={() => onChange(!value)}
+      data-onboarding-target={target}
       className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-[#111827] p-3 text-left"
     >
       <span className="min-w-0 pr-3 text-sm text-slate-300">{label}</span>
@@ -242,6 +245,7 @@ export default function PersonelSayfasi() {
           </button>
           <button
             onClick={() => setAktifTab("yetkiler")}
+            data-onboarding-target="personel-permissions-tab"
             className={`rounded-xl px-4 py-1.5 text-sm font-medium transition-colors ${aktifTab === "yetkiler" ? "bg-slate-700/80 text-white" : "text-slate-400 hover:text-slate-200"}`}
           >
             Yetkiler
@@ -264,6 +268,7 @@ export default function PersonelSayfasi() {
 
           <button
             onClick={() => acForm()}
+            data-onboarding-target="personel-create"
             className="absolute right-4 top-6 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-lg md:hidden"
           >
             + Personel
@@ -331,6 +336,7 @@ export default function PersonelSayfasi() {
             <div className="flex gap-2 p-3" style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}>
               <button
                 onClick={() => acForm()}
+                data-onboarding-target="personel-create"
                 className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white"
               >
                 + Personel Ekle
@@ -384,15 +390,17 @@ export default function PersonelSayfasi() {
             </div>
           )}
 
-          <div className="mt-4 flex-1 overflow-y-auto pr-1">
+          <div className="mt-4 flex-1 overflow-y-auto pr-1" data-onboarding-target="personel-permission-dashboard">
             <div className="space-y-2">
-              <Toggle label="İş programı görebilir" value={yetki.isProgramiGorebilir} onChange={(v) => setYetki({ ...yetki, isProgramiGorebilir: v })} />
-              <Toggle label="İş programı düzenleyebilir" value={yetki.isProgramiDuzenleyebilir} onChange={(v) => setYetki({ ...yetki, isProgramiDuzenleyebilir: v })} />
-              <Toggle label="İmalat tamamlayabilir" value={yetki.imalatTamamlayabilir} onChange={(v) => setYetki({ ...yetki, imalatTamamlayabilir: v })} />
-              <Toggle label="Maliyet görebilir" value={yetki.maliyetGorebilir} onChange={(v) => setYetki({ ...yetki, maliyetGorebilir: v })} />
-              <Toggle label="Müşteri görebilir" value={yetki.musteriGorebilir} onChange={(v) => setYetki({ ...yetki, musteriGorebilir: v })} />
-              <Toggle label="Teklif oluşturabilir" value={yetki.teklifOlusturabilir} onChange={(v) => setYetki({ ...yetki, teklifOlusturabilir: v })} />
-              <Toggle label="Atölye ayarı görebilir" value={yetki.atolyeAyarGorebilir} onChange={(v) => setYetki({ ...yetki, atolyeAyarGorebilir: v })} />
+              <Toggle label="İş programı görebilir" value={yetki.isProgramiGorebilir} onChange={(v) => setYetki({ ...yetki, isProgramiGorebilir: v })} target="personel-permission-is-programi" />
+              <Toggle label="İş programı düzenleyebilir" value={yetki.isProgramiDuzenleyebilir} onChange={(v) => setYetki({ ...yetki, isProgramiDuzenleyebilir: v })} target="personel-permission-is-programi-edit" />
+              <Toggle label="İmalat tamamlayabilir" value={yetki.imalatTamamlayabilir} onChange={(v) => setYetki({ ...yetki, imalatTamamlayabilir: v })} target="personel-permission-production" />
+              <Toggle label="Maliyet görebilir" value={yetki.maliyetGorebilir} onChange={(v) => setYetki({ ...yetki, maliyetGorebilir: v })} target="personel-permission-tahsilat" />
+              <Toggle label="Müşteri görebilir" value={yetki.musteriGorebilir} onChange={(v) => setYetki({ ...yetki, musteriGorebilir: v })} target="personel-permission-musteri" />
+              <Toggle label="Teklif oluşturabilir" value={yetki.teklifOlusturabilir} onChange={(v) => setYetki({ ...yetki, teklifOlusturabilir: v })} target="personel-permission-isler" />
+              <div data-onboarding-target="personel-permission-personel">
+                <Toggle label="Atölye ayarı görebilir" value={yetki.atolyeAyarGorebilir} onChange={(v) => setYetki({ ...yetki, atolyeAyarGorebilir: v })} target="personel-permission-atolye" />
+              </div>
             </div>
           </div>
 
@@ -400,6 +408,7 @@ export default function PersonelSayfasi() {
             <button
               onClick={yetkiKaydet}
               disabled={yetkiKaydediliyor || !aktif}
+              data-onboarding-target="personel-save"
               className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold transition hover:bg-emerald-500 disabled:bg-slate-700"
             >
               {yetkiKaydediliyor ? "Kaydediliyor..." : "Yetkileri Kaydet"}
@@ -413,6 +422,7 @@ export default function PersonelSayfasi() {
             </button>
             <button
               onClick={() => acForm()}
+              data-onboarding-target="personel-create"
               className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold transition hover:bg-violet-500"
             >
               + Personel Ekle
@@ -477,7 +487,7 @@ export default function PersonelSayfasi() {
             />
           ) : (
             <div className="flex h-full flex-col">
-              <div className="mb-5">
+              <div className="mb-5" data-onboarding-target="personel-permission-dashboard">
                 <p className="text-xs tracking-[0.25em] text-slate-500 uppercase">Yetkiler</p>
                 <h2 className="mt-2 text-2xl font-semibold leading-tight">
                   {aktif.ad} {aktif.soyad}
@@ -485,13 +495,15 @@ export default function PersonelSayfasi() {
                 <p className="mt-1 text-sm text-slate-400">{aktif.gorevi}</p>
               </div>
               <div className="space-y-2">
-                <Toggle label="İş programı görebilir" value={yetki.isProgramiGorebilir} onChange={(v) => setYetki({ ...yetki, isProgramiGorebilir: v })} />
-                <Toggle label="İş programı düzenleyebilir" value={yetki.isProgramiDuzenleyebilir} onChange={(v) => setYetki({ ...yetki, isProgramiDuzenleyebilir: v })} />
-                <Toggle label="İmalat tamamlayabilir" value={yetki.imalatTamamlayabilir} onChange={(v) => setYetki({ ...yetki, imalatTamamlayabilir: v })} />
-                <Toggle label="Maliyet görebilir" value={yetki.maliyetGorebilir} onChange={(v) => setYetki({ ...yetki, maliyetGorebilir: v })} />
-                <Toggle label="Müşteri görebilir" value={yetki.musteriGorebilir} onChange={(v) => setYetki({ ...yetki, musteriGorebilir: v })} />
-                <Toggle label="Teklif oluşturabilir" value={yetki.teklifOlusturabilir} onChange={(v) => setYetki({ ...yetki, teklifOlusturabilir: v })} />
-                <Toggle label="Atölye ayarı görebilir" value={yetki.atolyeAyarGorebilir} onChange={(v) => setYetki({ ...yetki, atolyeAyarGorebilir: v })} />
+                <Toggle label="İş programı görebilir" value={yetki.isProgramiGorebilir} onChange={(v) => setYetki({ ...yetki, isProgramiGorebilir: v })} target="personel-permission-is-programi" />
+                <Toggle label="İş programı düzenleyebilir" value={yetki.isProgramiDuzenleyebilir} onChange={(v) => setYetki({ ...yetki, isProgramiDuzenleyebilir: v })} target="personel-permission-is-programi-edit" />
+                <Toggle label="İmalat tamamlayabilir" value={yetki.imalatTamamlayabilir} onChange={(v) => setYetki({ ...yetki, imalatTamamlayabilir: v })} target="personel-permission-production" />
+                <Toggle label="Maliyet görebilir" value={yetki.maliyetGorebilir} onChange={(v) => setYetki({ ...yetki, maliyetGorebilir: v })} target="personel-permission-tahsilat" />
+                <Toggle label="Müşteri görebilir" value={yetki.musteriGorebilir} onChange={(v) => setYetki({ ...yetki, musteriGorebilir: v })} target="personel-permission-musteri" />
+                <Toggle label="Teklif oluşturabilir" value={yetki.teklifOlusturabilir} onChange={(v) => setYetki({ ...yetki, teklifOlusturabilir: v })} target="personel-permission-isler" />
+                <div data-onboarding-target="personel-permission-personel">
+                  <Toggle label="Atölye ayarı görebilir" value={yetki.atolyeAyarGorebilir} onChange={(v) => setYetki({ ...yetki, atolyeAyarGorebilir: v })} target="personel-permission-atolye" />
+                </div>
               </div>
             </div>
           )}
@@ -503,6 +515,7 @@ export default function PersonelSayfasi() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => acForm()}
+            data-onboarding-target="personel-create"
             className="rounded-xl border border-violet-600/50 bg-violet-600/10 px-4 py-2 text-xs font-semibold text-violet-300 transition hover:bg-violet-600/20"
           >
             + Personel Ekle
@@ -521,6 +534,7 @@ export default function PersonelSayfasi() {
                 <button
                   onClick={yetkiKaydet}
                   disabled={yetkiKaydediliyor}
+                  data-onboarding-target="personel-save"
                   className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold transition hover:bg-emerald-500 disabled:bg-slate-700"
                 >
                   {yetkiKaydediliyor ? "Kaydediliyor..." : "Yetkileri Kaydet"}

@@ -745,14 +745,14 @@ export default function MusterilerPage() {
 
           <Card className="p-2.5 lg:overflow-y-auto">
             <div className="space-y-3">
-              <button onClick={yeniAc} className="w-full rounded-2xl bg-emerald-500 px-4 py-3 text-left font-bold text-slate-950 shadow-lg shadow-emerald-500/10">
+              <button data-onboarding-target="musteri-yeni-btn" onClick={yeniAc} className="w-full rounded-2xl bg-emerald-500 px-4 py-3 text-left font-bold text-slate-950 shadow-lg shadow-emerald-500/10">
                 + Yeni Müşteri<span className="block text-xs font-medium text-slate-800/80">Cari kart oluştur</span>
               </button>
-              <a href="/api/musteriler/sablon" className="block w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 font-semibold">
+              <a data-onboarding-target="musteri-sablon" href="/api/musteriler/sablon" className="block w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 font-semibold">
                 Excel Şablon İndir<span className="block text-xs font-normal text-slate-400">Standart içe aktarma dosyası</span>
               </a>
               <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => excelYukle(e.target.files?.[0])} />
-              <button onClick={() => fileRef.current?.click()} disabled={excelYukleniyor}
+              <button data-onboarding-target="musteri-import" onClick={() => fileRef.current?.click()} disabled={excelYukleniyor}
                 className="w-full rounded-2xl border border-blue-400/30 bg-blue-400/10 px-4 py-3 text-left font-semibold text-blue-100 disabled:opacity-50">
                 {excelYukleniyor ? 'Excel Yükleniyor...' : 'Excel Yükle'}<span className="block text-xs font-normal text-blue-100/70">Toplu müşteri aktar</span>
               </button>
@@ -793,16 +793,16 @@ export default function MusterilerPage() {
               <button onClick={() => setModal(false)} className="rounded-xl border border-white/10 px-3 py-2 text-sm">Kapat</button>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Firma Adı</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Firma adı" value={form.firmaAdi} onChange={(e) => setForm({ ...form, firmaAdi: e.target.value })} /></div>
-              <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Telefon</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Telefon" value={form.telefon} onChange={(e) => setForm({ ...form, telefon: e.target.value })} /></div>
+              <div className="flex flex-col gap-1"><label data-onboarding-target="musteri-firmaAdi" className="text-xs text-slate-400 font-semibold pl-1">Firma Adı</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Firma adı" value={form.firmaAdi} onChange={(e) => setForm({ ...form, firmaAdi: e.target.value })} /></div>
+              <div className="flex flex-col gap-1"><label data-onboarding-target="musteri-telefon" className="text-xs text-slate-400 font-semibold pl-1">Telefon</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Telefon" value={form.telefon} onChange={(e) => setForm({ ...form, telefon: e.target.value })} /></div>
               <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Ad</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Ad" value={form.ad} onChange={(e) => setForm({ ...form, ad: e.target.value })} /></div>
               <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Soyad</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Soyad" value={form.soyad} onChange={(e) => setForm({ ...form, soyad: e.target.value })} /></div>
               <div className="flex flex-col gap-1 sm:col-span-2"><label className="text-xs text-slate-400 font-semibold pl-1">E-posta</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="E-posta" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
               <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Açılış Bakiyesi</label><input className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" placeholder="Açılış bakiyesi" value={form.acilisBakiyesi} onChange={(e) => setForm({ ...form, acilisBakiyesi: e.target.value })} /></div>
               <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Bakiye Tipi</label><select className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white" value={form.bakiyeTipi} onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}><option value="borc">Müşteri borçlu</option><option value="alacak">Müşteri alacaklı</option></select></div>
-              <div className="flex flex-col gap-1 sm:col-span-2"><label className="text-xs text-slate-400 font-semibold pl-1">Müşteri Tipi</label><select className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white sm:col-span-2" value={form.musteriTipi} onChange={(e) => setForm({ ...form, musteriTipi: e.target.value })}><option value="son_kullanici">Son Kullanıcı</option><option value="bayi">Bayi</option><option value="mimar">Mimar</option><option value="muteahhit">Müteahhit</option></select></div>
+              <div className="flex flex-col gap-1 sm:col-span-2"><label data-onboarding-target="musteri-musteriTipi" className="text-xs text-slate-400 font-semibold pl-1">Müşteri Tipi</label><select className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 outline-none text-white sm:col-span-2" value={form.musteriTipi} onChange={(e) => setForm({ ...form, musteriTipi: e.target.value })}><option value="son_kullanici">Son Kullanıcı</option><option value="bayi">Bayi</option><option value="mimar">Mimar</option><option value="muteahhit">Müteahhit</option></select></div>
             </div>
-            <button onClick={kaydet} className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 font-bold text-slate-950">{duzenle ? 'Değişiklikleri Kaydet' : 'Müşteri Oluştur'}</button>
+            <button data-onboarding-target="musteri-kaydet" onClick={kaydet} className="mt-5 w-full rounded-2xl bg-emerald-500 px-4 py-3 font-bold text-slate-950">{duzenle ? 'Değişiklikleri Kaydet' : 'Müşteri Oluştur'}</button>
           </div>
         </div>
       )}
@@ -850,15 +850,15 @@ export default function MusterilerPage() {
             <button onClick={() => setMobilYeniAcik(false)} className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 font-bold text-white">Kapat</button>
           </div>
           <div className="space-y-3">
-            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Firma Adı</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Firma adı" value={form.firmaAdi || ''} onChange={(e) => setForm({ ...form, firmaAdi: e.target.value })} /></div>
+            <div className="flex flex-col gap-1"><label data-onboarding-target="musteri-firmaAdi" className="text-xs text-slate-400 font-semibold pl-1">Firma Adı</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Firma adı" value={form.firmaAdi || ''} onChange={(e) => setForm({ ...form, firmaAdi: e.target.value })} /></div>
             <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Ad</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Ad" value={form.ad || ''} onChange={(e) => setForm({ ...form, ad: e.target.value })} /></div>
             <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Soyad</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Soyad" value={form.soyad || ''} onChange={(e) => setForm({ ...form, soyad: e.target.value })} /></div>
-            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Telefon</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Telefon" value={form.telefon || ''} onChange={(e) => setForm({ ...form, telefon: e.target.value })} /></div>
+            <div className="flex flex-col gap-1"><label data-onboarding-target="musteri-telefon" className="text-xs text-slate-400 font-semibold pl-1">Telefon</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Telefon" value={form.telefon || ''} onChange={(e) => setForm({ ...form, telefon: e.target.value })} /></div>
             <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">E-posta</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="E-posta" value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
             <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Açılış Bakiyesi</label><input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" placeholder="Açılış bakiyesi" value={form.acilisBakiyesi || ''} onChange={(e) => setForm({ ...form, acilisBakiyesi: e.target.value })} /></div>
             <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Bakiye Tipi</label><select className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none" value={form.bakiyeTipi || 'borc'} onChange={(e) => setForm({ ...form, bakiyeTipi: e.target.value })}><option value="borc">Borç</option><option value="alacak">Alacak</option></select></div>
-            <div className="flex flex-col gap-1"><label className="text-xs text-slate-400 font-semibold pl-1">Müşteri Tipi</label><select className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none" value={form.musteriTipi || 'son_kullanici'} onChange={(e) => setForm({ ...form, musteriTipi: e.target.value })}><option value="son_kullanici">Son Kullanıcı</option><option value="bayi">Bayi</option><option value="mimar">Mimar</option><option value="muteahhit">Müteahhit</option></select></div>
-            <button onClick={async () => { await kaydet(); setMobilYeniAcik(false) }} className="mt-3 w-full rounded-2xl bg-emerald-500 px-4 py-4 font-black text-slate-950">Müşteri Oluştur</button>
+            <div className="flex flex-col gap-1"><label data-onboarding-target="musteri-musteriTipi" className="text-xs text-slate-400 font-semibold pl-1">Müşteri Tipi</label><select className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none" value={form.musteriTipi || 'son_kullanici'} onChange={(e) => setForm({ ...form, musteriTipi: e.target.value })}><option value="son_kullanici">Son Kullanıcı</option><option value="bayi">Bayi</option><option value="mimar">Mimar</option><option value="muteahhit">Müteahhit</option></select></div>
+            <button data-onboarding-target="musteri-kaydet" onClick={async () => { await kaydet(); setMobilYeniAcik(false) }} className="mt-3 w-full rounded-2xl bg-emerald-500 px-4 py-4 font-black text-slate-950">Müşteri Oluştur</button>
           </div>
         </div>
       )}
@@ -897,7 +897,7 @@ export default function MusterilerPage() {
         </div>
       )}
 
-      <button onClick={() => { setAktif(null); setDuzenle(false); setMobilDetayAcik(false); setMobilYeniAcik(true); setForm({ firmaAdi: '', ad: '', soyad: '', telefon: '', email: '', acilisBakiyesi: '', bakiyeTipi: 'borc' }) }}
+      <button data-onboarding-target="musteri-yeni-btn" onClick={() => { setAktif(null); setDuzenle(false); setMobilDetayAcik(false); setMobilYeniAcik(true); setForm({ firmaAdi: '', ad: '', soyad: '', telefon: '', email: '', acilisBakiyesi: '', bakiyeTipi: 'borc' }) }}
         className="fixed right-4 z-40 rounded-full bg-emerald-500 px-5 py-4 text-sm font-black text-slate-950 shadow-2xl md:hidden"
         style={{ bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
         + Yeni

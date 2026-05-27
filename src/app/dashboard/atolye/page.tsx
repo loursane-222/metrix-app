@@ -2,9 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatMtulTR } from '@/lib/format'
 
-function Input({ label, value, onChange }: any) {
+function Input({ label, value, onChange, coachTarget }: any) {
   return (
-    <label className="block">
+    <label className="block" {...(coachTarget ? { 'data-onboarding-target': coachTarget } : {})}>
       <p className="mb-0.5 text-[10px] text-slate-400">{label}</p>
       <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
         className="h-10 md:h-8 w-full rounded-lg border border-slate-700 bg-[#0B1120] px-3 text-sm text-white outline-none focus:border-blue-500" />
@@ -13,11 +13,11 @@ function Input({ label, value, onChange }: any) {
 }
 
 
-function ParaInput({ label, fieldKey, ort, value, onChange }: { label: string; fieldKey: keyof FormState; ort?: number; value: string; onChange: (key: keyof FormState, val: string) => void }) {
+function ParaInput({ label, fieldKey, ort, value, onChange, coachTarget }: { label: string; fieldKey: keyof FormState; ort?: number; value: string; onChange: (key: keyof FormState, val: string) => void; coachTarget?: string }) {
   const display = tlInput(value)
   const hasOrt = ort && ort > 0 && String(Math.round(ort)) !== value.replace(/\./g, '')
   return (
-    <label className="block">
+    <label className="block" {...(coachTarget ? { 'data-onboarding-target': coachTarget } : {})}>
       <div className="mb-0.5 flex items-center justify-between">
         <p className="text-[10px] text-slate-400">{label}</p>
         {hasOrt && (
@@ -424,8 +424,8 @@ export default function AtolyePage() {
           <button onClick={() => setAktifTab('uretim')} className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${aktifTab === 'uretim' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Üretim Modeli</button>
           <button onClick={() => setAktifTab('kaynaklar')} className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${aktifTab === 'kaynaklar' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Kaynaklar</button>
           <button onClick={() => setAktifTab('kimlik')} className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${aktifTab === 'kimlik' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Kimlik</button>
-          <button onClick={() => setAktifTab('giderler')} className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${aktifTab === 'giderler' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Giderler</button>
-          <button onClick={() => setAktifTab('kapasite')} className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${aktifTab === 'kapasite' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Kapasite</button>
+          <button onClick={() => setAktifTab('giderler')} data-onboarding-target="atolye-gider-tab" className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${aktifTab === 'giderler' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Giderler</button>
+          <button onClick={() => setAktifTab('kapasite')} data-onboarding-target="atolye-kapasite-tab" className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${aktifTab === 'kapasite' ? 'bg-slate-700/80 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Kapasite</button>
         </div>
       </div>
 
@@ -462,8 +462,8 @@ export default function AtolyePage() {
 
           <div className="mt-4 grid gap-2">
             <SideButton active={aktifSol === 'kimlik'} onClick={() => setAktifSol('kimlik')} title="Atölye Bilgileri" sub="Kimlik, iletişim" />
-            <SideButton active={aktifSol === 'gider'} onClick={() => setAktifSol('gider')} title="Giderler" sub="Personel ve sabit gider" />
-            <SideButton active={aktifSol === 'kapasite'} onClick={() => setAktifSol('kapasite')} title="Kapasite" sub="Plaka, mtül, teklif" />
+            <SideButton active={aktifSol === 'gider'} onClick={() => setAktifSol('gider')} title="Giderler" sub="Personel ve sabit gider" coachTarget="atolye-gider-tab" />
+            <SideButton active={aktifSol === 'kapasite'} onClick={() => setAktifSol('kapasite')} title="Kapasite" sub="Plaka, mtül, teklif" coachTarget="atolye-kapasite-tab" />
           </div>
 
           <div className="mt-4 flex-1 min-h-0 overflow-y-auto rounded-2xl border border-slate-800 bg-[#111827] p-3" style={{WebkitOverflowScrolling:'touch'}}>
@@ -481,8 +481,8 @@ export default function AtolyePage() {
             {aktifSol === 'gider' && (
               <div className="grid gap-2">
                 <p className="text-[10px] uppercase tracking-widest text-blue-400 pt-1">Personel</p>
-                <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} value={form["toplamMaas"] as string} onChange={setAlan} />
-                <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} value={form["sgkGideri"] as string} onChange={setAlan} />
+                <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} value={form["toplamMaas"] as string} onChange={setAlan} coachTarget="atolye-toplamMaas" />
+                <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} value={form["sgkGideri"] as string} onChange={setAlan} coachTarget="atolye-sgkGideri" />
                 {personelKayitSayisi > 0 && (
                   <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 py-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-blue-400">Personel kayıtlarından hesaplanan</p>
@@ -492,6 +492,7 @@ export default function AtolyePage() {
                     </p>
                     <button
                       onClick={personeldenAktar}
+                      data-onboarding-target="atolye-personelden-aktar"
                       className="mt-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/20"
                     >
                       {aktarMesaj || 'Kayıtlardan Aktar'}
@@ -502,8 +503,8 @@ export default function AtolyePage() {
                 <ParaInput label="Yol Gideri" fieldKey="yolGideri" ort={ortalamalar.yolGideri} value={form["yolGideri"] as string} onChange={setAlan} />
 
                 <p className="text-[10px] uppercase tracking-widest text-blue-400 pt-2">Sabit Giderler</p>
-                <ParaInput label="Kira" fieldKey="kira" ort={ortalamalar.kira} value={form["kira"] as string} onChange={setAlan} />
-                <ParaInput label="Elektrik" fieldKey="elektrik" ort={ortalamalar.elektrik} value={form["elektrik"] as string} onChange={setAlan} />
+                <ParaInput label="Kira" fieldKey="kira" ort={ortalamalar.kira} value={form["kira"] as string} onChange={setAlan} coachTarget="atolye-kira" />
+                <ParaInput label="Elektrik" fieldKey="elektrik" ort={ortalamalar.elektrik} value={form["elektrik"] as string} onChange={setAlan} coachTarget="atolye-elektrik" />
                 <ParaInput label="Su" fieldKey="su" ort={ortalamalar.su} value={form["su"] as string} onChange={setAlan} />
                 <ParaInput label="Doğalgaz" fieldKey="dogalgaz" ort={ortalamalar.dogalgaz} value={form["dogalgaz"] as string} onChange={setAlan} />
                 <ParaInput label="İnternet" fieldKey="internet" ort={ortalamalar.internet} value={form["internet"] as string} onChange={setAlan} />
@@ -543,7 +544,7 @@ export default function AtolyePage() {
 
             {aktifSol === 'kapasite' && (
               <div className="grid gap-2">
-                <Input label="Porselen Plaka/Ay" value={form.aylikPorselenPlaka} onChange={(v: string) => setAlan('aylikPorselenPlaka', v)} />
+                <Input label="Porselen Plaka/Ay" value={form.aylikPorselenPlaka} onChange={(v: string) => setAlan('aylikPorselenPlaka', v)} coachTarget="atolye-aylikPorselenPlaka" />
                 <Input label="Kuvars Plaka/Ay" value={form.aylikKuvarsPlaka} onChange={(v: string) => setAlan('aylikKuvarsPlaka', v)} />
                 <Input label="Doğaltaş Plaka/Ay" value={form.aylikDogaltasPlaka} onChange={(v: string) => setAlan('aylikDogaltasPlaka', v)} />
                 <Input label="Plaka Başına Mtül" value={form.plakaBasinaMtul} onChange={(v: string) => setAlan('plakaBasinaMtul', v)} />
@@ -637,7 +638,7 @@ export default function AtolyePage() {
             <p className="mt-2 text-xs opacity-90">{hesap.tavsiye}</p>
           </div>
           <div className="mt-auto grid gap-2 pt-2">
-            <button onClick={kaydet} disabled={kaydediliyor} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold hover:bg-emerald-500 disabled:bg-slate-700">{kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}</button>
+            <button onClick={kaydet} disabled={kaydediliyor} data-onboarding-target="atolye-kaydet" className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold hover:bg-emerald-500 disabled:bg-slate-700">{kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}</button>
             <button onClick={() => setMakineModal(true)} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500">+ Makine Ekle</button>
             <button onClick={() => setAracModal(true)} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold hover:bg-violet-500">+ Araç Ekle</button>
             <button onClick={() => setGiderModal(true)} className="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold hover:bg-amber-500">+ Gider Ekle</button>
@@ -771,8 +772,8 @@ export default function AtolyePage() {
             <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="sm:col-span-2 xl:col-span-3"><p className="text-[10px] uppercase tracking-widest text-blue-400">Personel</p></div>
-                <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} value={form.toplamMaas} onChange={setAlan} />
-                <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} value={form.sgkGideri} onChange={setAlan} />
+                <ParaInput label="Toplam Maaş" fieldKey="toplamMaas" ort={ortalamalar.toplamMaas} value={form.toplamMaas} onChange={setAlan} coachTarget="atolye-toplamMaas" />
+                <ParaInput label="SGK Gideri" fieldKey="sgkGideri" ort={ortalamalar.sgkGideri} value={form.sgkGideri} onChange={setAlan} coachTarget="atolye-sgkGideri" />
                 {personelKayitSayisi > 0 && (
                   <div className="sm:col-span-2 xl:col-span-3 flex items-center justify-between gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
                     <div className="min-w-0">
@@ -784,6 +785,7 @@ export default function AtolyePage() {
                     </div>
                     <button
                       onClick={personeldenAktar}
+                      data-onboarding-target="atolye-personelden-aktar"
                       className="shrink-0 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/20"
                     >
                       {aktarMesaj || 'Kayıtlardan Aktar'}
@@ -793,8 +795,8 @@ export default function AtolyePage() {
                 <ParaInput label="Yemek Gideri" fieldKey="yemekGideri" ort={ortalamalar.yemekGideri} value={form.yemekGideri} onChange={setAlan} />
                 <ParaInput label="Yol Gideri" fieldKey="yolGideri" ort={ortalamalar.yolGideri} value={form.yolGideri} onChange={setAlan} />
                 <div className="sm:col-span-2 xl:col-span-3"><p className="text-[10px] uppercase tracking-widest text-blue-400 pt-1">Sabit Giderler</p></div>
-                <ParaInput label="Kira" fieldKey="kira" ort={ortalamalar.kira} value={form.kira} onChange={setAlan} />
-                <ParaInput label="Elektrik" fieldKey="elektrik" ort={ortalamalar.elektrik} value={form.elektrik} onChange={setAlan} />
+                <ParaInput label="Kira" fieldKey="kira" ort={ortalamalar.kira} value={form.kira} onChange={setAlan} coachTarget="atolye-kira" />
+                <ParaInput label="Elektrik" fieldKey="elektrik" ort={ortalamalar.elektrik} value={form.elektrik} onChange={setAlan} coachTarget="atolye-elektrik" />
                 <ParaInput label="Su" fieldKey="su" ort={ortalamalar.su} value={form.su} onChange={setAlan} />
                 <ParaInput label="Doğalgaz" fieldKey="dogalgaz" ort={ortalamalar.dogalgaz} value={form.dogalgaz} onChange={setAlan} />
                 <ParaInput label="İnternet" fieldKey="internet" ort={ortalamalar.internet} value={form.internet} onChange={setAlan} />
@@ -830,7 +832,7 @@ export default function AtolyePage() {
         {aktifTab === 'kapasite' && (
           <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <Input label="Porselen Plaka/Ay" value={form.aylikPorselenPlaka} onChange={(v: string) => setAlan('aylikPorselenPlaka', v)} />
+              <Input label="Porselen Plaka/Ay" value={form.aylikPorselenPlaka} onChange={(v: string) => setAlan('aylikPorselenPlaka', v)} coachTarget="atolye-aylikPorselenPlaka" />
               <Input label="Kuvars Plaka/Ay" value={form.aylikKuvarsPlaka} onChange={(v: string) => setAlan('aylikKuvarsPlaka', v)} />
               <Input label="Doğaltaş Plaka/Ay" value={form.aylikDogaltasPlaka} onChange={(v: string) => setAlan('aylikDogaltasPlaka', v)} />
               <Input label="Plaka Başına Mtül" value={form.plakaBasinaMtul} onChange={(v: string) => setAlan('plakaBasinaMtul', v)} />
@@ -851,7 +853,7 @@ export default function AtolyePage() {
         </div>
         <div className="flex items-center gap-3">
           {mesaj && <p className="text-xs text-emerald-300">{mesaj}</p>}
-          <button onClick={kaydet} disabled={kaydediliyor} className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:bg-slate-700">
+          <button onClick={kaydet} disabled={kaydediliyor} data-onboarding-target="atolye-kaydet" className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:bg-slate-700">
             {kaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
           </button>
         </div>
@@ -1077,9 +1079,9 @@ export default function AtolyePage() {
 }
 
 // Input moved to top-level
-function SideButton({ active, title, sub, onClick }: any) {
+function SideButton({ active, title, sub, onClick, coachTarget }: any) {
   return (
-    <button onClick={onClick} className={`rounded-2xl border p-3 text-left ${active ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-800 bg-[#111827]'}`}>
+    <button onClick={onClick} {...(coachTarget ? { 'data-onboarding-target': coachTarget } : {})} className={`rounded-2xl border p-3 text-left ${active ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-800 bg-[#111827]'}`}>
       <p className="text-sm font-semibold">{title}</p>
       <p className="mt-1 text-xs text-slate-400">{sub}</p>
     </button>

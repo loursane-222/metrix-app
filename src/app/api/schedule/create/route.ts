@@ -128,6 +128,76 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // ── AI mod personel ataması ─────────────────────────────────────────────
+    // FazAtama hataları WorkSchedule oluşturmayı engellemez; ayrı try-catch'te.
+    const personelOnerisi = body.personelOnerisi as {
+      OLCU?: string | null;
+      IMALAT_KESIM?: string | null;
+      IMALAT_TOPLAMA?: string | null;
+      MONTAJ?: string | null;
+    } | undefined;
+
+    if (personelOnerisi) {
+      try {
+        const rawIds = [
+          personelOnerisi.OLCU,
+          personelOnerisi.IMALAT_KESIM,
+          personelOnerisi.IMALAT_TOPLAMA,
+          personelOnerisi.MONTAJ,
+        ].filter((id): id is string => typeof id === "string" && id.length > 0);
+
+        const uniqueIds = [...new Set(rawIds)];
+
+        const validPersonel =
+          uniqueIds.length > 0
+            ? await prisma.personel.findMany({
+                where: { id: { in: uniqueIds }, atolyeId, aktif: true },
+                select: { id: true },
+              })
+            : [];
+        const validSet = new Set(validPersonel.map((p) => p.id));
+
+        for (const phase of schedule.phases) {
+          const ids: string[] = [];
+
+          if (phase.phase === "OLCU" && personelOnerisi.OLCU && validSet.has(personelOnerisi.OLCU)) {
+            ids.push(personelOnerisi.OLCU);
+          }
+          if (phase.phase === "IMALAT") {
+            if (personelOnerisi.IMALAT_KESIM && validSet.has(personelOnerisi.IMALAT_KESIM)) {
+              ids.push(personelOnerisi.IMALAT_KESIM);
+            }
+            if (
+              personelOnerisi.IMALAT_TOPLAMA &&
+              validSet.has(personelOnerisi.IMALAT_TOPLAMA) &&
+              personelOnerisi.IMALAT_TOPLAMA !== personelOnerisi.IMALAT_KESIM
+            ) {
+              ids.push(personelOnerisi.IMALAT_TOPLAMA);
+            }
+          }
+          if (phase.phase === "MONTAJ" && personelOnerisi.MONTAJ && validSet.has(personelOnerisi.MONTAJ)) {
+            ids.push(personelOnerisi.MONTAJ);
+          }
+
+          for (const personelId of ids) {
+            try {
+              await prisma.fazAtama.create({
+                data: { schedulePhaseId: phase.id, personelId },
+              });
+            } catch (fazErr) {
+              console.warn(
+                `[schedule/create] FazAtama oluşturulamadı — phaseId: ${phase.id}, personelId: ${personelId}, hata: ${fazErr instanceof Error ? fazErr.message : String(fazErr)}`
+              );
+            }
+          }
+        }
+      } catch (personelErr) {
+        console.warn(
+          `[schedule/create] Personel atama bloğu hata verdi (program yine de oluşturuldu) — isId: ${isId}, hata: ${personelErr instanceof Error ? personelErr.message : String(personelErr)}`
+        );
+      }
+    }
+
     return NextResponse.json({ ok: true, schedule });
   } catch (error) {
     console.error(error);

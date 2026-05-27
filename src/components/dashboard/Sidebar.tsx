@@ -22,14 +22,14 @@ type CurrentUser = {
 };
 
 const menuItems = [
-  { href: "/dashboard", label: "Dashboard", badge: "Genel Bakış" },
-  { href: "/dashboard/isler", label: "İşler", badge: "Teklifler" },
-  { href: "/dashboard/musteriler", label: "Müşteriler", badge: "CRM" },
-  { href: "/dashboard/is-programi", label: "İş Programı", badge: "Planlama" },
-  { href: "/dashboard/atolye", label: "Atölye", badge: "Maliyet" },
-  { href: "/dashboard/personel", label: "Personel", badge: "Ekip" },
-  { href: "/dashboard/plaka-planlayici", label: "Plaka Planlayıcı", badge: "Optimizasyon" },
-  { href: "/dashboard/tahsilatlar", label: "Tahsilat & Cari", badge: "Finans" },
+  { href: "/dashboard", label: "Dashboard", badge: "Genel Bakış", onboardingTarget: "dashboard" },
+  { href: "/dashboard/isler", label: "İşler", badge: "Teklifler", onboardingTarget: "yeni-is" },
+  { href: "/dashboard/musteriler", label: "Müşteriler", badge: "CRM", onboardingTarget: "musteriler" },
+  { href: "/dashboard/is-programi", label: "İş Programı", badge: "Planlama", onboardingTarget: "is-programi" },
+  { href: "/dashboard/atolye", label: "Atölye", badge: "Maliyet", onboardingTarget: "atolye-gideri" },
+  { href: "/dashboard/personel", label: "Personel", badge: "Ekip", onboardingTarget: "personel" },
+  { href: "/dashboard/plaka-planlayici", label: "Plaka Planlayıcı", badge: "Optimizasyon", onboardingTarget: "plaka-planlayici" },
+  { href: "/dashboard/tahsilatlar", label: "Tahsilat & Cari", badge: "Finans", onboardingTarget: "tahsilat" },
 ];
 
 export default function Sidebar() {
@@ -130,7 +130,7 @@ export default function Sidebar() {
 
   const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+      <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-3">
         <div className="flex items-center gap-3">
           {atolye?.logoUrl ? (
             <img
@@ -169,60 +169,63 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="mt-3 space-y-1">
-        {visibleMenuItems.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => mobile && setMobileOpen(false)}
-              className={[
-                "group flex items-center justify-between rounded-2xl border px-4 py-2.5 text-sm transition",
-                active
-                  ? "border-blue-400/50 bg-blue-500/15 text-white shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
-                  : "border-transparent text-slate-200 hover:border-white/10 hover:bg-white/5 hover:text-white",
-              ].join(" ")}
-            >
-              <span className="font-medium">{item.label}</span>
-              <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-slate-300 transition group-hover:bg-white/10">
-                {item.badge}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+        <nav className="space-y-1">
+          {visibleMenuItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => mobile && setMobileOpen(false)}
+                data-onboarding-target={item.onboardingTarget}
+                className={[
+                  "group flex items-center justify-between rounded-2xl border px-4 py-2.5 text-sm transition",
+                  active
+                    ? "border-blue-400/50 bg-blue-500/15 text-white shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
+                    : "border-transparent text-slate-200 hover:border-white/10 hover:bg-white/5 hover:text-white",
+                ].join(" ")}
+              >
+                <span className="font-medium">{item.label}</span>
+                <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-slate-300 transition group-hover:bg-white/10">
+                  {item.badge}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
 
-      {currentUser?.role !== "personel" && vadeTaksitler.length > 0 && (
-        <div className="mt-3 rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-3">
-          <p className="text-[10px] uppercase tracking-[0.22em] text-amber-300">
-            Tahsilat Takibi
-          </p>
-          <h3 className="mt-1 text-sm font-semibold leading-tight">
-            {vadeTaksitler.length} taksit vadesi geliyor
-          </h3>
-          <div className="mt-2 space-y-1">
-            {vadeTaksitler.slice(0, 3).map((t: any) => {
-              const gun = Math.ceil((new Date(t.vadeTarihi).getTime() - Date.now()) / 86400000);
-              const gecti = gun < 0;
-              const musteri = t.plan?.musteri;
-              const musteriAdi = musteri?.firmaAdi || musteri?.ad || "—";
-              return (
-                <div key={t.id} className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[11px] text-slate-300">{musteriAdi}</span>
-                  <span className={`shrink-0 text-[11px] font-bold ${gecti ? "text-red-400" : "text-amber-300"}`}>
-                    {gecti ? `${Math.abs(gun)}g gecikti` : gun === 0 ? "Bugün" : `${gun}g`}
-                  </span>
-                </div>
-              );
-            })}
+        {currentUser?.role !== "personel" && vadeTaksitler.length > 0 && (
+          <div className="mt-3 rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-3">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-amber-300">
+              Tahsilat Takibi
+            </p>
+            <h3 className="mt-1 text-sm font-semibold leading-tight">
+              {vadeTaksitler.length} taksit vadesi geliyor
+            </h3>
+            <div className="mt-2 space-y-1">
+              {vadeTaksitler.slice(0, 3).map((t: any) => {
+                const gun = Math.ceil((new Date(t.vadeTarihi).getTime() - Date.now()) / 86400000);
+                const gecti = gun < 0;
+                const musteri = t.plan?.musteri;
+                const musteriAdi = musteri?.firmaAdi || musteri?.ad || "—";
+                return (
+                  <div key={t.id} className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[11px] text-slate-300">{musteriAdi}</span>
+                    <span className={`shrink-0 text-[11px] font-bold ${gecti ? "text-red-400" : "text-amber-300"}`}>
+                      {gecti ? `${Math.abs(gun)}g gecikti` : gun === 0 ? "Bugün" : `${gun}g`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <button
         onClick={logout}
-        className="mt-3 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300"
+        className="mt-3 flex w-full shrink-0 items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300"
       >
         <span>Çıkış Yap</span>
         <span>→</span>

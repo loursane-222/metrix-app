@@ -1139,7 +1139,7 @@ export default function YeniIsV3Page() {
               <div className="yi-kart">
                 <p style={{ fontSize: "14px", fontWeight: 700, marginBottom: "12px" }}>👤 Müşteri</p>
                 <div style={{ position: "relative" }}>
-                  <input className="yi-inp" placeholder="Müşteri ara veya yaz..." value={form.musteriId ? form.musteriAdi : musteriArama}
+                  <input data-onboarding-target="yeni-is-musteri-input" className="yi-inp" placeholder="Müşteri ara veya yaz..." value={form.musteriId ? form.musteriAdi : musteriArama}
                     onFocus={() => setMusteriListeAcik(true)}
                     onChange={(e) => { setMusteriArama(e.target.value); setAlan("musteriId", ""); setAlan("musteriAdi", e.target.value); setMusteriListeAcik(true); }} />
                   {form.musteriId && (
@@ -1188,7 +1188,7 @@ export default function YeniIsV3Page() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
                     <span className="yi-label">Taş / Ürün Adı</span>
-                    <input className="yi-inp" placeholder="Calacatta Gold" value={form.urunAdi} onChange={(e) => setAlan("urunAdi", e.target.value)} />
+                    <input data-onboarding-target="yeni-is-urun-adi" className="yi-inp" placeholder="Calacatta Gold" value={form.urunAdi} onChange={(e) => setAlan("urunAdi", e.target.value)} />
                   </div>
                   <div>
                     <span className="yi-label">İş Tarihi</span>
@@ -1393,7 +1393,7 @@ export default function YeniIsV3Page() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
                     <p style={{ fontSize: "14px", fontWeight: 700 }}>🪨 Plaka Bilgisi</p>
                     <div style={{ display: "flex", gap: "8px" }}>
-                    <button onClick={plakaHesapla} disabled={plakaHesaplaniyor} style={{ padding: "7px 14px", background: plakaHesaplaniyor ? "#374151" : "#10b981", border: "none", borderRadius: "10px", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: plakaHesaplaniyor ? "not-allowed" : "pointer" }}>
+                    <button data-onboarding-target="yeni-is-plaka-hesapla" onClick={plakaHesapla} disabled={plakaHesaplaniyor} style={{ padding: "7px 14px", background: plakaHesaplaniyor ? "#374151" : "#10b981", border: "none", borderRadius: "10px", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: plakaHesaplaniyor ? "not-allowed" : "pointer" }}>
                       {plakaHesaplaniyor ? "⏳ Hesaplanıyor..." : "🧮 Plaka Hesapla"}
                     </button>
                     <button onClick={() => {
@@ -1411,7 +1411,7 @@ export default function YeniIsV3Page() {
                       });
                       setPlakaInitialRows(rows);
                       setPlakaAcik(true);
-                    }} style={{ padding: "7px 14px", background: "#1d4ed8", border: "none", borderRadius: "10px", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
+                    }} data-onboarding-target="yeni-is-gorsel-planlayici" style={{ padding: "7px 14px", background: "#1d4ed8", border: "none", borderRadius: "10px", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
                       📐 Görsel Planlayıcı
                     </button>
                   </div>
@@ -1430,7 +1430,7 @@ export default function YeniIsV3Page() {
                       <div className="plaka-euro-row">
                         <div className="plaka-euro-main">
                           <span className="yi-label">veya Euro fiyatı</span>
-                          <input className="yi-inp" type="text" inputMode="decimal" placeholder="€" value={form.plakaFiyatiEuro} onChange={(e) => setAlan("plakaFiyatiEuro", e.target.value)} />
+                          <input data-onboarding-target="yeni-is-plaka-euro" className="yi-inp" type="text" inputMode="decimal" placeholder="€" value={form.plakaFiyatiEuro} onChange={(e) => setAlan("plakaFiyatiEuro", e.target.value)} />
                         </div>
                         <div className="plaka-kur-cell">
                           <span className="yi-label">Euro Kuru</span>
@@ -1609,7 +1609,7 @@ export default function YeniIsV3Page() {
                         </button>
                       ))}
                     </div>
-                    <input className="yi-inp" type="text" inputMode="decimal" step="0.1" placeholder="3.0" value={form.carpan} onChange={(e) => setAlan("carpan", e.target.value)} />
+                    <input data-onboarding-target="yeni-is-carpan" className="yi-inp" type="text" inputMode="decimal" step="0.1" placeholder="3.0" value={form.carpan} onChange={(e) => setAlan("carpan", e.target.value)} />
                     {hesap.malzemeMaliyeti > 0 && (
                       <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
                         {tl(hesap.malzemeMaliyeti)} × {form.carpan} = {tl(hesap.satisFiyati)}
@@ -1876,7 +1876,7 @@ export default function YeniIsV3Page() {
               İleri →
             </button>
           ) : (
-            <button onClick={kaydet} disabled={kaydediliyor} style={{ flex: 1, padding: "13px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "13px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer" }}>
+            <button data-onboarding-target="yeni-is-kaydet" onClick={kaydet} disabled={kaydediliyor} style={{ flex: 1, padding: "13px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "13px", color: "#fff", fontSize: "15px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer" }}>
               {kaydediliyor ? "Kaydediliyor..." : "✓ Kaydet"}
             </button>
           )}
@@ -1904,7 +1904,7 @@ export default function YeniIsV3Page() {
           <button onClick={() => sonraki && setAktifAdim(sonraki)} disabled={!sonraki} style={{ padding: "10px 14px", background: sonraki ? "#0d1117" : "#111827", border: "1px solid #1f2937", borderRadius: "12px", color: sonraki ? "#d1d5db" : "#4b5563", fontSize: "13px", fontWeight: 700, cursor: sonraki ? "pointer" : "not-allowed" }}>
             Sonraki
           </button>
-          <button onClick={kaydet} disabled={kaydediliyor} style={{ padding: "10px 18px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "12px", color: "#fff", fontSize: "13px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer" }}>
+          <button data-onboarding-target="yeni-is-kaydet" onClick={kaydet} disabled={kaydediliyor} style={{ padding: "10px 18px", background: kaydediliyor ? "#374151" : "#10b981", border: "none", borderRadius: "12px", color: "#fff", fontSize: "13px", fontWeight: 900, cursor: kaydediliyor ? "not-allowed" : "pointer" }}>
             {kaydediliyor ? "Kaydediliyor..." : duzenleId ? "Kaydet" : "Teklifi Kaydet"}
           </button>
         </div>

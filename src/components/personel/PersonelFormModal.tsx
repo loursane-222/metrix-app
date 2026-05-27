@@ -39,9 +39,17 @@ const BOS_FORM: FormState = {
 const iCls =
   "h-11 w-full rounded-xl border border-slate-700 bg-[#111827] px-3 text-sm text-white outline-none focus:border-blue-500 appearance-none"
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  target,
+}: {
+  label: string;
+  children: React.ReactNode;
+  target?: string;
+}) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className="flex flex-col gap-1" data-onboarding-target={target}>
       <span className="text-xs text-slate-400">{label}</span>
       {children}
     </label>
@@ -171,20 +179,20 @@ export function PersonelFormModal({
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {/* ── Kimlik ── */}
-          <Field label="Ad">
+          <Field label="Ad" target="personel-name">
             <input value={form.ad} onChange={(e) => set("ad", e.target.value)} className={iCls} />
           </Field>
           <Field label="Soyad">
             <input value={form.soyad} onChange={(e) => set("soyad", e.target.value)} className={iCls} />
           </Field>
 
-          <Field label="Görevi">
+          <Field label="Görevi" target="personel-role">
             <select value={form.gorevi} onChange={(e) => set("gorevi", e.target.value)} className={iCls}>
               {GOREVLER.map((g) => <option key={g}>{g}</option>)}
             </select>
           </Field>
 
-          <Field label="Rol Grubu">
+          <Field label="Rol Grubu" target="personel-role-group">
             <select value={form.rolGrubu} onChange={(e) => set("rolGrubu", e.target.value)} className={iCls}>
               {ROL_OPTIONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
@@ -192,7 +200,7 @@ export function PersonelFormModal({
             </select>
           </Field>
 
-          <Field label="Bağlı Olduğu">
+          <Field label="Bağlı Olduğu" target="personel-manager">
             <select
               value={form.bagliOlduguId}
               onChange={(e) => set("bagliOlduguId", e.target.value)}
@@ -207,7 +215,7 @@ export function PersonelFormModal({
             </select>
           </Field>
 
-          <Field label="Çalışma Yılı">
+          <Field label="Çalışma Yılı" target="personel-seniority">
             <input
               type="number"
               min="0"
@@ -218,7 +226,7 @@ export function PersonelFormModal({
           </Field>
 
           {/* ── İletişim ── */}
-          <Field label="Telefon">
+          <Field label="Telefon" target="personel-phone">
             <input
               type="tel"
               value={form.telefon}
@@ -226,7 +234,7 @@ export function PersonelFormModal({
               className={iCls}
             />
           </Field>
-          <Field label="E-posta">
+          <Field label="E-posta" target="personel-email">
             <input
               type="email"
               value={form.email}
@@ -234,7 +242,7 @@ export function PersonelFormModal({
               className={iCls}
             />
           </Field>
-          <Field label={editingPersonel ? "Yeni Şifre (boş = değişmez)" : "Giriş Şifresi"}>
+          <Field label={editingPersonel ? "Yeni Şifre (boş = değişmez)" : "Giriş Şifresi"} target="personel-password">
             <input
               type="password"
               value={form.password}
@@ -250,7 +258,7 @@ export function PersonelFormModal({
             </p>
           </div>
 
-          <Field label="Brüt Maaş (₺ / ay)">
+          <Field label="Brüt Maaş (₺ / ay)" target="personel-cost">
             <input
               type="number"
               min="0"
@@ -262,7 +270,7 @@ export function PersonelFormModal({
             />
           </Field>
 
-          <Field label="İşveren SGK Oranı (%)">
+          <Field label="İşveren SGK Oranı (%)" target="personel-sgk">
             <input
               type="number"
               min="0"
@@ -283,7 +291,7 @@ export function PersonelFormModal({
             />
           </Field>
 
-          <Field label="Haftalık Çalışma Günü (1–7)">
+          <Field label="Haftalık Çalışma Günü (1–7)" target="personel-work-days">
             <input
               type="number"
               min="1"
@@ -311,6 +319,7 @@ export function PersonelFormModal({
         <button
           onClick={kaydet}
           disabled={saving || !form.ad.trim() || !form.soyad.trim()}
+          data-onboarding-target="personel-form-save"
           className="mt-5 w-full rounded-xl bg-emerald-600 py-3 font-semibold transition hover:bg-emerald-500 disabled:bg-slate-700"
         >
           {saving ? "Kaydediliyor..." : "Kaydet"}

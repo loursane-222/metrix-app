@@ -10,10 +10,16 @@ function safeJson<T>(data: T): T {
   return JSON.parse(JSON.stringify(data));
 }
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>;
+}) {
+  const params = await searchParams;
   const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
+
+  const year = Number(params.year) || today.getFullYear();
+  const month = Math.max(1, Math.min(12, Number(params.month) || today.getMonth() + 1));
 
   const schedulesRaw: any[] = await getSchedulesForMonth(year, month);
   const schedules = safeJson(schedulesRaw);

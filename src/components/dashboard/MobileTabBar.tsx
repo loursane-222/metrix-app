@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
+import MetrixGuideLauncher from "@/components/onboarding/MetrixGuideLauncher";
 
 type CurrentUser = {
   role?: "admin" | "personel";
@@ -13,6 +14,7 @@ const tabItems = [
     href: "/dashboard",
     label: "Ana Sayfa",
     exact: true,
+    onboardingTarget: "dashboard",
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#60a5fa" : "rgba(148,163,184,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
@@ -23,6 +25,7 @@ const tabItems = [
     href: "/dashboard/isler",
     label: "İşler",
     exact: false,
+    onboardingTarget: "yeni-is",
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#60a5fa" : "rgba(148,163,184,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
@@ -34,6 +37,7 @@ const tabItems = [
     label: "",
     exact: false,
     fab: true,
+    onboardingTarget: "yeni-is",
     icon: (_active: boolean) => (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -44,6 +48,7 @@ const tabItems = [
     href: "/dashboard/is-programi",
     label: "Program",
     exact: false,
+    onboardingTarget: "is-programi",
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#60a5fa" : "rgba(148,163,184,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -55,6 +60,7 @@ const tabItems = [
     label: "Daha Fazla",
     exact: false,
     more: true,
+    onboardingTarget: "more",
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#60a5fa" : "rgba(148,163,184,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
@@ -69,6 +75,7 @@ const moreItems = [
     label: "Müşteriler",
     sub: "CRM & ekstre",
     color: "#22c55e",
+    onboardingTarget: "musteriler",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
@@ -80,6 +87,7 @@ const moreItems = [
     label: "Atölye",
     sub: "Maliyet ayarları",
     color: "#f59e0b",
+    onboardingTarget: "atolye-gideri",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -91,6 +99,7 @@ const moreItems = [
     label: "Personel",
     sub: "Ekip yönetimi",
     color: "#a78bfa",
+    onboardingTarget: "personel",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
@@ -102,6 +111,7 @@ const moreItems = [
     label: "Plaka Planlayıcı",
     sub: "Optimizasyon",
     color: "#38bdf8",
+    onboardingTarget: "plaka-planlayici",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
@@ -113,6 +123,7 @@ const moreItems = [
     label: "Tahsilat & Cari",
     sub: "Finans & ödeme planı",
     color: "#10b981",
+    onboardingTarget: "tahsilat",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
@@ -149,6 +160,12 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
 
   return (
     <>
+      {!pathname.startsWith("/dashboard/is-programi") && (
+        <div className="fixed right-3 z-[70] md:hidden" style={{ bottom: "calc(88px + env(safe-area-inset-bottom, 0px))" }}>
+          <MetrixGuideLauncher compact className="min-h-[34px] bg-slate-950/90 px-3 text-[11px] shadow-[0_12px_34px_rgba(0,0,0,0.28)]" />
+        </div>
+      )}
+
       {/* Daha Fazla sheet overlay */}
       {moreOpen && (
         <div
@@ -182,6 +199,7 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
                   key={item.href}
                   href={item.href}
                   onClick={() => setMoreOpen(false)}
+                  data-onboarding-target={item.onboardingTarget}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -282,6 +300,7 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
                   href={item.href}
                   className="flex flex-col items-center justify-center mb-2"
                   aria-label="Yeni İş Ekle"
+                  data-onboarding-target={item.onboardingTarget}
                 >
                   <div style={{
                     width: 52,
@@ -307,6 +326,7 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
                   onClick={() => setMoreOpen((v) => !v)}
                   className="flex flex-col items-center gap-1 px-3 py-1 min-w-[48px] bg-transparent border-0"
                   aria-label="Daha Fazla"
+                  data-onboarding-target={item.onboardingTarget}
                 >
                   {item.icon(active)}
                   <span style={{
@@ -332,6 +352,7 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
                 href={item.href}
                 className="flex flex-col items-center gap-1 px-3 py-1 min-w-[48px]"
                 aria-label={item.label}
+                data-onboarding-target={item.onboardingTarget}
               >
                 {item.icon(active)}
                 <span style={{
