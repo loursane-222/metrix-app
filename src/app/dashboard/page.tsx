@@ -7,6 +7,7 @@ import Link from "next/link";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
 import TaskDetailModal from "@/components/schedule/TaskDetailModal";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
+import ReportsTab from "@/components/dashboard/ReportsTab";
 
 // ─── Live Ops types ───────────────────────────────────────────────────────────
 type RiskState = "NO_PLAN" | "NORMAL" | "OVERRUN" | "CRITICAL" | "STALE";
@@ -319,6 +320,7 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [sekme, setSekme] = useState<"yillik" | "aylik">("aylik");
   const [activeDashboardTab, setActiveDashboardTab] = useState<"live" | "operations" | "sales" | "cash" | "reports">("live");
+  const [activeMobileDashboardTab, setActiveMobileDashboardTab] = useState<"ops" | "commercial" | "summary">("ops");
   const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
   const [dashboardCoachWelcome, setDashboardCoachWelcome] = useState(false);
   const [dashboardCoachActive, setDashboardCoachActive] = useState(false);
@@ -572,7 +574,6 @@ export default function DashboardPage() {
   const yillikFinans = data?.finans?.yillik ?? { verilen: 0, onaylanan: 0, kaybedilen: 0, devam: 0, donusumOrani: 0, teklifSayisi: 0 };
   const aylikFinans = data?.finans?.aylik ?? { verilen: 0, onaylanan: 0, kaybedilen: 0, devam: 0, donusumOrani: 0, teklifSayisi: 0 };
   const vadesiGelenToplam = vadesiGelenler.reduce((s: number, v: any) => s + Number(v.tutar || 0), 0);
-  const operasyonYogunlugu = Number(atelye.doluluk ?? operasyonPlan.length ?? 0);
   const operasyonSaglikSkoru = Math.max(0, Math.min(100,
     58 +
     Math.min(sicakTeklifler.length * 4, 14) -
@@ -585,74 +586,6 @@ export default function DashboardPage() {
     operasyonSaglikSkoru >= 68 ? "Güçlü" :
     operasyonSaglikSkoru >= 45 ? "Dengeli" : "Zayıf";
   const raporDonem = `${_bugun.toLocaleDateString("tr-TR", { month: "long" })} ${_bugun.getFullYear()}`;
-  const raporRows = [
-    {
-      donem: "Bu Ay",
-      satis: `₺${fmt(aylikFinans.onaylanan)}`,
-      tahsilat: vadesiGelenler.length > 0 ? `₺${fmt(vadesiGelenToplam)} vadesi gelen` : "Risk yok",
-      uretim: `${operasyonPlan.length} operasyon`,
-      geciken: `${operasyonKpi.geciken} geciken / ${liveToplamBlocked} takılan`,
-      sicak: `${sicakTeklifler.length} fırsat`,
-      skor: operasyonSaglikSkoru,
-      degisim: "baz veri yok",
-      trend: "neutral",
-    },
-    {
-      donem: "Geçen Ay",
-      satis: "veri yok",
-      tahsilat: "veri yok",
-      uretim: "veri yok",
-      geciken: "veri yok",
-      sicak: "veri yok",
-      skor: null,
-      degisim: "karşılaştırma yok",
-      trend: "none",
-    },
-    {
-      donem: "Son 3 Ay",
-      satis: "takip başlıyor",
-      tahsilat: "takip başlıyor",
-      uretim: `${operasyonPlan.length} güncel operasyon`,
-      geciken: `${liveToplamBlocked} takılma`,
-      sicak: `${sicakTeklifler.length} sinyal`,
-      skor: operasyonSaglikSkoru,
-      degisim: "baz oluşuyor",
-      trend: "neutral",
-    },
-    {
-      donem: "Bu Yıl",
-      satis: `₺${fmt(yillikFinans.onaylanan)}`,
-      tahsilat: vadesiGelenToplam > 0 ? `₺${fmt(vadesiGelenToplam)} açık takip` : "açık takip yok",
-      uretim: `${atelye.bugunOperasyon ?? operasyonPlan.length} bugünkü operasyon`,
-      geciken: `${operasyonKpi.geciken} geciken`,
-      sicak: `${sicakTeklifler.length} aktif fırsat`,
-      skor: Math.max(0, Math.min(100, operasyonSaglikSkoru + Math.round(Number(yillikFinans.donusumOrani || 0) / 5))),
-      degisim: Number(yillikFinans.donusumOrani || 0) > 50 ? "güçlü" : "takipte",
-      trend: Number(yillikFinans.donusumOrani || 0) > 50 ? "up" : "neutral",
-    },
-    {
-      donem: "Geçen Yıl",
-      satis: "veri yok",
-      tahsilat: "veri yok",
-      uretim: "veri yok",
-      geciken: "veri yok",
-      sicak: "veri yok",
-      skor: null,
-      degisim: "karşılaştırma yok",
-      trend: "none",
-    },
-    {
-      donem: "Genel Toplam",
-      satis: `₺${fmt(yillikFinans.onaylanan + yillikFinans.devam)}`,
-      tahsilat: `₺${fmt(vadesiGelenToplam)} izleniyor`,
-      uretim: `${operasyonPlan.length} plan satırı`,
-      geciken: `${operasyonKpi.geciken + liveToplamBlocked} risk`,
-      sicak: `${sicakTeklifler.length} fırsat`,
-      skor: operasyonSaglikSkoru,
-      degisim: "anlık görünüm",
-      trend: "neutral",
-    },
-  ];
 
   useEffect(() => {
     if (!dashboardCoachActive || !activeDashboardCoachStep) {
@@ -1056,87 +989,22 @@ export default function DashboardPage() {
         )}
 
         {activeDashboardTab === "reports" && (
-          <section data-onboarding-target="dashboard-reports-full" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-[30px] border border-white/10 bg-slate-950/44 p-5 shadow-[0_26px_90px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-            <div className="flex shrink-0 items-center justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Executive Insight</p>
-                <h2 className="mt-1 text-2xl font-black text-white">Yönetici Rapor Tablosu</h2>
-                <p className="mt-1 text-sm text-slate-500">Satış, tahsilat, üretim ve performans değişimlerini tek tabloda izleyin.</p>
-              </div>
-              <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-black text-emerald-300">{raporDonem}</span>
-            </div>
-            <div className="grid shrink-0 grid-cols-4 gap-2">
-              {[
-                ["Yıl Toplam Onaylanan", yillikFinans.onaylanan, "text-emerald-300", "satış"],
-                ["Ay Toplam Onaylanan", aylikFinans.onaylanan, "text-blue-300", "aylık"],
-                ["Vadesi Gelen Tahsilat", vadesiGelenToplam, "text-amber-300", `${vadesiGelenler.length} kayıt`],
-                ["Operasyon Yoğunluğu", operasyonYogunlugu, "text-violet-300", "anlık"],
-              ].map(([label, value, color, sub]) => (
-                <div key={String(label)} className="rounded-2xl border border-white/10 bg-white/[0.055] p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
-                  <p className={`mt-1 text-xl font-black tabular-nums ${color}`}>{typeof value === "number" && String(label) !== "Operasyon Yoğunluğu" ? `₺${fmt(value)}` : String(value)}</p>
-                  <p className="mt-0.5 text-[10px] font-bold text-slate-600">{String(sub || "")}</p>
-                </div>
-              ))}
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035]">
-              <div className="grid grid-cols-[1fr_1.15fr_1.15fr_1.1fr_1.05fr_.9fr_.9fr_.9fr] gap-0 border-b border-white/10 bg-slate-950/70 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                <span>Dönem</span>
-                <span>Satış / Onaylanan</span>
-                <span>Tahsilat / Vadesi Gelen</span>
-                <span>Üretim / Operasyon</span>
-                <span>Geciken / Takılan</span>
-                <span>Sıcak Teklif</span>
-                <span>Performans</span>
-                <span>Değişim</span>
-              </div>
-              <div className="max-h-full overflow-y-auto">
-                {raporRows.map((row) => {
-                  const score = typeof row.skor === "number" ? row.skor : null;
-                  const scoreLabel = score == null ? "veri yok" : score >= 85 ? "Çok Güçlü" : score >= 68 ? "Güçlü" : score >= 45 ? "Dengeli" : "Zayıf";
-                  const trendCls =
-                    row.trend === "up" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300" :
-                    row.trend === "down" ? "border-red-400/20 bg-red-500/10 text-red-300" :
-                    row.trend === "none" ? "border-slate-400/10 bg-white/[0.035] text-slate-500" :
-                    "border-amber-400/20 bg-amber-500/10 text-amber-300";
-                  const trendIcon = row.trend === "up" ? "↑" : row.trend === "down" ? "↓" : row.trend === "none" ? "–" : "→";
-                  return (
-                    <div key={row.donem} className="grid grid-cols-[1fr_1.15fr_1.15fr_1.1fr_1.05fr_.9fr_.9fr_.9fr] gap-0 border-b border-white/[0.055] px-3 py-3 text-sm text-slate-300 transition hover:bg-white/[0.045] last:border-0">
-                      <strong className="text-slate-100">{row.donem}</strong>
-                      <span className="tabular-nums">{row.satis}</span>
-                      <span className="tabular-nums">{row.tahsilat}</span>
-                      <span>{row.uretim}</span>
-                      <span>{row.geciken}</span>
-                      <span>{row.sicak}</span>
-                      <span>
-                        {score == null ? (
-                          <span className="text-slate-500">veri yok</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-2">
-                            <span className="font-black tabular-nums text-white">{score}</span>
-                            <span className="text-[11px] text-slate-500">{scoreLabel}</span>
-                          </span>
-                        )}
-                      </span>
-                      <span><span className={`rounded-full border px-2 py-1 text-[11px] font-black ${trendCls}`}>{trendIcon} {row.degisim}</span></span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="grid shrink-0 grid-cols-3 gap-3">
-              {[
-                ["Satış Yorumu", sicakTeklifler.length > 0 ? "Satış tarafında takip edilmesi gereken fırsatlar var." : "Satış sinyalleri düşük; yeni teklif hareketleri takip edilmeli."],
-                ["Nakit Yorumu", vadesiGelenler.length > 0 ? "Nakit tarafında takip gerektiren açık ödeme var." : "Nakit tarafında vadesi gelen açık ödeme görünmüyor."],
-                ["Operasyon Yorumu", liveToplamBlocked > 0 ? "Operasyon tarafında darboğaz oluşmuş görünüyor." : "Operasyon akışında kritik takılma görünmüyor."],
-              ].map(([title, copy]) => (
-                <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{title}</p>
-                  <p className="mt-2 text-sm font-semibold leading-5 text-slate-300">{copy}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+          <ReportsTab
+            aylikFinans={aylikFinans}
+            yillikFinans={yillikFinans}
+            vadesiGelenler={vadesiGelenler}
+            vadesiGelenToplam={vadesiGelenToplam}
+            operasyonPlan={operasyonPlan}
+            operasyonKpi={operasyonKpi}
+            sicakTeklifler={sicakTeklifler}
+            liveToplamAktif={liveToplamAktif}
+            liveToplamPaused={liveToplamPaused}
+            liveToplamBlocked={liveToplamBlocked}
+            atelye={atelye}
+            operasyonSaglikSkoru={operasyonSaglikSkoru}
+            performansLabel={performansLabel}
+            raporDonem={raporDonem}
+          />
         )}
 
         {false && (
@@ -1486,439 +1354,477 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-4xl md:hidden">
+      {/* ── MOBILE DASHBOARD — 3-segment cockpit ───────────────────────── */}
+      <div className="mx-auto max-w-lg md:hidden">
 
-        <div className="sticky top-0 z-30 -mx-3 flex items-center justify-between border-b border-white/[0.06] bg-[#030712]/90 px-3 py-3 backdrop-blur-md md:-mx-6 md:px-6 md:py-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Operasyon Merkezi</p>
-            <h1 className="mt-0.5 text-lg font-bold text-white">Dashboard</h1>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden text-right sm:block">
-              <p className="text-xs font-semibold capitalize text-white">{gunAdi}</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">{tamTarih}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4 pt-4">
-        <OnboardingChecklist />
-
-        {/* ── 1. GÜNÜN PROGRAMI ────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4" data-onboarding-target="is-programi">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Gunluk Operasyon</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">Bugunun Programi</p>
-            </div>
-            <Link href="/dashboard/is-programi" className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-400 transition-colors hover:text-white">
-              Program
-            </Link>
-          </div>
-
-          {/* 4 KPI kart — 2×2 grid */}
-          <div className="mb-4 grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Planlanan</p>
-              <p className="mt-1 text-2xl font-black leading-none text-white tabular-nums">{operasyonKpi.planlanan}</p>
-              <p className="mt-0.5 text-[10px] text-slate-600">operasyon</p>
-            </div>
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2.5">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-blue-400">İşlemde</p>
-              <p className="mt-1 text-2xl font-black leading-none text-blue-300 tabular-nums">{operasyonKpi.islemde}</p>
-              <p className="mt-0.5 text-[10px] text-blue-400/50">aktif</p>
-            </div>
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-500">Tamamlanan</p>
-              <p className="mt-1 text-2xl font-black leading-none text-emerald-400 tabular-nums">{operasyonKpi.tamamlanan}</p>
-              <p className="mt-0.5 text-[10px] text-emerald-500/50">bitti</p>
-            </div>
-            <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3 py-2.5">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-red-400">Geciken</p>
-              <p className={`mt-1 text-2xl font-black leading-none tabular-nums ${operasyonKpi.geciken > 0 ? "text-red-400" : "text-slate-600"}`}>{operasyonKpi.geciken}</p>
-              <p className="mt-0.5 text-[10px] text-red-400/50">suresi gecti</p>
-            </div>
-          </div>
-
-          {operasyonPlan.length === 0 && (
-            <EmptyState
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
-              title="Bugün için plan yok"
-              description="İş programından operasyon ekleyebilirsin."
-              action={{ label: "İş Programına Git", href: "/dashboard/is-programi" }}
-            />
-          )}
-          <div className="space-y-0">
-            {operasyonPlan.map((o: any) => (
-              <div key={o.id} className="flex items-start gap-3 border-b border-white/5 py-2.5 last:border-0">
-                <span className="w-10 flex-shrink-0 pt-0.5 text-[11px] font-semibold tabular-nums text-slate-500">{o.saat}</span>
-                <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ background: phaseColor(o.phase) }} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[12px] font-semibold text-white">{o.tip}</p>
-                    {o.tamamlandi && (
-                      <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">Tamam</span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-slate-500">{o.musteri}{o.urun ? " · " + o.urun : ""}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          {atelye.bugunOperasyon > 0 && (
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-white/5 bg-white/5 px-3 py-2">
-              <span className="text-[11px] text-slate-500">
-                {atelye.bugunOperasyon - atelye.bekleyenOperasyon}/{atelye.bugunOperasyon} görev tamamlandı
-              </span>
-              <span className={`text-[11px] font-semibold ${atelye.bekleyenOperasyon === 0 ? "text-emerald-400" : "text-amber-400"}`}>
-                {atelye.bekleyenOperasyon === 0 ? "Tümü tamam" : `${atelye.bekleyenOperasyon} aktif`}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ── 2. AKTİF OPERASYON STRIP — sadece aktif varsa ───────────────── */}
-        {aktifEkip.length > 0 && (
-          <div>
-            <div className="mb-2.5 flex items-center justify-between">
-              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Aktif Operasyon</p>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                <span className="text-[10px] font-semibold text-emerald-400">{liveToplamAktif} çalışıyor</span>
-                {liveToplamPaused > 0 && (
-                  <span className="text-[10px] font-semibold text-amber-400">· {liveToplamPaused} beklemede</span>
-                )}
-              </span>
-            </div>
-            <div
-              className="flex gap-3 overflow-x-auto pb-1"
-              style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
-            >
-              {aktifEkip.map((e) => (
-                <LiveCard
-                  key={e.execId}
-                  item={e}
-                  onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
-                />
+        {/* STICKY HEADER + SEGMENT CONTROL */}
+        <div className="sticky top-0 z-30 -mx-3 border-b border-white/[0.06] bg-[#030712]/95 backdrop-blur-md">
+          <div className="px-4 pb-2 pt-3">
+            <p className="text-[9px] font-black uppercase tracking-[0.22em] text-blue-400">Metrix · Operasyon Merkezi</p>
+            <h1 className="mt-0.5 text-[17px] font-black tracking-[-0.02em] text-white">
+              {liveToplamBlocked > 0
+                ? "Dikkat gerektiren iş var."
+                : operasyonKpi.geciken > 0
+                ? "Geciken operasyon var."
+                : "Sistem normal."}
+            </h1>
+            <p className="mt-0.5 mb-3 text-[11px] text-slate-500">
+              {operasyonKpi.planlanan > 0 ? `Bugün ${operasyonKpi.planlanan} operasyon` : "Bugün plan yok"}
+              {liveToplamBlocked > 0 ? `, ${liveToplamBlocked} kritik takılı` : ""}
+              {vadesiGelenler.length > 0 ? `, ${vadesiGelenler.length} vadesi gelen ödeme` : ""}
+            </p>
+            <div className="flex gap-1 rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1">
+              {([
+                { id: "ops" as const, label: "Operasyon" },
+                { id: "commercial" as const, label: "Satış & Tahsilat" },
+                { id: "summary" as const, label: "Özet" },
+              ]).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveMobileDashboardTab(tab.id)}
+                  className={`flex-1 rounded-xl py-2 text-[12px] font-bold transition-all duration-150 ${
+                    activeMobileDashboardTab === tab.id
+                      ? tab.id === "ops"
+                        ? "bg-blue-500 text-white"
+                        : tab.id === "commercial"
+                        ? "bg-violet-500 text-white"
+                        : "bg-emerald-500 text-white"
+                      : "text-slate-400"
+                  }`}
+                >
+                  {tab.label}
+                </button>
               ))}
-              {/* Sağ tarafta hafif fade — peek hissi */}
-              <div className="flex-shrink-0" style={{ minWidth: 8 }} />
             </div>
           </div>
-        )}
+        </div>
 
-        {/* ── 3. CANLI AKIŞ — geçmiş hareketler ───────────────────────────── */}
-        <div className="rounded-2xl border border-blue-500/15 bg-[#090f1d] p-4">
-          <div className="mb-4 flex items-start justify-between gap-2">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-blue-400">Canli Akis</p>
-              <p className="mt-0.5 text-base font-bold text-white">Ekip Hareketleri</p>
-            </div>
-            <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-400">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              Canli
-            </span>
-          </div>
-          {anaAkis.length === 0 && (
-            <EmptyState
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}
-              title="Henüz aktivite yok"
-              description="İşlemler başladıkça burada görünecek."
-            />
-          )}
-          <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
-            {anaAkis.map((a: any, i: number) => (
-              <div key={a.id || i} className="-mx-1 flex items-start gap-3 rounded-lg border-b border-white/5 px-1 py-3 last:border-0 transition-colors hover:bg-white/[0.03]">
-                <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full" style={{ background: activityColor(a.type) }} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] leading-snug text-slate-200">{a.message}</p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                    {a.actorAdi && (
-                      <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">{a.actorAdi}</span>
-                    )}
-                    <p className="text-[10px] uppercase tracking-wider text-slate-600">{a.type?.replace(/_/g, " ")}</p>
-                  </div>
+        <div className="pb-[calc(88px+env(safe-area-inset-bottom))]">
+          <OnboardingChecklist />
+
+          {/* ── OPERASYON SEGMENT ─────────────────────────────────────────────── */}
+          {activeMobileDashboardTab === "ops" && (
+            <div className="space-y-3 pt-3" data-onboarding-target="is-programi">
+
+              {/* KPI 2x2 grid */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4" style={{ minHeight: 88 }}>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Bugünkü Plan</p>
+                  <p className="mt-2 text-[32px] font-black leading-none tabular-nums text-white">{operasyonKpi.planlanan}</p>
+                  <p className="mt-1 text-[10px] text-slate-600">operasyon</p>
                 </div>
-                <span className="flex-shrink-0 whitespace-nowrap text-[10px] text-slate-600">{timeAgo(a.createdAt)}</span>
+                <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.07] p-4" style={{ minHeight: 88 }}>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Aktif</p>
+                  <p className="mt-2 text-[32px] font-black leading-none tabular-nums text-blue-300">{liveToplamAktif || operasyonKpi.islemde}</p>
+                  <p className="mt-1 text-[10px] text-slate-600">{liveToplamPaused > 0 ? `${liveToplamPaused} beklemede` : "çalışıyor"}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4" style={{ minHeight: 88 }}>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Tamamlanan</p>
+                  <p className="mt-2 text-[32px] font-black leading-none tabular-nums text-emerald-300">{operasyonKpi.tamamlanan}</p>
+                  <p className="mt-1 text-[10px] text-slate-600">bitti</p>
+                </div>
+                <div className={`rounded-2xl border p-4 ${operasyonKpi.geciken > 0 ? "border-red-500/20 bg-red-500/[0.07]" : "border-white/10 bg-white/[0.03]"}`} style={{ minHeight: 88 }}>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Geciken</p>
+                  <p className={`mt-2 text-[32px] font-black leading-none tabular-nums ${operasyonKpi.geciken > 0 ? "text-red-300" : "text-slate-500"}`}>{operasyonKpi.geciken}</p>
+                  <p className="mt-1 text-[10px] text-slate-600">{operasyonKpi.geciken > 0 ? "kontrol et" : "sorun yok"}</p>
+                </div>
               </div>
-            ))}
-          </div>
-          {anaAkis.length > 0 && (
-            <p className="mt-3 text-center text-[10px] text-slate-700">Son 5 is gunu · {anaAkis.length} hareket</p>
-          )}
-        </div>
 
-        {/* ── 4. TAKİLAN İŞLER ─────────────────────────────────────────────── */}
-        {blockedItems.length > 0 && (
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[11px] uppercase tracking-[0.12em] text-red-400">Takılan İşler</p>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                <span className="text-[10px] font-semibold text-red-400">{liveToplamBlocked} takılı</span>
-              </span>
-            </div>
-            <div className="space-y-2">
-              {blockedItems.map((item) => {
-                const phaseLabel =
-                  item.phaseType === "IMALAT" ? "İmalat" :
-                  item.phaseType === "MONTAJ" ? "Montaj" : "Ölçü";
-                const phaseCls =
-                  item.phaseType === "IMALAT" ? "bg-amber-500/15 text-amber-400" :
-                  item.phaseType === "MONTAJ" ? "bg-emerald-500/15 text-emerald-400" :
-                  "bg-blue-500/15 text-blue-400";
-                const reasonLabel = item.cannotStartReason
-                  ? (CANNOT_START_REASON_LABELS[item.cannotStartReason] ?? item.cannotStartReason)
-                  : null;
-                const hasCost = item.materialLossCost && Number(item.materialLossCost) > 0;
-                const blockedHours = item.elapsedBlockedMinutes >= 60
-                  ? `${Math.floor(item.elapsedBlockedMinutes / 60)} sa ${item.elapsedBlockedMinutes % 60} dk`
-                  : `${item.elapsedBlockedMinutes} dk`;
+              {/* Takılan İşler — alarm first */}
+              {blockedItems.length > 0 && (
+                <div className="overflow-hidden rounded-2xl border border-red-500/25 bg-red-500/[0.06]">
+                  <div className="flex items-center justify-between border-b border-red-500/15 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-red-400">Takılan İşler</p>
+                    </div>
+                    <span className="rounded-full border border-red-500/25 bg-red-500/10 px-2.5 py-1 text-[10px] font-black text-red-400">{liveToplamBlocked} kritik</span>
+                  </div>
+                  {blockedItems.slice(0, 3).map((item) => {
+                    const reasonLabel = item.cannotStartReason ? (CANNOT_START_REASON_LABELS[item.cannotStartReason] ?? item.cannotStartReason) : "Kontrol gerekli";
+                    const bh = item.elapsedBlockedMinutes >= 60 ? `${Math.floor(item.elapsedBlockedMinutes / 60)}sa ${item.elapsedBlockedMinutes % 60}dk` : `${item.elapsedBlockedMinutes}dk`;
+                    return (
+                      <button key={item.execId}
+                        onClick={() => setLiveTask({ id: item.phaseId, phase: item.phaseType, title: item.musteriAdi, subtitle: item.urunAdi, completed: false, schedule: {} })}
+                        className="flex w-full items-center justify-between gap-3 border-b border-red-500/10 px-4 py-3.5 text-left last:border-0 active:bg-red-500/10">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-bold text-white">{item.musteriAdi}</p>
+                          <p className="mt-0.5 text-[11px] text-red-300/80">{reasonLabel}</p>
+                        </div>
+                        <p className={`flex-shrink-0 text-[12px] font-black tabular-nums text-red-300 ${item.elapsedBlockedMinutes >= 240 ? "animate-pulse" : ""}`}>{bh}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
-                return (
-                  <button
-                    key={item.execId}
-                    onClick={() => setLiveTask({ id: item.phaseId, phase: item.phaseType, title: item.musteriAdi, subtitle: item.urunAdi, completed: false, schedule: {} })}
-                    className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 cursor-pointer text-left transition-colors active:scale-[0.98] ${
-                      item.elapsedBlockedMinutes >= 240
-                        ? "border-red-500/40 bg-red-500/[0.08] hover:border-red-500/50 hover:bg-red-500/[0.12]"
-                        : item.elapsedBlockedMinutes >= 120
-                        ? "border-red-500/25 bg-red-500/[0.06] hover:border-red-500/35 hover:bg-red-500/[0.09]"
-                        : "border-red-500/15 bg-red-500/[0.04] hover:border-red-500/25 hover:bg-red-500/[0.07]"
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${phaseCls}`}>
-                          {phaseLabel}
-                        </span>
-                        <p className="truncate text-[12px] font-bold text-white">{item.musteriAdi}</p>
+              {/* Aktif Operasyon carousel */}
+              {aktifEkip.length > 0 && (
+                <div>
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-blue-400">Aktif Operasyonlar</p>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                      <span className="text-[10px] font-bold text-emerald-400">{liveToplamAktif} çalışıyor</span>
+                    </span>
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto pb-1"
+                    style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+                    {aktifEkip.map((e) => (
+                      <LiveCard key={e.execId} item={e}
+                        onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })} />
+                    ))}
+                    <div className="flex-shrink-0" style={{ minWidth: 8 }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Bugünün Programı */}
+              <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03]">
+                <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">Bugünün Programı</p>
+                  <Link href="/dashboard/is-programi" className="text-[11px] font-bold text-blue-400">Tümü</Link>
+                </div>
+                {operasyonPlan.length === 0 ? (
+                  <div className="px-4 py-6 text-center">
+                    <p className="text-[12px] text-slate-500">Bugün için plan yok.</p>
+                    <Link href="/dashboard/is-programi" className="mt-2 inline-block rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-[11px] font-bold text-slate-400">İş Programı</Link>
+                  </div>
+                ) : (
+                  operasyonPlan.slice(0, 8).map((o: any) => (
+                    <div key={o.id} className="flex items-center gap-3 border-b border-white/[0.04] px-4 py-3 last:border-0">
+                      <span className="w-10 flex-shrink-0 text-[11px] font-black tabular-nums text-slate-500">{o.saat}</span>
+                      <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ background: phaseColor(o.phase) }} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-bold text-white">{o.tip}</p>
+                        <p className="mt-0.5 truncate text-[10px] text-slate-500">{o.musteri}{o.urun ? " · " + o.urun : ""}</p>
                       </div>
-                      {reasonLabel && (
-                        <p className="mt-0.5 text-[10px] text-red-300/70">{reasonLabel}</p>
-                      )}
-                      {hasCost && (
-                        <p className="mt-0.5 text-[10px] font-bold text-red-400">
-                          ₺{Number(item.materialLossCost).toLocaleString("tr-TR")} maliyet
-                        </p>
+                      {o.tamamlandi && (
+                        <span className="flex-shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black text-emerald-400">Tamam</span>
                       )}
                     </div>
-                    <div className="flex-shrink-0 text-right">
-                      <p className={`text-[11px] font-bold tabular-nums ${item.elapsedBlockedMinutes >= 240 ? "animate-pulse text-red-300" : "text-red-300"}`}>{blockedHours}</p>
-                      <p className="text-[9px] text-red-500/50">takılı</p>
-                      {item.elapsedBlockedMinutes >= 240 && (
-                        <span className="mt-0.5 inline-block rounded-md bg-red-500/20 px-1.5 py-0.5 text-[8px] font-bold text-red-400 animate-pulse">Acil</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                  ))
+                )}
+              </div>
 
-        {/* ── 5. TAHSİLAT ──────────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-amber-500/15 bg-[#0B1120] p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-amber-600">Tahsilat</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">Vadesi Gelen Odemeler</p>
+              {/* Canlı Akış — compact */}
+              {anaAkis.length > 0 && (
+                <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03]">
+                  <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">Canlı Akış</p>
+                  </div>
+                  {anaAkis.slice(0, 5).map((a: any, i: number) => (
+                    <div key={a.id || i} className="flex items-start gap-3 border-b border-white/[0.04] px-4 py-2.5 last:border-0">
+                      <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: activityColor(a.type) }} />
+                      <p className="flex-1 text-[11px] leading-snug text-slate-300">{a.message}</p>
+                      <span className="flex-shrink-0 text-[10px] text-slate-600">{timeAgo(a.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <Link href="/dashboard/tahsilatlar" className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-400 transition-colors hover:text-white">
-              Tumu
-            </Link>
-          </div>
-          {vadesiGelenler.length === 0 && (
-            <EmptyState
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>}
-              title="Vadesi gelen ödeme yok"
-              description="Tüm ödemeler zamanında."
-            />
           )}
-          <div className="space-y-0">
-            {vadesiGelenler.map((v: any) => {
-              const phone = phoneClean(v.musteriTelefon);
-              const isGecmis = v.durum === "gecmis";
-              const aiPayload = {
-                musteriAdi: v.musteriAdi,
-                tutar: v.tutar,
-                vadeTarihi: v.vadeTarihi,
-                gecenGun: v.gecenGun,
-                teklifNo: v.teklifNo,
-              };
-              return (
-                <div key={v.id} className="border-b border-white/5 py-3 last:border-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] font-semibold text-white">{v.musteriAdi}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-600">
-                        {new Date(v.vadeTarihi).toLocaleDateString("tr-TR")}{v.teklifNo ? " · " + v.teklifNo : ""}
-                      </p>
+
+          {/* ── SATIŞ & TAHSİLAT SEGMENT ──────────────────────────────────────── */}
+          {activeMobileDashboardTab === "commercial" && (
+            <div className="space-y-3 pt-3">
+
+              {/* Commercial KPI row */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.07] p-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Sıcak Teklif</p>
+                  <p className="mt-1.5 text-[18px] font-black leading-none tabular-nums text-violet-300">{sicakTeklifler.length}</p>
+                  <p className="mt-1 text-[9px] text-slate-600">takipte</p>
+                </div>
+                <div className={`rounded-2xl border p-3 ${vadesiGelenler.length > 0 ? "border-amber-500/20 bg-amber-500/[0.07]" : "border-white/10 bg-white/[0.03]"}`}>
+                  <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Nakit Risk</p>
+                  <p className={`mt-1.5 text-[18px] font-black leading-none tabular-nums ${vadesiGelenler.length > 0 ? "text-amber-300" : "text-slate-500"}`}>{vadesiGelenler.length}</p>
+                  <p className="mt-1 text-[9px] text-slate-600">ödeme</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Aylık Satış</p>
+                  <p className="mt-1.5 text-[18px] font-black leading-none tabular-nums text-emerald-300">{"₺" + fmt(aylikFinans.verilen)}</p>
+                  <p className="mt-1 text-[9px] text-slate-600">{`%${aylikFinans.donusumOrani} dön.`}</p>
+                </div>
+              </div>
+
+              {/* Sıcak Teklifler */}
+              <div className="overflow-hidden rounded-2xl border border-violet-500/15 bg-white/[0.03]">
+                <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-violet-400">Sıcak Teklifler</p>
+                  <Link href="/dashboard/isler" className="text-[11px] font-bold text-violet-400">Tümü</Link>
+                </div>
+                {sicakTeklifler.length === 0 ? (
+                  <div className="px-4 py-6 text-center">
+                    <p className="text-[12px] text-slate-500">Takip gerektiren teklif yok.</p>
+                  </div>
+                ) : (
+                  sicakTeklifler.slice(0, 5).map((t: any) => {
+                    const score = teklifSicaklikSkoru(t);
+                    const heat = sicaklikMeta(score);
+                    const phone = phoneClean(t.telefon);
+                    const aiPayload = {
+                      musteriAdi: t.musteri,
+                      tutar: t.tutar,
+                      goruntulenme: t.goruntulenme,
+                      pdf: t.pdf,
+                      aksiyonTipi: t.aksiyonTipi,
+                      aksiyonSaati: t.aksiyonSaati,
+                      ihtimal: score,
+                    };
+                    return (
+                      <div key={t.teklifNo} className="border-b border-white/[0.04] px-4 py-3.5 last:border-0">
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] font-bold text-white">{t.musteri || "Müşteri"}</p>
+                            <p className="mt-0.5 truncate text-[10px] text-slate-500">{t.urun || t.teklifNo || ""}</p>
+                          </div>
+                          <div className="flex-shrink-0 text-right">
+                            <p className={`text-[13px] font-black ${heat.text}`}>%{score}</p>
+                            <p className="text-[10px] text-slate-500">{"₺" + fmt(t.tutar)}</p>
+                          </div>
+                        </div>
+                        <div className="mb-2.5 h-1 w-full overflow-hidden rounded-full bg-white/10">
+                          <div className={`h-full rounded-full ${heat.bar}`} style={{ width: `${score}%` }} />
+                        </div>
+                        {phone.length > 0 && (
+                          <AiWaButon label="WhatsApp" phone={phone} payload={aiPayload} tip="satis"
+                            className="rounded-lg border border-emerald-500/20 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-bold text-emerald-400 active:bg-emerald-500/25" />
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Vadesi Gelen Tahsilatlar */}
+              <div className="overflow-hidden rounded-2xl border border-amber-500/15 bg-white/[0.03]">
+                <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-400">Vadesi Gelen Tahsilatlar</p>
+                  <Link href="/dashboard/tahsilatlar" className="text-[11px] font-bold text-amber-400">Tümü</Link>
+                </div>
+                {vadesiGelenler.length === 0 ? (
+                  <div className="px-4 py-6 text-center">
+                    <p className="text-[12px] text-emerald-400">Tüm ödemeler zamanında.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="border-b border-white/[0.04] px-4 py-3">
+                      <p className="text-[11px] text-slate-500">Toplam Tutar</p>
+                      <p className="mt-0.5 text-[22px] font-black tabular-nums text-amber-300">{"₺" + fmt(vadesiGelenToplam)}</p>
                     </div>
-                    <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
-                      <p className={"text-[13px] font-black " + (isGecmis ? "text-red-400" : "text-amber-400")}>{"₺" + fmt(v.tutar)}</p>
-                      {isGecmis ? (
-                        <span className="rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-400">{v.gecenGun}g gecti</span>
-                      ) : (
-                        <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-400">Bugun</span>
-                      )}
+                    {vadesiGelenler.slice(0, 5).map((v: any) => {
+                      const phone = phoneClean(v.musteriTelefon);
+                      const isGecmis = v.durum === "gecmis";
+                      const aiPayload = {
+                        musteriAdi: v.musteriAdi,
+                        tutar: v.tutar,
+                        vadeTarihi: v.vadeTarihi,
+                        gecenGun: v.gecenGun,
+                        teklifNo: v.teklifNo,
+                      };
+                      return (
+                        <div key={v.id} className="flex items-center justify-between gap-3 border-b border-white/[0.04] px-4 py-3 last:border-0">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12px] font-bold text-white">{v.musteriAdi}</p>
+                            <p className="mt-0.5 text-[10px] text-slate-500">{new Date(v.vadeTarihi).toLocaleDateString("tr-TR")}</p>
+                          </div>
+                          <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
+                            <p className={`text-[13px] font-black ${isGecmis ? "text-red-400" : "text-amber-400"}`}>{"₺" + fmt(v.tutar)}</p>
+                            {phone.length > 0 ? (
+                              <AiWaButon label="WA" phone={phone} payload={aiPayload} tip="tahsilat"
+                                className="rounded-lg border border-amber-500/20 bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold text-amber-400 active:bg-amber-500/25" />
+                            ) : (
+                              <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${isGecmis ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"}`}>
+                                {isGecmis ? `${v.gecenGun}g gecti` : "Bugün"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+
+              {/* Ticari mini yorum */}
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <p className="text-[11px] leading-relaxed text-slate-500">
+                  {vadesiGelenler.length > 0 && sicakTeklifler.length > 0
+                    ? "Nakit tarafında takip gerektiren ödeme var. Satış tarafında takip edilecek fırsatlar mevcut."
+                    : vadesiGelenler.length > 0
+                    ? "Nakit tarafında takip gerektiren ödeme var."
+                    : sicakTeklifler.length > 0
+                    ? "Satış tarafında takip edilecek fırsatlar var."
+                    : "Ticari sinyaller işler biriktikçe güçlenir."}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── ÖZET SEGMENT ──────────────────────────────────────────────────── */}
+          {activeMobileDashboardTab === "summary" && (
+            <div className="space-y-3 pt-3">
+
+              {/* Sağlık Skoru */}
+              <div className="rounded-2xl border border-emerald-500/15 bg-white/[0.03] p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-400">İşletme Sağlık Skoru</p>
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${
+                    operasyonSaglikSkoru >= 68
+                      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
+                      : operasyonSaglikSkoru >= 45
+                      ? "border-amber-400/30 bg-amber-500/10 text-amber-300"
+                      : "border-red-400/30 bg-red-500/10 text-red-300"
+                  }`}>{performansLabel}</span>
+                </div>
+                <div className="flex items-center gap-5">
+                  <div className="relative flex-shrink-0" style={{ width: 96, height: 54 }}>
+                    <svg width="96" height="54" viewBox="0 0 96 54" fill="none">
+                      <path d="M6 52 A42 42 0 0 1 90 52" stroke="rgba(255,255,255,0.06)" strokeWidth="8" strokeLinecap="round"/>
+                      <path d="M6 52 A42 42 0 0 1 90 52"
+                        stroke={operasyonSaglikSkoru >= 68 ? "#34d399" : operasyonSaglikSkoru >= 45 ? "#f59e0b" : "#f87171"}
+                        strokeWidth="8" strokeLinecap="round"
+                        strokeDasharray={`${(operasyonSaglikSkoru / 100) * 131.9} 131.9`}/>
+                    </svg>
+                    <div className="absolute bottom-0 left-0 right-0 text-center">
+                      <p className="text-[22px] font-black leading-none tabular-nums text-white">{operasyonSaglikSkoru}</p>
+                      <p className="text-[9px] text-slate-500">/100</p>
                     </div>
                   </div>
-                  <div className="mt-1.5">
-                    {phone.length > 0 ? (
-                      <AiWaButon
-                        label="WA Mesaj Gonder"
-                        phone={phone}
-                        payload={aiPayload}
-                        tip="tahsilat"
-                        className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-50 border border-amber-500/20"
-                      />
-                    ) : (
-                      <Link
-                        href={v.musteriId ? `/dashboard/musteriler?musteriId=${v.musteriId}&duzenle=1` : "/dashboard/musteriler"}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/60 px-2 py-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-                      >
-                        <span>Telefon kayitli degil</span>
-                        <span className="text-slate-600">· Ekle</span>
-                      </Link>
-                    )}
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-2">
+                      <p className="text-[9px] text-slate-500">Operasyon</p>
+                      <p className="mt-0.5 text-[15px] font-black leading-none tabular-nums text-blue-300">{Math.max(0, Math.min(100, 60 + operasyonKpi.tamamlanan * 3 - operasyonKpi.geciken * 5 - liveToplamBlocked * 8))}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-2">
+                      <p className="text-[9px] text-slate-500">Satış</p>
+                      <p className="mt-0.5 text-[15px] font-black leading-none tabular-nums text-violet-300">{Math.max(0, Math.min(100, 55 + sicakTeklifler.length * 5 + aylikFinans.donusumOrani))}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-2">
+                      <p className="text-[9px] text-slate-500">Tahsilat</p>
+                      <p className="mt-0.5 text-[15px] font-black leading-none tabular-nums text-amber-300">{Math.max(0, Math.min(100, 80 - vadesiGelenler.length * 6))}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-2">
+                      <p className="text-[9px] text-slate-500">Verimlilik</p>
+                      <p className="mt-0.5 text-[15px] font-black leading-none tabular-nums text-emerald-300">{Math.max(0, Math.min(100, 58 + (liveToplamAktif || operasyonKpi.islemde || 0) * 4 - liveToplamPaused * 3))}</p>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+              </div>
 
-        {/* ── 6. SICAK SATIŞLAR ────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-emerald-500/15 bg-[#08111f] p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-emerald-500">Satis Skoru</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">Takip Edilmesi Gerekenler</p>
-            </div>
-            <Link href="/dashboard/isler" className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-400 transition-colors hover:text-white">
-              Tumu
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {sicakTeklifler.length === 0 && (
-              <EmptyState
-                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>}
-                title="Takip gerektiren teklif yok"
-                description="Aktif teklifler burada listelenecek."
-                action={{ label: "İşlere Git", href: "/dashboard/isler" }}
-              />
-            )}
-            {sicakTeklifler.map((t: any) => {
-              const score = Number(t.ihtimal || 0);
-              const phone = phoneClean(t.telefon);
-              const borderColor = score >= 85 ? "border-red-500/40" : score >= 65 ? "border-amber-500/30" : "border-white/10";
-              const badgeBg = score >= 85 ? "bg-red-500/15 text-red-400" : score >= 65 ? "bg-amber-500/15 text-amber-400" : "bg-slate-800 text-slate-400";
-              const badgeLabel = score >= 85 ? "Cok Sicak" : score >= 65 ? "Sicak" : "Takip";
-              const aiPayload = {
-                musteri: t.musteri,
-                tutar: t.tutar,
-                goruntulenme: t.goruntulenme,
-                pdf: t.pdf,
-                aksiyonTipi: t.aksiyonTipi,
-                aksiyonSaati: t.aksiyonSaati,
-                ihtimal: score,
-              };
-              return (
-                <div key={t.teklifNo} className={"rounded-xl border " + borderColor + " bg-[#0B1120] p-3"}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-white">{t.musteri}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">{t.teklifNo}</p>
-                    </div>
-                    <div className="flex flex-shrink-0 flex-col items-end gap-1">
-                      <span className={"rounded-lg px-2 py-0.5 text-[11px] font-bold " + badgeBg}>
-                        %{score} · {badgeLabel}
+              {/* Bu Ay Özeti 2x2 */}
+              <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03]">
+                <div className="border-b border-white/[0.06] px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">Bu Ay Özeti</p>
+                </div>
+                <div className="grid grid-cols-2 divide-x divide-y divide-white/[0.06]">
+                  <div className="p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Satış</p>
+                    <p className="mt-2 text-[20px] font-black leading-none tabular-nums text-white">{"₺" + fmt(aylikFinans.verilen)}</p>
+                    <p className="mt-1 text-[10px] text-slate-600">{aylikFinans.teklifSayisi} teklif</p>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Onaylanan</p>
+                    <p className="mt-2 text-[20px] font-black leading-none tabular-nums text-emerald-300">{"₺" + fmt(aylikFinans.onaylanan)}</p>
+                    <p className="mt-1 text-[10px] text-slate-600">{`%${aylikFinans.donusumOrani} dönüşüm`}</p>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Tamamlanan</p>
+                    <p className="mt-2 text-[20px] font-black leading-none tabular-nums text-blue-300">{operasyonKpi.tamamlanan}</p>
+                    <p className="mt-1 text-[10px] text-slate-600">operasyon</p>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Tahsilat Riski</p>
+                    <p className={`mt-2 text-[20px] font-black leading-none tabular-nums ${vadesiGelenToplam > 0 ? "text-amber-300" : "text-emerald-300"}`}>{"₺" + fmt(vadesiGelenToplam)}</p>
+                    <p className="mt-1 text-[10px] text-slate-600">{vadesiGelenler.length} ödeme</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Riskler & Fırsatlar */}
+              <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03]">
+                <div className="border-b border-white/[0.06] px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">Riskler & Fırsatlar</p>
+                </div>
+                <div className="divide-y divide-white/[0.04]">
+                  {blockedItems.length > 0 && (
+                    <button onClick={() => setActiveMobileDashboardTab("ops")} className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-white/[0.03]">
+                      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                       </span>
-                      <p className="text-[11px] font-semibold text-white">{"₺" + fmt(t.tutar)}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-white">{blockedItems.length} takılan iş</p>
+                        <p className="text-[11px] text-slate-500">Acil kontrol gerekiyor</p>
+                      </div>
+                      <span className="text-slate-600">›</span>
+                    </button>
+                  )}
+                  {operasyonKpi.geciken > 0 && (
+                    <button onClick={() => setActiveMobileDashboardTab("ops")} className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-white/[0.03]">
+                      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-amber-500/25 bg-amber-500/10">
+                        <span className="h-2 w-2 rounded-full bg-amber-500" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-white">{operasyonKpi.geciken} geciken operasyon</p>
+                        <p className="text-[11px] text-slate-500">Program takibi gerekiyor</p>
+                      </div>
+                      <span className="text-slate-600">›</span>
+                    </button>
+                  )}
+                  {vadesiGelenler.length > 0 && (
+                    <button onClick={() => setActiveMobileDashboardTab("commercial")} className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-white/[0.03]">
+                      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-amber-500/25 bg-amber-500/10">
+                        <span className="h-2 w-2 rounded-full bg-amber-400" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-white">{vadesiGelenler.length} vadesi gelen ödeme</p>
+                        <p className="text-[11px] text-slate-500">{"₺" + fmt(vadesiGelenToplam)} nakit takibi</p>
+                      </div>
+                      <span className="text-slate-600">›</span>
+                    </button>
+                  )}
+                  {sicakTeklifler.length > 0 && (
+                    <button onClick={() => setActiveMobileDashboardTab("commercial")} className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-white/[0.03]">
+                      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-500/10">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-white">{sicakTeklifler.length} sıcak teklif</p>
+                        <p className="text-[11px] text-slate-500">Satış fırsatı takipte</p>
+                      </div>
+                      <span className="text-slate-600">›</span>
+                    </button>
+                  )}
+                  {blockedItems.length === 0 && operasyonKpi.geciken === 0 && vadesiGelenler.length === 0 && sicakTeklifler.length === 0 && (
+                    <div className="px-4 py-6 text-center">
+                      <p className="text-[12px] text-emerald-400">Risk göstergesi yok. İşletme dengeli.</p>
                     </div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="rounded-md bg-slate-800/80 px-2 py-0.5 text-[10px] text-slate-400">{t.goruntulenme}x goruntulendi</span>
-                    <span className="rounded-md bg-blue-950/60 px-2 py-0.5 text-[10px] text-blue-400">PDF {t.pdf}x</span>
-                    {t.aksiyonMesaji && (
-                      <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-400">{t.aksiyonMesaji}</span>
-                    )}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {t.aksiyonTipi === "ara" && phone.length > 0 && (
-                      <a href={telHref(phone)} className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white">
-                        Hemen Ara
-                      </a>
-                    )}
-                    <AiWaButon
-                      label="AI WhatsApp"
-                      phone={phone}
-                      payload={aiPayload}
-                      tip="satis"
-                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600/90 px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-60"
-                    />
-                    <Link href="/dashboard/isler" className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">
-                      Detay
-                    </Link>
-                  </div>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
+              </div>
 
-        {/* ── 6. FİNANS — compact, at bottom ──────────────────────────────── */}
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Finans Ozeti</p>
-          <div className="flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
-            <button
-              onClick={() => setSekme("aylik")}
-              className={"rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all " + (sekme === "aylik" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white")}
-            >
-              Bu Ay
-            </button>
-            <button
-              onClick={() => setSekme("yillik")}
-              className={"rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all " + (sekme === "yillik" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white")}
-            >
-              Bu Yil
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          {kartlar.map((k) => (
-            <div key={k.label} className={"rounded-2xl border " + k.border + " bg-[#0B1120] p-3"}>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{k.label}</p>
-              <p className={"mt-1.5 text-xl font-black leading-none " + k.color}>{"₺" + fmt(k.val)}</p>
-              <p className="mt-1 text-[10px] text-slate-600">{k.sub}</p>
+              {/* Mini İçgörüler */}
+              <div className="space-y-2.5 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <p className="mb-3 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">İşletme İçgörüleri</p>
+                {(([
+                  liveToplamBlocked === 0 && operasyonKpi.geciken === 0 ? "Operasyon tarafında darboğaz görünmüyor." : null,
+                  liveToplamBlocked > 0 ? `${liveToplamBlocked} takılan iş verimlilik düşürüyor.` : null,
+                  vadesiGelenler.length > 0 ? "Vadesi gelen ödemeler nakit takibi gerektiriyor." : "Nakit akışında vadesi gelen ödeme yok.",
+                  sicakTeklifler.length > 0 ? `${sicakTeklifler.length} sıcak teklif satış fırsatı oluşturuyor.` : "Aktif sıcak teklif takibi yok.",
+                  aylikFinans.donusumOrani > 0 ? `Bu ay %${aylikFinans.donusumOrani} dönüşüm oranı.` : null,
+                ]) as (string | null)[]).filter((t): t is string => t !== null).map((text, i) => (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-600" />
+                    <p className="text-[12px] leading-relaxed text-slate-400">{text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
         </div>
-
-        <div className="rounded-2xl border border-white/10 bg-[#0B1120] p-4">
-          <p className="mb-3 text-[11px] uppercase tracking-[0.12em] text-slate-500">Teklif dagilimi</p>
-          <div className="flex h-2.5 w-full overflow-hidden rounded-full">
-            <div style={{ width: onayPct + "%", background: "#22c55e" }} className="transition-all duration-700" />
-            <div style={{ width: devamPct + "%", background: "#3b82f6" }} className="transition-all duration-700" />
-            <div style={{ width: kaybPct + "%", background: "#ef4444" }} className="transition-all duration-700" />
-          </div>
-          <div className="mt-3 flex flex-wrap gap-3">
-            {[
-              { color: "#22c55e", label: "Onaylanan", pct: onayPct },
-              { color: "#3b82f6", label: "Devam", pct: devamPct },
-              { color: "#ef4444", label: "Kaybedilen", pct: kaybPct },
-            ].map((l) => (
-              <span key={l.label} className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ background: l.color }} />
-                {l.label} %{l.pct}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        </div>{/* space-y-4 wrapper */}
       </div>
 
       {liveTask && (
