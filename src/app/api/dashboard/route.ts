@@ -13,6 +13,24 @@ function phaseLabel(phase: string) {
   return map[phase] || phase;
 }
 
+function riskTypeForCannotStart(reasonCode: string | null) {
+  const map: Record<string, string> = {
+    STONE_BROKEN_IN_CUTTING: "MATERIAL_LOSS",
+    MATERIAL_MISSING: "MATERIAL_DELAY",
+    PERSONNEL_UNAVAILABLE: "CAPACITY_RISK",
+    MACHINE_BUSY: "MACHINE_CAPACITY",
+    CUSTOMER_NOT_READY: "CUSTOMER_DELAY",
+    SITE_NOT_READY: "SITE_DELAY",
+  };
+  return reasonCode ? (map[reasonCode] ?? "OPERATION_BLOCKED") : "OPERATION_BLOCKED";
+}
+
+function numericValue(value: unknown) {
+  if (value == null) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function getAuthAtolyeId() {
   const cookieStore = await cookies();
   const token = cookieStore.get("metrix-token")?.value;
@@ -295,6 +313,38 @@ export async function GET() {
       }
     });
 
+    const riskSignals = anaAkis
+      .filter((a) => a.eventType === "EXECUTION_CANNOT_START")
+      .map((a) => {
+        const metadata = a.metadata && typeof a.metadata === "object" ? a.metadata as Record<string, unknown> : {}
+        const reasonCode = typeof metadata.reasonCode === "string" ? metadata.reasonCode : null
+        const costAmount = numericValue(metadata.costAmount) ?? numericValue(metadata.materialLossCost)
+        const currency = typeof metadata.currency === "string" ? metadata.currency : null
+        const jobName = typeof metadata.jobName === "string" ? metadata.jobName : null
+        const customerName = typeof metadata.customerName === "string" ? metadata.customerName : null
+        const phaseType = typeof metadata.phaseType === "string" ? metadata.phaseType : null
+        const hasFinancialRisk = costAmount != null && costAmount > 0
+
+        return {
+          id: `risk_${a.id}`,
+          riskType: riskTypeForCannotStart(reasonCode),
+          severity: hasFinancialRisk ? "critical" : (a.severity ?? "warning"),
+          title: a.title ?? "İşleme başlanamadı",
+          message: a.message,
+          reasonCode,
+          costAmount,
+          currency,
+          jobName,
+          customerName,
+          phaseType,
+          url: a.url,
+          sourceActivityId: a.id,
+          sourceEventType: a.eventType,
+          createdAt: a.createdAt,
+        }
+      })
+      .slice(0, 10);
+
     // --- BUGÜNÜN PLANI ---
     const schedulePhases = await prisma.schedulePhase.findMany({
       where: {
@@ -475,6 +525,7 @@ export async function GET() {
       },
       sicakTeklifler,
       anaAkis,
+      riskSignals,
       operasyonPlan,
       operasyonKpi,
       vadesiGelenler,

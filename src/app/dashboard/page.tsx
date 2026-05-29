@@ -41,6 +41,24 @@ type BlockedItem = {
   elapsedBlockedMinutes: number;
 };
 
+type RiskSignal = {
+  id: string;
+  riskType: string;
+  severity: string;
+  title: string;
+  message: string;
+  reasonCode: string | null;
+  costAmount: number | null;
+  currency: string | null;
+  jobName: string | null;
+  customerName: string | null;
+  phaseType: string | null;
+  url: string | null;
+  sourceActivityId: string;
+  sourceEventType: string;
+  createdAt: string;
+};
+
 const CANNOT_START_REASON_LABELS: Record<string, string> = {
   CUSTOMER_NOT_READY:      "Müşteri hazır değil",
   MATERIAL_MISSING:        "Malzeme eksik",
@@ -50,6 +68,16 @@ const CANNOT_START_REASON_LABELS: Record<string, string> = {
   SITE_NOT_READY:          "Saha hazır değil",
   STONE_BROKEN_IN_CUTTING: "Kesimde taş kırıldı",
   OTHER:                   "Diğer",
+};
+
+const RISK_SIGNAL_LABELS: Record<string, string> = {
+  MATERIAL_LOSS: "Malzeme kaybı",
+  MATERIAL_DELAY: "Malzeme gecikmesi",
+  CAPACITY_RISK: "Kapasite riski",
+  MACHINE_CAPACITY: "Makine kapasitesi",
+  CUSTOMER_DELAY: "Müşteri bekleniyor",
+  SITE_DELAY: "Saha bekleniyor",
+  OPERATION_BLOCKED: "Operasyon riski",
 };
 
 // ─── Risk state config ────────────────────────────────────────────────────────
@@ -463,6 +491,7 @@ export default function DashboardPage() {
 
   const sicakTeklifler = useMemo(() => data?.sicakTeklifler || [], [data]);
   const anaAkis = useMemo(() => data?.anaAkis || [], [data]);
+  const riskSignals = useMemo<RiskSignal[]>(() => data?.riskSignals || [], [data]);
   const operasyonPlan = useMemo(() => data?.operasyonPlan || [], [data]);
   const operasyonKpi = useMemo(() => data?.operasyonKpi ?? { planlanan: 0, islemde: 0, tamamlanan: 0, geciken: 0 }, [data]);
   const aktifEkip = useMemo(() => liveOps?.aktifEkip ?? [], [liveOps]);
@@ -1806,6 +1835,49 @@ export default function DashboardPage() {
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">Riskler & Fırsatlar</p>
                 </div>
                 <div className="divide-y divide-white/[0.04]">
+                  {riskSignals.slice(0, 3).map((risk) => {
+                    const reasonLabel = risk.reasonCode ? (CANNOT_START_REASON_LABELS[risk.reasonCode] ?? risk.reasonCode) : null;
+                    const riskLabel = RISK_SIGNAL_LABELS[risk.riskType] ?? risk.riskType;
+                    const costAmount = risk.costAmount != null ? Number(risk.costAmount) : null;
+                    const hasCost = costAmount != null && Number.isFinite(costAmount) && costAmount > 0;
+
+                    return (
+                      <button
+                        key={risk.id}
+                        onClick={() => risk.url ? router.push(risk.url) : setActiveMobileDashboardTab("ops")}
+                        className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-white/[0.03]"
+                      >
+                        <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border ${
+                          risk.severity === "critical"
+                            ? "border-red-500/30 bg-red-500/10"
+                            : "border-amber-500/25 bg-amber-500/10"
+                        }`}>
+                          <span className={`h-2 w-2 rounded-full ${risk.severity === "critical" ? "animate-pulse bg-red-500" : "bg-amber-400"}`} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="truncate text-[13px] font-bold text-white">{riskLabel}</p>
+                            {hasCost && (
+                              <span className="rounded-full border border-red-500/25 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-black text-red-300">
+                                Finansal
+                              </span>
+                            )}
+                          </div>
+                          <p className="truncate text-[11px] text-slate-500">
+                            {reasonLabel ?? risk.message}
+                            {risk.jobName ? ` · ${risk.jobName}` : ""}
+                            {risk.customerName ? ` · ${risk.customerName}` : ""}
+                          </p>
+                          {hasCost && (
+                            <p className="mt-0.5 text-[10px] font-bold text-red-300">
+                              {`Risk tutarı: ${risk.currency === "TRY" || !risk.currency ? "₺" : risk.currency + " "}${fmt(costAmount ?? 0)}`}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-slate-600">›</span>
+                      </button>
+                    );
+                  })}
                   {blockedItems.length > 0 && (
                     <button onClick={() => setActiveMobileDashboardTab("ops")} className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-white/[0.03]">
                       <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10">
@@ -1854,7 +1926,7 @@ export default function DashboardPage() {
                       <span className="text-slate-600">›</span>
                     </button>
                   )}
-                  {blockedItems.length === 0 && operasyonKpi.geciken === 0 && vadesiGelenler.length === 0 && sicakTeklifler.length === 0 && (
+                  {riskSignals.length === 0 && blockedItems.length === 0 && operasyonKpi.geciken === 0 && vadesiGelenler.length === 0 && sicakTeklifler.length === 0 && (
                     <div className="px-4 py-6 text-center">
                       <p className="text-[12px] text-emerald-400">Risk göstergesi yok. İşletme dengeli.</p>
                     </div>
