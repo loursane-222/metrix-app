@@ -70,6 +70,24 @@ export async function PATCH(req: NextRequest) {
       }
     });
 
+    const prevPhotoUrl = phase.photoUrl ?? "";
+    const shouldAppendPhotoAdded = photoUrl !== undefined && prevPhotoUrl.trim() === "" && photoUrl !== prevPhotoUrl;
+    if (shouldAppendPhotoAdded) {
+      try {
+        await appendExecutionTimelineEvent({
+          schedulePhaseId: phaseId,
+          atolyeId: auth.atolyeId,
+          userId: auth.userId,
+          personelId: auth.personelId || null,
+          operationStep: phase.phase === "OLCU" ? "OLCU" : phase.phase === "MONTAJ" ? "MONTAJ" : "DIGER",
+          eventType: "PHOTO_ADDED",
+          metadata: { source: "phase-full" },
+          attachmentUrl: photoUrl,
+          attachmentType: "PHOTO",
+        });
+      } catch {}
+    }
+
     if (nextDate) {
       const tarihStr = nextDate.toLocaleDateString("tr-TR");
       const deepLink = `/dashboard/is-programi?phaseId=${phaseId}`;
