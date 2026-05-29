@@ -1,6 +1,7 @@
 import { getAtolyeAuth } from "@/lib/getAtolyeId"
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
+import { emitMetrixEvent } from "@/lib/events/emitMetrixEvent";
 import { appendExecutionTimelineEvent } from "@/lib/execution/events";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -86,6 +87,60 @@ export async function PATCH(req: NextRequest) {
           attachmentType: "PHOTO",
         });
       } catch {}
+
+      try {
+        const [actorPersonel, actorUser] = await Promise.all([
+          auth.personelId
+            ? prisma.personel.findUnique({
+                where: { id: auth.personelId },
+                select: { ad: true, soyad: true },
+              })
+            : Promise.resolve(null),
+          !auth.personelId && auth.userId
+            ? prisma.user.findUnique({
+                where: { id: auth.userId },
+                select: { ad: true },
+              })
+            : Promise.resolve(null),
+        ]);
+        const actorName = actorPersonel
+          ? `${actorPersonel.ad}${actorPersonel.soyad ? " " + actorPersonel.soyad : ""}`.trim()
+          : actorUser?.ad || null;
+        const jobName = phase.workSchedule.is.musteriAdi || phase.workSchedule.is.urunAdi || "İş";
+        const deepLink = `/dashboard/is-programi?phaseId=${phaseId}`;
+
+        await emitMetrixEvent({
+          atolyeId: auth.atolyeId,
+          type: "PHOTO_ADDED",
+          source: "schedule",
+          severity: "info",
+          entityType: "schedule_phase",
+          entityId: phaseId,
+          title: "Fotoğraf eklendi",
+          message: `${jobName} – ${fazAdi} fazına fotoğraf eklendi.`,
+          url: deepLink,
+          actorId: auth.personelId || auth.userId,
+          actorName,
+          actorUserId: auth.userId,
+          actorPersonelId: auth.personelId || null,
+          notify: true,
+          feed: true,
+          risk: false,
+          aiMemory: true,
+          payload: {
+            jobId: phase.workSchedule.isId,
+            jobName,
+            scheduleId: phase.workScheduleId,
+            phaseId,
+            phaseType: phase.phase,
+            photoUrl,
+            actorId: auth.personelId || auth.userId,
+            actorName,
+          },
+        });
+      } catch (error) {
+        console.warn("photo activity event failed:", error);
+      }
     }
 
     if (nextDate) {

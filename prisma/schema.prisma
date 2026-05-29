@@ -401,6 +401,17 @@ model ActivityLog {
   type      String
   message   String
   refId     String?
+  eventType String?
+  category  String?
+  severity  String?
+  source    String?
+  title     String?
+  url       String?
+  refType   String?
+  actorId   String?
+  actorName String?
+  attachmentUrl String?
+  metadata  Json?
   createdAt DateTime @default(now())
 
   @@index([atolyeId])
