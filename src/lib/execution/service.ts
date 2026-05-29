@@ -2,6 +2,7 @@ import { PhaseExecutionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { sseEmitter } from "@/lib/sseEmitter"
 import { logActivity } from "@/lib/activityLogger"
+import { emitMetrixEvent } from "@/lib/events/emitMetrixEvent"
 import { canTransition, eventTypeForTransition } from "./transitions"
 
 // ─── Working-hours constants (Istanbul UTC+3, fixed shift) ────────────────────
@@ -402,7 +403,12 @@ export async function transitionExecution(input: TransitionInput) {
         where: { id: execution.schedulePhaseId },
         select: {
           phase: true,
-          workSchedule: { select: { is: { select: { musteriAdi: true } } } },
+          workSchedule: {
+            select: {
+              isId: true,
+              is: { select: { musteriAdi: true, urunAdi: true } },
+            },
+          },
         },
       }),
       personelId
@@ -418,10 +424,12 @@ export async function transitionExecution(input: TransitionInput) {
 
     const fazLabel = FAZ_LABEL[phaseCtx?.phase ?? ""] ?? "faz"
     const musteriAdi = phaseCtx?.workSchedule?.is?.musteriAdi || "—"
+    const jobName = phaseCtx?.workSchedule?.is?.urunAdi || musteriAdi
     const actorLabel = actorName || "Atölye"
     const reasonSuffix = toStatus === "CANNOT_START" && cannotStartReason
       ? ` (${CANNOT_START_LABELS[cannotStartReason] ?? cannotStartReason})`
       : ""
+    const deepLink = `/dashboard/is-programi?phaseId=${execution.schedulePhaseId}`
 
     const MSG: Record<string, string> = {
       execution_started:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını başlattı`,
@@ -432,16 +440,95 @@ export async function transitionExecution(input: TransitionInput) {
       execution_cannot_start: `${actorLabel} — ${musteriAdi} ${fazLabel} fazı başlatılamadı${reasonSuffix}`,
     }
 
-    await logActivity({
-      atolyeId,
-      personelId: personelId ?? undefined,
-      userId: userId ?? undefined,
-      type: actType,
-      message: MSG[actType] ?? `${actorLabel} — ${musteriAdi} ${fazLabel} durumu değişti`,
-      refId: executionId,
-      url: `/dashboard/is-programi?phaseId=${execution.schedulePhaseId}`,
-      awaitPush: true,
-    })
+    const message = MSG[actType] ?? `${actorLabel} — ${musteriAdi} ${fazLabel} durumu değişti`
+    const actorId = personelId ?? userId ?? null
+
+    if (toStatus === "CANNOT_START") {
+      await emitMetrixEvent({
+        atolyeId,
+        type: "EXECUTION_CANNOT_START",
+        source: "execution",
+        severity: "warning",
+        entityType: "execution",
+        entityId: executionId,
+        title: "İşleme başlanamadı",
+        message,
+        url: deepLink,
+        actorId,
+        actorName: actorName ?? null,
+        actorUserId: userId ?? null,
+        actorPersonelId: personelId ?? null,
+        notify: true,
+        feed: true,
+        risk: true,
+        aiMemory: true,
+        payload: {
+          executionId,
+          schedulePhaseId: execution.schedulePhaseId,
+          phaseId: execution.schedulePhaseId,
+          phaseType: phaseCtx?.phase ?? execution.schedulePhase?.phase ?? null,
+          fromStatus,
+          toStatus,
+          reasonCode: cannotStartReason ?? null,
+          failureDescription: failureDescription ?? null,
+          materialLossCost: materialLossCost ?? null,
+          costType: materialLossCost != null ? "MATERIAL_LOSS" : null,
+          costAmount: materialLossCost ?? null,
+          currency: materialLossCost != null ? "TRY" : null,
+          actorId,
+          actorName: actorName ?? null,
+          jobId: phaseCtx?.workSchedule?.isId ?? null,
+          jobName,
+          customerName: musteriAdi,
+        },
+      })
+    } else if (toStatus === "COMPLETED") {
+      await emitMetrixEvent({
+        atolyeId,
+        type: "EXECUTION_COMPLETED",
+        source: "execution",
+        severity: "success",
+        entityType: "execution",
+        entityId: executionId,
+        title: "Faz tamamlandı",
+        message,
+        url: deepLink,
+        actorId,
+        actorName: actorName ?? null,
+        actorUserId: userId ?? null,
+        actorPersonelId: personelId ?? null,
+        notify: true,
+        feed: true,
+        risk: false,
+        aiMemory: true,
+        payload: {
+          executionId,
+          schedulePhaseId: execution.schedulePhaseId,
+          phaseId: execution.schedulePhaseId,
+          phaseType: phaseCtx?.phase ?? execution.schedulePhase?.phase ?? null,
+          fromStatus,
+          toStatus,
+          actualMinutes: updated.actualMinutes ?? null,
+          mtul: updated.mtul ?? null,
+          actorId,
+          actorName: actorName ?? null,
+          jobId: phaseCtx?.workSchedule?.isId ?? null,
+          jobName,
+          customerName: musteriAdi,
+        },
+      })
+    } else {
+      await logActivity({
+        atolyeId,
+        personelId: personelId ?? undefined,
+        userId: userId ?? undefined,
+        type: actType,
+        message,
+        refId: executionId,
+        url: deepLink,
+        awaitPush: true,
+      })
+    }
   } catch (error) {
     console.warn("execution activity notification failed:", error)
   }
