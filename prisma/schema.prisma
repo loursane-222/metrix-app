@@ -560,10 +560,28 @@ model PhaseExecutionEvent {
   note             String?
   metadata         Json?
 
+  actorType        String?
+  actorUserId      String?
+  actorPersonelId  String?
+  operationStep    String?
+  fromStatus       String?
+  toStatus         String?
+  reasonCode       String?
+  costType         String?
+  costAmount       Decimal?
+  currency         String?
+  attachmentUrl    String?
+  attachmentType   String?
+
   createdAt        DateTime       @default(now())
 
   @@index([phaseExecutionId])
   @@index([schedulePhaseId])
   @@index([atolyeId])
+  @@index([atolyeId, createdAt])
+  @@index([operationStep])
+  @@index([eventType])
+  @@index([actorPersonelId])
+  @@index([actorUserId])
   @@map("phase_execution_events")
 }
