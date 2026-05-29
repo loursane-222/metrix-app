@@ -21,6 +21,7 @@ export async function PATCH(req: NextRequest) {
     const phaseId = String(body.phaseId || "");
     const plannedDate = String(body.plannedDate || "");
     const notes = typeof body.notes === "string" ? body.notes : undefined;
+    const photoUrl = typeof body.photoUrl === "string" && body.photoUrl.trim() !== "" ? body.photoUrl.trim() : undefined;
     const personelIds: string[] | null = Array.isArray(body.personelIds)
       ? Array.from(new Set(body.personelIds.map((x: any) => String(x)).filter(Boolean)))
       : null;
@@ -55,6 +56,12 @@ export async function PATCH(req: NextRequest) {
         if (phase.phase === "MONTAJ") await tx.workSchedule.update({ where: { id: phase.workScheduleId }, data: { endDate: nextDate } });
       }
       if (notes !== undefined) await tx.workSchedule.update({ where: { id: phase.workScheduleId }, data: { notes } });
+      if (photoUrl !== undefined) {
+        await tx.schedulePhase.update({
+          where: { id: phaseId },
+          data: { photoUrl, photoUploadedAt: new Date() },
+        });
+      }
       if (personelIds !== null) {
         const valid = await tx.personel.findMany({ where: { id: { in: personelIds }, atolyeId: auth.atolyeId, aktif: true }, select: { id: true } });
         const validIds = valid.map((p) => p.id);

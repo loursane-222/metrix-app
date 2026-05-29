@@ -149,15 +149,23 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
     if (!phaseRow?.id || !plannedDate) return;
     setSaving(true);
     try {
+      const nextPhotoUrl = olcuPhotoUrl.trim();
+      const shouldPersistPhoto = nextPhotoUrl !== "" && nextPhotoUrl !== savedPhotoUrl;
+      const payload: any = {
+        phaseId: phaseRow.id,
+        plannedDate,
+        notes: notesDraft,
+        personelIds: selectedPersonelIds,
+      };
+
+      if (shouldPersistPhoto) {
+        payload.photoUrl = nextPhotoUrl;
+      }
+
       const res = await fetch("/api/schedule/phase-full", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phaseId: phaseRow.id,
-          plannedDate,
-          notes: notesDraft,
-          personelIds: selectedPersonelIds,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
