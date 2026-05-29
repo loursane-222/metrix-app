@@ -1,5 +1,6 @@
 import type { PhaseExecutionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { mapTimelineEvents } from "./timeline-dto"
 
 const ACTIVE_STATUSES: PhaseExecutionStatus[] = [
   "PLANNED",
@@ -10,33 +11,9 @@ const ACTIVE_STATUSES: PhaseExecutionStatus[] = [
 
 const TERMINAL_STATUSES: PhaseExecutionStatus[] = ["COMPLETED", "CANCELLED"]
 
-// PhaseExecutionEvent'te Personel relation tanımlı değil.
-// personelId'leri toplu çekip event'lere merge ediyoruz (1 ekstra sorgu, N+1 yok).
-async function attachActorNames<T extends { personelId: string | null }>(
-  events: T[],
-): Promise<(T & { personel: { ad: string; soyad: string } | null })[]> {
-  const ids = [...new Set(events.map((e) => e.personelId).filter((id): id is string => !!id))]
-
-  if (ids.length === 0) {
-    return events.map((e) => ({ ...e, personel: null }))
-  }
-
-  const rows = await prisma.personel.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, ad: true, soyad: true },
-  })
-
-  const byId = Object.fromEntries(rows.map((r) => [r.id, { ad: r.ad, soyad: r.soyad }]))
-
-  return events.map((e) => ({
-    ...e,
-    personel: e.personelId ? (byId[e.personelId] ?? null) : null,
-  }))
-}
-
 async function withEvents<T extends { id: string }>(
   execution: T | null,
-): Promise<(T & { events: Awaited<ReturnType<typeof attachActorNames>>[number][] }) | null> {
+): Promise<(T & { events: ReturnType<typeof mapTimelineEvents> }) | null> {
   if (!execution) return null
 
   const rawEvents = await prisma.phaseExecutionEvent.findMany({
@@ -44,7 +21,36 @@ async function withEvents<T extends { id: string }>(
     orderBy: { createdAt: "asc" },
   })
 
-  const events = await attachActorNames(rawEvents)
+  const personelIds = [
+    ...new Set(
+      rawEvents
+        .flatMap((event) => [event.personelId, event.actorPersonelId])
+        .filter((id): id is string => !!id),
+    ),
+  ]
+  const userIds = [
+    ...new Set(rawEvents.map((event) => event.actorUserId).filter((id): id is string => !!id)),
+  ]
+
+  const [personeller, users] = await Promise.all([
+    personelIds.length > 0
+      ? prisma.personel.findMany({
+          where: { id: { in: personelIds } },
+          select: { id: true, ad: true, soyad: true },
+        })
+      : Promise.resolve([]),
+    userIds.length > 0
+      ? prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, ad: true },
+        })
+      : Promise.resolve([]),
+  ])
+
+  const events = mapTimelineEvents(rawEvents, {
+    personelById: Object.fromEntries(personeller.map((p) => [p.id, { ad: p.ad, soyad: p.soyad }])),
+    userById: Object.fromEntries(users.map((u) => [u.id, { ad: u.ad }])),
+  })
   return { ...execution, events }
 }
 
