@@ -115,6 +115,37 @@ export interface TransitionInput {
   mtul?: number | null
 }
 
+function resolveActorAuditFields(
+  personelId?: string | null,
+  userId?: string | null,
+) {
+  if (personelId) {
+    return {
+      actorType: "PERSONEL",
+      actorPersonelId: personelId,
+      actorUserId: null,
+    }
+  }
+  if (userId) {
+    return {
+      actorType: "USER",
+      actorPersonelId: null,
+      actorUserId: userId,
+    }
+  }
+  return {
+    actorType: "SYSTEM",
+    actorPersonelId: null,
+    actorUserId: null,
+  }
+}
+
+function operationStepForPhase(phase?: string | null) {
+  if (phase === "OLCU") return "OLCU"
+  if (phase === "MONTAJ") return "MONTAJ"
+  return "DIGER"
+}
+
 // ─── createExecution ──────────────────────────────────────────────────────────
 // Her zaman PLANNED durumunda başlar.
 // Tek personel owner şu an; schema multi-staff'a kapalı değil.
@@ -163,6 +194,11 @@ export async function createExecution(input: CreateExecutionInput) {
     })
   })
 
+  const phaseForAudit = await prisma.schedulePhase.findUnique({
+    where: { id: schedulePhaseId },
+    select: { phase: true },
+  })
+
   // CREATED event — immutable log başlangıcı (transaction dışı, ok)
   await prisma.phaseExecutionEvent.create({
     data: {
@@ -172,6 +208,10 @@ export async function createExecution(input: CreateExecutionInput) {
       atolyeId,
       eventType: "CREATED",
       note: note ?? null,
+      ...resolveActorAuditFields(personelId),
+      operationStep: operationStepForPhase(phaseForAudit?.phase),
+      fromStatus: null,
+      toStatus: "PLANNED",
     },
   })
 
@@ -198,6 +238,7 @@ export async function transitionExecution(input: TransitionInput) {
 
   const execution = await prisma.phaseExecution.findUnique({
     where: { id: executionId },
+    include: { schedulePhase: { select: { phase: true } } },
   })
 
   if (!execution) throw new ExecutionError("Execution bulunamadı", 404)
@@ -286,6 +327,14 @@ export async function transitionExecution(input: TransitionInput) {
         atolyeId,
         eventType,
         note: note ?? null,
+        ...resolveActorAuditFields(personelId, userId),
+        operationStep: operationStepForPhase(execution.schedulePhase?.phase),
+        fromStatus,
+        toStatus,
+        reasonCode: toStatus === "CANNOT_START" ? cannotStartReason : null,
+        costType: toStatus === "CANNOT_START" && materialLossCost != null ? "MATERIAL_LOSS" : null,
+        costAmount: toStatus === "CANNOT_START" && materialLossCost != null ? materialLossCost : null,
+        currency: toStatus === "CANNOT_START" && materialLossCost != null ? "TRY" : null,
         metadata:
           toStatus === "CANNOT_START"
             ? {
