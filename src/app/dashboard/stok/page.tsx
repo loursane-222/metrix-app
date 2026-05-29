@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type StockProduct = {
   productName: string;
@@ -54,6 +54,37 @@ type SummaryResponse = {
   warehouses: Array<{ id: string; name: string; code: string | null; isDefault: boolean; isActive: boolean }>;
   recentPurchases: Array<{ id: string; purchaseCode: string; productName: string; supplierName: string | null; quantity: number; status: string; totalCost: number; currency: string }>;
   recentFireRecords: Array<{ id: string; fireType: string; status: string; reasonCode: string | null; finalCost: number | null; estimatedCost: number | null; currency: string; createdAt: string }>;
+};
+
+type StockImportRow = {
+  rowNumber: number;
+  productName: string;
+  materialType: string | null;
+  widthCm: number;
+  heightCm: number;
+  quantity: number;
+  warehouseName: string;
+  purchaseCurrency: string;
+  purchaseTotalCost: number;
+  supplierName: string | null;
+  batchNo: string | null;
+  errors: string[];
+  warnings: string[];
+};
+
+type StockImportPreview = {
+  validRows: StockImportRow[];
+  invalidRows: StockImportRow[];
+  warnings: string[];
+  totalPlateCount: number;
+  estimatedTotalValue: number;
+};
+
+type StockImportResult = {
+  createdPlateCount: number;
+  createdWarehouseCount: number;
+  totalValue: number;
+  warehouses: string[];
 };
 
 const EMPTY_SUMMARY: SummaryResponse = {
@@ -136,12 +167,31 @@ function SoonButton({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ActionButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-2xl border border-blue-400/25 bg-blue-500/16 px-4 py-2.5 text-xs font-black text-blue-100 shadow-[0_14px_38px_rgba(37,99,235,0.16)] transition hover:bg-blue-500/24"
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function StokPage() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [summary, setSummary] = useState<SummaryResponse>(EMPTY_SUMMARY);
   const [plates, setPlates] = useState<StockPlate[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<StockProduct | null>(null);
   const [selectedProductPlates, setSelectedProductPlates] = useState<StockPlate[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "products" | "plates" | "offcuts" | "purchases" | "movements">("overview");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFileName, setImportFileName] = useState("");
+  const [importPreview, setImportPreview] = useState<StockImportPreview | null>(null);
+  const [importResult, setImportResult] = useState<StockImportResult | null>(null);
+  const [importError, setImportError] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [platesLoading, setPlatesLoading] = useState(false);
   const [q, setQ] = useState("");
@@ -193,6 +243,60 @@ export default function StokPage() {
     await loadPlates({ productName: product.productName });
   }
 
+  function openImportPicker() {
+    setImportError("");
+    fileInputRef.current?.click();
+  }
+
+  async function handleImportFile(file: File | null) {
+    if (!file) return;
+    setImportOpen(true);
+    setImportFileName(file.name);
+    setImportPreview(null);
+    setImportResult(null);
+    setImportError("");
+    setImportLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/stock/import/preview", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Dosya önizlenemedi.");
+      setImportPreview(json);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Dosya önizlenemedi.");
+    } finally {
+      setImportLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function commitImport() {
+    if (!importPreview?.validRows.length) return;
+    setImportError("");
+    setImportLoading(true);
+    try {
+      const res = await fetch("/api/stock/import/commit", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: importPreview.validRows }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "İçe aktarma tamamlanamadı.");
+      setImportResult(json);
+      await Promise.all([loadSummary(), loadPlates()]);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "İçe aktarma tamamlanamadı.");
+    } finally {
+      setImportLoading(false);
+    }
+  }
+
   const materialTypes = useMemo(
     () => [...new Set(summary.products.map((p) => p.materialType).filter(Boolean))] as string[],
     [summary.products]
@@ -210,6 +314,13 @@ export default function StokPage() {
 
   return (
     <main className="min-h-[100dvh] bg-[#030712] px-3 pb-tab-bar pt-0 text-white md:h-[100dvh] md:overflow-hidden md:bg-[radial-gradient(circle_at_12%_8%,rgba(37,99,235,0.18),transparent_28%),radial-gradient(circle_at_78%_0%,rgba(16,185,129,0.12),transparent_26%),#07111f] md:px-4 md:pb-0 md:pt-3 lg:px-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.csv"
+        className="hidden"
+        onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
+      />
       <div className="mx-auto hidden h-full min-h-0 w-full max-w-[1840px] flex-col gap-3 md:flex">
         <header className="flex shrink-0 items-center justify-between gap-5 rounded-[28px] border border-white/10 bg-slate-950/42 px-5 py-3.5 shadow-[0_24px_90px_rgba(0,0,0,0.24)] backdrop-blur-xl">
           <div className="min-w-0">
@@ -218,7 +329,7 @@ export default function StokPage() {
             <p className="mt-1 max-w-2xl text-sm text-slate-400">Ürün bazlı stok görünümü, plaka kaderi ve gerçek malzeme maliyeti için temel ekran.</p>
           </div>
           <div className="flex shrink-0 gap-2">
-            <SoonButton>Excel Yükle</SoonButton>
+            <ActionButton onClick={openImportPicker}>Excel Yükle</ActionButton>
             <SoonButton>Manuel Stok Ekle</SoonButton>
           </div>
         </header>
@@ -259,7 +370,7 @@ export default function StokPage() {
                   </div>
                 </div>
                 {!hasStock && !loading ? (
-                  <EmptyStockState />
+                  <EmptyStockState onImportClick={openImportPicker} />
                 ) : (
                   <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                     <div className="grid gap-2">
@@ -342,6 +453,7 @@ export default function StokPage() {
         setActiveTab={setActiveTab}
         hasStock={hasStock}
         openProduct={openProduct}
+        onImportClick={openImportPicker}
       />
 
       {selectedProduct && (
@@ -352,11 +464,23 @@ export default function StokPage() {
           onClose={() => setSelectedProduct(null)}
         />
       )}
+      {importOpen && (
+        <ImportModal
+          fileName={importFileName}
+          preview={importPreview}
+          result={importResult}
+          error={importError}
+          loading={importLoading}
+          onClose={() => setImportOpen(false)}
+          onSelectFile={openImportPicker}
+          onCommit={commitImport}
+        />
+      )}
     </main>
   );
 }
 
-function EmptyStockState() {
+function EmptyStockState({ onImportClick }: { onImportClick: () => void }) {
   return (
     <div className="flex h-full min-h-[360px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.035] p-8 text-center">
       <div className="max-w-md">
@@ -364,7 +488,7 @@ function EmptyStockState() {
         <h3 className="mt-3 text-2xl font-black tracking-[-0.02em] text-white">İlk plakalarını Excel ile yükleyerek başlayacaksın.</h3>
         <p className="mt-2 text-sm leading-6 text-slate-500">Excel'de tek satırdaki adet bilgisi arka planda ayrı StockPlate kayıtlarına dönüşecek; kullanıcı ürün bazlı özet görecek.</p>
         <div className="mt-5 flex justify-center gap-2">
-          <SoonButton>Excel Yükle</SoonButton>
+          <ActionButton onClick={onImportClick}>Excel Yükle</ActionButton>
           <SoonButton>Manuel Stok Ekle</SoonButton>
         </div>
       </div>
@@ -476,13 +600,144 @@ function KpiMini({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MobileStockView({ summary, tabs, activeTab, setActiveTab, hasStock, openProduct }: {
+function ImportModal({
+  fileName,
+  preview,
+  result,
+  error,
+  loading,
+  onClose,
+  onSelectFile,
+  onCommit,
+}: {
+  fileName: string;
+  preview: StockImportPreview | null;
+  result: StockImportResult | null;
+  error: string;
+  loading: boolean;
+  onClose: () => void;
+  onSelectFile: () => void;
+  onCommit: () => void;
+}) {
+  const canCommit = !!preview?.validRows.length && !loading && !result;
+  return (
+    <div className="fixed inset-0 z-[260] bg-black/65 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="absolute bottom-0 left-0 right-0 flex max-h-[92dvh] flex-col rounded-t-[30px] border border-white/10 bg-[#07111f] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.48)] md:bottom-6 md:left-1/2 md:right-auto md:top-6 md:w-[880px] md:-translate-x-1/2 md:rounded-[30px] md:p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Excel Import Preview</p>
+            <h3 className="mt-1 truncate text-xl font-black tracking-[-0.02em] text-white">Stok başlangıç yüklemesi</h3>
+            <p className="mt-1 truncate text-sm text-slate-500">{fileName || "XLSX veya CSV dosyası seç"}</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.055] text-slate-300">×</button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <KpiMini label="Geçerli Satır" value={String(preview?.validRows.length ?? 0)} />
+          <KpiMini label="Hatalı Satır" value={String(preview?.invalidRows.length ?? 0)} />
+          <KpiMini label="Oluşacak Plaka" value={String(preview?.totalPlateCount ?? result?.createdPlateCount ?? 0)} />
+          <KpiMini label="Tahmini Değer" value={fmtMoney(preview?.estimatedTotalValue ?? result?.totalValue ?? 0)} />
+        </div>
+
+        {error && (
+          <div className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</div>
+        )}
+
+        {result && (
+          <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+            <p className="text-sm font-black text-emerald-200">İçe aktarma tamamlandı.</p>
+            <p className="mt-1 text-xs text-emerald-100/80">
+              {result.createdPlateCount} plaka oluşturuldu · {result.createdWarehouseCount} yeni depo · {fmtMoney(result.totalValue)} stok değeri
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+          {loading && !preview ? (
+            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center text-sm font-bold text-slate-400">Dosya okunuyor ve satırlar doğrulanıyor...</div>
+          ) : !preview ? (
+            <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.035] p-6 text-center">
+              <p className="text-sm font-black text-white">XLSX veya CSV dosyası seç.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Veri hemen DB'ye yazılmaz; önce validation preview gösterilir.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {preview.warnings.length > 0 && (
+                <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-200">Uyarılar</p>
+                  <div className="mt-2 space-y-1">
+                    {preview.warnings.slice(0, 5).map((warning) => (
+                      <p key={warning} className="text-xs leading-5 text-amber-100/85">{warning}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {preview.invalidRows.length > 0 && (
+                <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-3">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-red-200">Hatalı Satırlar</p>
+                  <div className="mt-2 grid gap-2">
+                    {preview.invalidRows.slice(0, 8).map((row) => (
+                      <div key={row.rowNumber} className="rounded-xl border border-red-300/10 bg-slate-950/35 p-3">
+                        <p className="text-xs font-black text-white">Satır {row.rowNumber} · {row.productName || "Ürün adı yok"}</p>
+                        <p className="mt-1 text-[11px] leading-5 text-red-100/80">{row.errors.join(" ")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-200">Geçerli Satırlar</p>
+                {preview.validRows.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">Import edilebilir satır yok.</p>
+                ) : (
+                  <div className="mt-2 grid gap-2">
+                    {preview.validRows.slice(0, 10).map((row) => (
+                      <div key={row.rowNumber} className="grid gap-2 rounded-xl border border-white/[0.06] bg-slate-950/35 p-3 md:grid-cols-[minmax(0,1fr)_100px_90px_110px] md:items-center">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-white">{row.productName}</p>
+                          <p className="truncate text-xs text-slate-500">{row.warehouseName} · {row.materialType || "Malzeme tipi yok"} · {row.widthCm} x {row.heightCm} cm</p>
+                        </div>
+                        <p className="text-xs font-black text-blue-200">{row.quantity} plaka</p>
+                        <p className="text-xs font-bold text-slate-400">{row.purchaseCurrency}</p>
+                        <p className="text-sm font-black text-emerald-300 md:text-right">{fmtMoney(row.purchaseTotalCost, row.purchaseCurrency)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2 md:flex md:justify-end">
+          <button type="button" onClick={onSelectFile} disabled={loading} className="rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-xs font-black text-slate-200 disabled:opacity-50">Dosya Seç</button>
+          <button
+            type="button"
+            onClick={onCommit}
+            disabled={!canCommit}
+            className="rounded-2xl border border-emerald-400/25 bg-emerald-500/16 px-4 py-3 text-xs font-black text-emerald-100 disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-slate-600"
+          >
+            {loading ? "İşleniyor..." : "İçe Aktar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileStockView({ summary, tabs, activeTab, setActiveTab, hasStock, openProduct, onImportClick }: {
   summary: SummaryResponse;
   tabs: readonly (readonly [string, string])[];
   activeTab: string;
   setActiveTab: (tab: any) => void;
   hasStock: boolean;
   openProduct: (product: StockProduct) => void;
+  onImportClick: () => void;
 }) {
   return (
     <div className="mx-auto max-w-lg md:hidden">
@@ -506,7 +761,7 @@ function MobileStockView({ summary, tabs, activeTab, setActiveTab, hasStock, ope
           <KpiCard label="Kullanılabilir" value={String(summary.totals.availablePlateCount)} sub="tam plaka" tone="text-blue-300" />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <SoonButton>Excel Yükle</SoonButton>
+          <ActionButton onClick={onImportClick}>Excel Yükle</ActionButton>
           <SoonButton>Stok Ekle</SoonButton>
         </div>
         {!hasStock ? (
