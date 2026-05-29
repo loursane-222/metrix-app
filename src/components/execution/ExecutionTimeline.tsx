@@ -16,7 +16,13 @@ export interface TimelineEvent {
   note: string | null
   metadata: unknown
   createdAt: string | Date
+  actor?: { type: string; id: string | null; name: string | null } | null
   personel?: { ad: string; soyad: string } | null
+  operationStep?: string | null
+  transition?: { from: string | null; to: string | null }
+  reasonCode?: string | null
+  cost?: { type: string | null; amount: string | number | null; currency: string | null } | null
+  attachment?: { url: string | null; type: string | null } | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -49,7 +55,7 @@ const EVENT_CONFIG: Record<string, EventConfig> = {
     badgeTone: "slate",
   },
   STARTED: {
-    label:     "Başlatıldı",
+    label:     "Başladı",
     dotColor:  "bg-emerald-500",
     lineColor: "bg-emerald-900/60",
     textColor: "text-emerald-300",
@@ -63,7 +69,7 @@ const EVENT_CONFIG: Record<string, EventConfig> = {
     badgeTone: "amber",
   },
   RESUMED: {
-    label:     "Devam edildi",
+    label:     "Devam etti",
     dotColor:  "bg-emerald-500",
     lineColor: "bg-emerald-900/60",
     textColor: "text-emerald-300",
@@ -90,6 +96,20 @@ const EVENT_CONFIG: Record<string, EventConfig> = {
     textColor: "text-zinc-500",
     badgeTone: "slate",
   },
+  NOTE_ADDED: {
+    label:     "Not eklendi",
+    dotColor:  "bg-cyan-500",
+    lineColor: "bg-cyan-900/50",
+    textColor: "text-cyan-300",
+    badgeTone: "blue",
+  },
+  PHOTO_ADDED: {
+    label:     "Fotoğraf eklendi",
+    dotColor:  "bg-violet-500",
+    lineColor: "bg-violet-900/50",
+    textColor: "text-violet-300",
+    badgeTone: "purple",
+  },
 }
 
 const FALLBACK_CONFIG: EventConfig = {
@@ -98,6 +118,14 @@ const FALLBACK_CONFIG: EventConfig = {
   lineColor: "bg-slate-800",
   textColor: "text-slate-400",
   badgeTone: "slate",
+}
+
+const OPERATION_STEP_LABELS: Record<string, string> = {
+  OLCU: "Ölçü",
+  KESIM: "Kesim",
+  TOPLAMA: "Toplama",
+  MONTAJ: "Montaj",
+  DIGER: "Operasyon",
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -125,19 +153,38 @@ function formatTime(raw: string | Date): { relative: string; absolute: string } 
   return { relative, absolute }
 }
 
-function actorName(personel?: { ad: string; soyad: string } | null): string | null {
+function personelName(personel?: { ad: string; soyad: string } | null): string | null {
   if (!personel) return null
   return [personel.ad, personel.soyad].filter(Boolean).join(" ").trim() || null
 }
 
+function actorName(event: TimelineEvent): string | null {
+  return event.actor?.name || personelName(event.personel)
+}
+
+function metadataRecord(meta: unknown): Record<string, unknown> {
+  return meta && typeof meta === "object" ? meta as Record<string, unknown> : {}
+}
+
+function numericCost(value: string | number | null | undefined): number | null {
+  if (value == null) return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function formatMoney(value: number, currency?: string | null): string {
+  const symbol = currency === "TRY" || !currency ? "₺" : `${currency} `
+  return `${symbol}${value.toLocaleString("tr-TR")}`
+}
+
 // ─── CannotStartCard ──────────────────────────────────────────────────────────
 
-function CannotStartCard({ meta }: { meta: unknown }) {
-  if (!meta || typeof meta !== "object") return null
-  const m = meta as Record<string, unknown>
-  const reasonKey   = typeof m.cannotStartReason === "string" ? m.cannotStartReason : null
-  const description = typeof m.failureDescription === "string" ? m.failureDescription : null
-  const cost        = m.materialLossCost != null ? Number(m.materialLossCost) : null
+function CannotStartCard({ event }: { event: TimelineEvent }) {
+  const m = metadataRecord(event.metadata)
+  const reasonKey   = event.reasonCode ?? (typeof m.cannotStartReason === "string" ? m.cannotStartReason : null)
+  const description = typeof m.failureDescription === "string" ? m.failureDescription : event.note
+  const cost        = numericCost(event.cost?.amount) ?? numericCost(m.materialLossCost as string | number | null)
+  const currency    = event.cost?.currency ?? "TRY"
 
   if (!reasonKey && !description && cost == null) return null
 
@@ -153,10 +200,41 @@ function CannotStartCard({ meta }: { meta: unknown }) {
       )}
       {cost != null && cost > 0 && (
         <p className="text-xs font-bold text-red-400">
-          Maliyet etkisi: ₺{cost.toLocaleString("tr-TR")}
+          Fire maliyeti: {formatMoney(cost, currency)}
         </p>
       )}
     </div>
+  )
+}
+
+function NoteCard({ note }: { note: string | null }) {
+  if (!note) return null
+  return (
+    <div className="mt-2 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] px-3 py-2.5">
+      <p className="text-xs italic leading-relaxed text-cyan-100/90">&ldquo;{note}&rdquo;</p>
+    </div>
+  )
+}
+
+function PhotoCard({ attachment }: { attachment?: TimelineEvent["attachment"] }) {
+  const url = attachment?.url
+  if (!url) return null
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-2 flex w-fit max-w-full items-center gap-2 rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-2.5 py-2 transition hover:bg-violet-500/[0.1]"
+    >
+      <img
+        src={url}
+        alt="Eklenen operasyon fotoğrafı"
+        className="h-12 w-16 rounded-lg object-cover"
+        loading="lazy"
+      />
+      <span className="text-xs font-semibold text-violet-200">Fotoğrafı aç</span>
+    </a>
   )
 }
 
@@ -170,8 +248,13 @@ function EventRow({
   isLast: boolean
 }) {
   const cfg    = EVENT_CONFIG[event.eventType] ?? FALLBACK_CONFIG
-  const actor  = actorName(event.personel)
+  const actor  = actorName(event)
   const { relative, absolute } = formatTime(event.createdAt)
+  const stepLabel = event.operationStep ? OPERATION_STEP_LABELS[event.operationStep] ?? event.operationStep : null
+  const transition = event.transition?.from && event.transition.to
+    ? `${event.transition.from} → ${event.transition.to}`
+    : null
+  const showDefaultNote = event.note && event.eventType !== "NOTE_ADDED" && event.eventType !== "CANNOT_START"
 
   return (
     <div className="flex gap-3">
@@ -190,6 +273,11 @@ function EventRow({
           <DarkBadge tone={cfg.badgeTone} size="sm">
             {cfg.label}
           </DarkBadge>
+          {stepLabel && (
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-bold text-slate-400">
+              {stepLabel}
+            </span>
+          )}
           <span className="text-[11px] text-slate-600" title={absolute}>
             {relative}
           </span>
@@ -202,8 +290,12 @@ function EventRow({
           <p className="mt-1 text-xs text-slate-500">{actor}</p>
         )}
 
+        {transition && (
+          <p className="mt-1 text-[11px] font-medium text-slate-600">{transition}</p>
+        )}
+
         {/* Note */}
-        {event.note && (
+        {showDefaultNote && (
           <p className="mt-1.5 text-xs italic leading-relaxed text-slate-400">
             &ldquo;{event.note}&rdquo;
           </p>
@@ -211,7 +303,15 @@ function EventRow({
 
         {/* CANNOT_START metadata */}
         {event.eventType === "CANNOT_START" && (
-          <CannotStartCard meta={event.metadata} />
+          <CannotStartCard event={event} />
+        )}
+
+        {event.eventType === "NOTE_ADDED" && (
+          <NoteCard note={event.note} />
+        )}
+
+        {event.eventType === "PHOTO_ADDED" && (
+          <PhotoCard attachment={event.attachment} />
         )}
       </div>
     </div>
