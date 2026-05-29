@@ -28,6 +28,7 @@ function emptyProduct(productName: string, materialType: string | null) {
     offcutCount: 0,
     totalRemainingAreaCm2: 0,
     totalStockValue: 0,
+    shadeGroups: [] as Array<{ shadeCode: string; plateCount: number }>,
     warehouses: [] as Array<{ warehouseId: string | null; name: string; plateCount: number }>,
   };
 }
@@ -65,12 +66,12 @@ export async function GET() {
     ]);
 
     const warehouseName = new Map(warehouses.map((w) => [w.id, w.name]));
-    const products = new Map<string, ReturnType<typeof emptyProduct> & { warehouseCounts: Map<string, number> }>();
+    const products = new Map<string, ReturnType<typeof emptyProduct> & { warehouseCounts: Map<string, number>; shadeCounts: Map<string, number> }>();
 
     for (const plate of plates) {
       const key = `${plate.productName}::${plate.materialType ?? ""}`;
       if (!products.has(key)) {
-        products.set(key, { ...emptyProduct(plate.productName, plate.materialType), warehouseCounts: new Map() });
+        products.set(key, { ...emptyProduct(plate.productName, plate.materialType), warehouseCounts: new Map(), shadeCounts: new Map() });
       }
       const row = products.get(key)!;
       const status = String(plate.status || "").toUpperCase();
@@ -84,12 +85,14 @@ export async function GET() {
 
       const warehouseKey = plate.warehouseId ?? "__none";
       row.warehouseCounts.set(warehouseKey, (row.warehouseCounts.get(warehouseKey) ?? 0) + 1);
+      const shadeKey = plate.shadeCode?.trim() || "Belirtilmedi";
+      row.shadeCounts.set(shadeKey, (row.shadeCounts.get(shadeKey) ?? 0) + 1);
     }
 
     for (const offcut of offcuts) {
       const key = `${offcut.productName}::${offcut.materialType ?? ""}`;
       if (!products.has(key)) {
-        products.set(key, { ...emptyProduct(offcut.productName, offcut.materialType), warehouseCounts: new Map() });
+        products.set(key, { ...emptyProduct(offcut.productName, offcut.materialType), warehouseCounts: new Map(), shadeCounts: new Map() });
       }
       const row = products.get(key)!;
       row.offcutCount += 1;
@@ -97,9 +100,12 @@ export async function GET() {
     }
 
     const productRows = [...products.values()]
-      .map(({ warehouseCounts, ...row }) => ({
+      .map(({ warehouseCounts, shadeCounts, ...row }) => ({
         ...row,
         totalRemainingAreaM2: row.totalRemainingAreaCm2 / 10_000,
+        shadeGroups: [...shadeCounts.entries()]
+          .map(([shadeCode, plateCount]) => ({ shadeCode, plateCount }))
+          .sort((a, b) => b.plateCount - a.plateCount || a.shadeCode.localeCompare(b.shadeCode, "tr")),
         warehouses: [...warehouseCounts.entries()].map(([id, plateCount]) => ({
           warehouseId: id === "__none" ? null : id,
           name: id === "__none" ? "Depo belirtilmedi" : warehouseName.get(id) ?? "Bilinmeyen depo",

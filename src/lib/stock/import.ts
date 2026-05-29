@@ -8,6 +8,7 @@ export type NormalizedStockImportRow = {
   materialType: string | null;
   brand: string | null;
   colorName: string | null;
+  shadeCode: string | null;
   thicknessMm: number | null;
   widthCm: number;
   heightCm: number;
@@ -69,6 +70,15 @@ const FIELD_ALIASES: Record<string, keyof NormalizedStockImportRow> = {
   "renk desen": "colorName",
   "renk / desen": "colorName",
   "desen": "colorName",
+  "shade": "shadeCode",
+  "shade code": "shadeCode",
+  "shade / ton kodu": "shadeCode",
+  "shade ton kodu": "shadeCode",
+  "ton kodu": "shadeCode",
+  "renk kodu": "shadeCode",
+  "uretim tonu": "shadeCode",
+  "üretim tonu": "shadeCode",
+  "batch shade": "shadeCode",
   "kalinlik mm": "thicknessMm",
   "kalınlık mm": "thicknessMm",
   "tedarikci": "supplierName",
@@ -210,6 +220,7 @@ export function normalizeStockImportRows(rows: RawRow[]): NormalizedStockImportR
       materialType: optionalText(row.materialType),
       brand: optionalText(row.brand),
       colorName: optionalText(row.colorName),
+      shadeCode: optionalText(row.shadeCode),
       thicknessMm: Number.isFinite(numberValue(row.thicknessMm)) ? numberValue(row.thicknessMm) : null,
       widthCm: Number.isFinite(widthCm) ? widthCm : 0,
       heightCm: Number.isFinite(heightCm) ? heightCm : 0,
@@ -257,6 +268,7 @@ export async function buildStockImportPreview(atolyeId: string, rows: Normalized
         batchNo: row.batchNo,
         supplierName: row.supplierName,
         purchaseTotalCost: row.purchaseTotalCost,
+        shadeCode: row.shadeCode,
       },
       select: { id: true },
     });
@@ -342,6 +354,7 @@ export async function commitStockImportRows(atolyeId: string, rows: NormalizedSt
             materialType: row.materialType,
             brand: row.brand,
             colorName: row.colorName,
+            shadeCode: row.shadeCode,
             batchNo: row.batchNo,
             supplierName: row.supplierName,
             warehouseId: warehouse?.id,

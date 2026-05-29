@@ -472,6 +472,7 @@ model StockPlate {
   materialType      String?
   brand             String?
   colorName         String?
+  shadeCode         String?
   batchNo           String?
   supplierName      String?
   warehouseId       String?

@@ -74,6 +74,10 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
   const meta = PHASE_META[phase] || PHASE_META.OLCU;
   const schedule = task?.schedule || {};
   const job = schedule?.is || {};
+  const stockSnapshot =
+    job?.stockMaterialSnapshot && typeof job.stockMaterialSnapshot === "object"
+      ? job.stockMaterialSnapshot
+      : null;
 
   const phaseRow = useMemo(
     () => (schedule?.phases || []).find((p: any) => p.id === task?.id || p.phase === phase),
@@ -278,6 +282,33 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
 
               {/* Sağ kolon */}
               <div className="space-y-4">
+                {stockSnapshot && (
+                  <div className="rounded-3xl border border-cyan-500/20 bg-cyan-500/[0.045] p-5">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
+                      Malzeme Bilgisi
+                    </div>
+                    <div className="mt-3 grid gap-2 text-sm">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Ürün</p>
+                        <p className="mt-1 font-black text-white">{stockSnapshot.productName || job?.urunAdi || "Ürün yok"}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Shade / Ton</p>
+                          <p className="mt-1 truncate font-black text-cyan-100">{stockSnapshot.shadeCode || "Belirtilmedi"}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Plaka Kodu</p>
+                          <p className="mt-1 truncate font-black text-white">{stockSnapshot.plateCode || "—"}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Depo</p>
+                        <p className="mt-1 truncate font-bold text-slate-200">{stockSnapshot.warehouseName || "Depo yok"}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* ── ÖLÇÜ: Fotoğraf Yükleme ─────────────────────────────── */}
                 {phase === "OLCU" && (

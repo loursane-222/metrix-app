@@ -117,6 +117,7 @@ type StockSelectPlate = {
   plateCode: string;
   productName: string;
   materialType: string | null;
+  shadeCode: string | null;
   warehouse: { id: string; name: string; code: string | null } | null;
   widthCm: number;
   heightCm: number;
@@ -629,6 +630,7 @@ export default function YeniIsV3Page() {
       plateCode: plate.plateCode,
       productName: plate.productName,
       materialType: plate.materialType,
+      shadeCode: plate.shadeCode,
       warehouseName: plate.warehouse?.name || null,
       widthCm: plate.widthCm,
       heightCm: plate.heightCm,
@@ -1361,7 +1363,7 @@ export default function YeniIsV3Page() {
                       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
                         <div style={{ minWidth: 0 }}>
                           <p style={{ fontSize: "12px", fontWeight: 900, color: "#d1fae5" }}>{form.stockMaterialSnapshot.plateCode} · {form.stockMaterialSnapshot.productName}</p>
-                          <p style={{ marginTop: "3px", fontSize: "11px", color: "#86efac" }}>{form.stockMaterialSnapshot.warehouseName || "Depo yok"} · {form.stockMaterialSnapshot.widthCm} x {form.stockMaterialSnapshot.heightCm} cm · {m2(form.stockMaterialSnapshot.remainingAreaCm2)}</p>
+                          <p style={{ marginTop: "3px", fontSize: "11px", color: "#86efac" }}>{form.stockMaterialSnapshot.warehouseName || "Depo yok"} · {form.stockMaterialSnapshot.widthCm} x {form.stockMaterialSnapshot.heightCm} cm · {m2(form.stockMaterialSnapshot.remainingAreaCm2)}{form.stockMaterialSnapshot.shadeCode ? ` · Shade ${form.stockMaterialSnapshot.shadeCode}` : ""}</p>
                         </div>
                         <button type="button" onClick={() => setStockPickerOpen(true)} style={{ flexShrink: 0, border: "1px solid rgba(16,185,129,.28)", background: "rgba(16,185,129,.12)", borderRadius: "12px", padding: "9px 12px", color: "#bbf7d0", fontSize: "12px", fontWeight: 900 }}>Değiştir</button>
                       </div>
@@ -2151,7 +2153,7 @@ export default function YeniIsV3Page() {
                       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                         <div style={{ minWidth: 0 }}>
                           <p style={{ fontSize: "13px", fontWeight: 900 }}>{plate.plateCode} · {plate.productName}</p>
-                          <p style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>{plate.materialType || "Malzeme tipi yok"} · {plate.warehouse?.name || "Depo yok"} · {plate.sourceType || "Kaynak yok"}</p>
+                          <p style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>{plate.materialType || "Malzeme tipi yok"} · {plate.warehouse?.name || "Depo yok"}{plate.shadeCode ? ` · Shade ${plate.shadeCode}` : ""} · {plate.sourceType || "Kaynak yok"}</p>
                         </div>
                         <span style={{ flexShrink: 0, border: "1px solid rgba(16,185,129,.25)", background: "rgba(16,185,129,.1)", color: "#86efac", borderRadius: "999px", padding: "5px 9px", fontSize: "10px", fontWeight: 900 }}>{plate.status}</span>
                       </div>

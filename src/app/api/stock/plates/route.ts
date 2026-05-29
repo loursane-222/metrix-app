@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         { materialType: { contains: q, mode: "insensitive" } },
         { brand: { contains: q, mode: "insensitive" } },
         { colorName: { contains: q, mode: "insensitive" } },
+        { shadeCode: { contains: q, mode: "insensitive" } },
         { batchNo: { contains: q, mode: "insensitive" } },
       ];
     }
@@ -63,6 +64,7 @@ export async function GET(req: NextRequest) {
           materialType: p.materialType,
           brand: p.brand,
           colorName: p.colorName,
+          shadeCode: p.shadeCode,
           batchNo: p.batchNo,
           supplierName: p.supplierName,
           warehouseId: p.warehouseId,

@@ -14,6 +14,7 @@ type StockProduct = {
   totalRemainingAreaCm2: number;
   totalRemainingAreaM2: number;
   totalStockValue: number;
+  shadeGroups: Array<{ shadeCode: string; plateCount: number }>;
   warehouses: Array<{ warehouseId: string | null; name: string; plateCount: number }>;
 };
 
@@ -22,6 +23,7 @@ type StockPlate = {
   plateCode: string;
   productName: string;
   materialType: string | null;
+  shadeCode: string | null;
   warehouse: { id: string; name: string; code: string | null } | null;
   widthCm: number;
   heightCm: number;
@@ -60,6 +62,7 @@ type StockImportRow = {
   rowNumber: number;
   productName: string;
   materialType: string | null;
+  shadeCode: string | null;
   widthCm: number;
   heightCm: number;
   quantity: number;
@@ -248,6 +251,10 @@ export default function StokPage() {
     fileInputRef.current?.click();
   }
 
+  function downloadTemplate() {
+    window.location.href = "/api/stock/import/template";
+  }
+
   async function handleImportFile(file: File | null) {
     if (!file) return;
     setImportOpen(true);
@@ -329,6 +336,7 @@ export default function StokPage() {
             <p className="mt-1 max-w-2xl text-sm text-slate-400">Ürün bazlı stok görünümü, plaka kaderi ve gerçek malzeme maliyeti için temel ekran.</p>
           </div>
           <div className="flex shrink-0 gap-2">
+            <ActionButton onClick={downloadTemplate}>Şablon İndir</ActionButton>
             <ActionButton onClick={openImportPicker}>Excel Yükle</ActionButton>
             <SoonButton>Manuel Stok Ekle</SoonButton>
           </div>
@@ -379,6 +387,15 @@ export default function StokPage() {
                           <div className="min-w-0">
                             <p className="truncate text-sm font-black text-white">{product.productName}</p>
                             <p className="mt-0.5 truncate text-xs text-slate-500">{product.materialType || "Malzeme tipi yok"} · {product.warehouses.map((w) => w.name).join(", ") || "Depo belirtilmedi"}</p>
+                            {product.shadeGroups.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {product.shadeGroups.slice(0, 3).map((shade) => (
+                                  <span key={shade.shadeCode} className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-black text-cyan-200">
+                                    {shade.shadeCode}: {shade.plateCount} plaka
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-black text-emerald-300">{product.availablePlateCount} tam</span>
@@ -438,7 +455,7 @@ export default function StokPage() {
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Foundation Durumu</p>
               <div className="mt-3 space-y-2 text-xs leading-5 text-slate-400">
                 <p>Plaka bazlı stok modeli hazır.</p>
-                <p>Excel import Faz 1C'de açılacak.</p>
+                <p>Excel import ve shade/ton kodu takibi açık.</p>
                 <p>Satın alma ve rezervasyon entegrasyonu sonraki fazlarda bağlanacak.</p>
               </div>
             </div>
@@ -486,7 +503,7 @@ function EmptyStockState({ onImportClick }: { onImportClick: () => void }) {
       <div className="max-w-md">
         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Stok Foundation Hazır</p>
         <h3 className="mt-3 text-2xl font-black tracking-[-0.02em] text-white">İlk plakalarını Excel ile yükleyerek başlayacaksın.</h3>
-        <p className="mt-2 text-sm leading-6 text-slate-500">Excel'de tek satırdaki adet bilgisi arka planda ayrı StockPlate kayıtlarına dönüşecek; kullanıcı ürün bazlı özet görecek.</p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">Metrix stokları ürün bazında gösterir, ama her plakayı ayrı takip eder. Aynı üründe farklı shade/ton kodları olabilir; aynı işte farklı tonları karıştırmamak için shade kodunu gir.</p>
         <div className="mt-5 flex justify-center gap-2">
           <ActionButton onClick={onImportClick}>Excel Yükle</ActionButton>
           <SoonButton>Manuel Stok Ekle</SoonButton>
@@ -507,7 +524,7 @@ function PlateList({ plates, loading }: { plates: StockPlate[]; loading: boolean
             <p className="text-sm font-black text-white">{plate.plateCode}</p>
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-slate-100">{plate.productName}</p>
-              <p className="truncate text-xs text-slate-500">{plate.materialType || "Malzeme tipi yok"} · {plate.warehouse?.name || "Depo yok"}</p>
+              <p className="truncate text-xs text-slate-500">{plate.materialType || "Malzeme tipi yok"} · {plate.warehouse?.name || "Depo yok"}{plate.shadeCode ? ` · Shade ${plate.shadeCode}` : ""}</p>
             </div>
             <p className="text-xs font-bold text-slate-400">{plate.widthCm} x {plate.heightCm} cm</p>
             <p className="text-sm font-black tabular-nums text-blue-200">{fmtArea(plate.remainingAreaCm2)}</p>
@@ -552,6 +569,15 @@ function ProductDrawer({ product, plates, loading, onClose }: { product: StockPr
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Plaka Detayı</p>
             <h3 className="mt-1 truncate text-xl font-black text-white">{product.productName}</h3>
             <p className="mt-1 text-sm text-slate-500">{product.totalPlateCount} plaka · {product.offcutCount} offcut · {fmtArea(product.totalRemainingAreaCm2)}</p>
+            {product.shadeGroups.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {product.shadeGroups.map((shade) => (
+                  <span key={shade.shadeCode} className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-black text-cyan-200">
+                    {shade.shadeCode}: {shade.plateCount}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.055] text-slate-300">×</button>
         </div>
@@ -572,7 +598,7 @@ function ProductDrawer({ product, plates, loading, onClose }: { product: StockPr
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-black text-white">{plate.plateCode}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{plate.warehouse?.name || "Depo yok"} · {plate.widthCm} x {plate.heightCm} cm</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{plate.warehouse?.name || "Depo yok"} · {plate.widthCm} x {plate.heightCm} cm{plate.shadeCode ? ` · Shade ${plate.shadeCode}` : ""}</p>
                     </div>
                     <span className={`rounded-full border px-2 py-1 text-[10px] font-black ${statusClass(plate.status)}`}>{statusLabel(plate.status)}</span>
                   </div>
@@ -700,7 +726,7 @@ function ImportModal({
                       <div key={row.rowNumber} className="grid gap-2 rounded-xl border border-white/[0.06] bg-slate-950/35 p-3 md:grid-cols-[minmax(0,1fr)_100px_90px_110px] md:items-center">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-black text-white">{row.productName}</p>
-                          <p className="truncate text-xs text-slate-500">{row.warehouseName} · {row.materialType || "Malzeme tipi yok"} · {row.widthCm} x {row.heightCm} cm</p>
+                          <p className="truncate text-xs text-slate-500">{row.warehouseName} · {row.materialType || "Malzeme tipi yok"}{row.shadeCode ? ` · Shade ${row.shadeCode}` : ""} · {row.widthCm} x {row.heightCm} cm</p>
                         </div>
                         <p className="text-xs font-black text-blue-200">{row.quantity} plaka</p>
                         <p className="text-xs font-bold text-slate-400">{row.purchaseCurrency}</p>
@@ -761,13 +787,13 @@ function MobileStockView({ summary, tabs, activeTab, setActiveTab, hasStock, ope
           <KpiCard label="Kullanılabilir" value={String(summary.totals.availablePlateCount)} sub="tam plaka" tone="text-blue-300" />
         </div>
         <div className="grid grid-cols-2 gap-2">
+          <ActionButton onClick={() => { window.location.href = "/api/stock/import/template"; }}>Şablon İndir</ActionButton>
           <ActionButton onClick={onImportClick}>Excel Yükle</ActionButton>
-          <SoonButton>Stok Ekle</SoonButton>
         </div>
         {!hasStock ? (
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
             <p className="text-[12px] font-bold text-white">Stok modülü hazır.</p>
-            <p className="mt-1 text-[11px] leading-5 text-slate-500">İlk plakalarını Excel ile yükleyerek başlayacaksın.</p>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500">Metrix stokları ürün bazında gösterir, ama her plakayı ayrı takip eder. Shade/ton kodunu girerek aynı işte ton karışmasını önleyebilirsin.</p>
           </div>
         ) : activeTab === "products" || activeTab === "overview" ? (
           <div className="space-y-2">
@@ -777,6 +803,11 @@ function MobileStockView({ summary, tabs, activeTab, setActiveTab, hasStock, ope
                   <div className="min-w-0">
                     <p className="truncate text-[14px] font-black text-white">{product.productName}</p>
                     <p className="mt-0.5 truncate text-[11px] text-slate-500">{product.materialType || "Malzeme tipi yok"}</p>
+                    {product.shadeGroups.length > 0 && (
+                      <p className="mt-1 truncate text-[10px] font-bold text-cyan-200">
+                        {product.shadeGroups.slice(0, 2).map((s) => `${s.shadeCode}: ${s.plateCount}`).join(" · ")}
+                      </p>
+                    )}
                   </div>
                   <p className="text-[13px] font-black text-emerald-300">{fmtMoney(product.totalStockValue)}</p>
                 </div>
