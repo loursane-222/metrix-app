@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
+import { buildOperationsSummary } from "@/lib/ai/operations-summary";
 
 function phaseLabel(phase: string) {
   const map: Record<string, string> = {
@@ -484,6 +485,14 @@ export async function GET() {
       bugunOperasyon: operasyonPlan.length,
       bekleyenOperasyon: operasyonPlan.filter((o) => !o.tamamlandi).length,
     };
+    const aiSummary = buildOperationsSummary({
+      riskSignals,
+      anaAkis,
+      operasyonKpi,
+      blockedItems: [],
+      vadesiGelenler,
+      sicakTeklifler,
+    });
 
     return Response.json({
       // Sayaçlar (sidebar için)
@@ -526,6 +535,7 @@ export async function GET() {
       sicakTeklifler,
       anaAkis,
       riskSignals,
+      aiSummary,
       operasyonPlan,
       operasyonKpi,
       vadesiGelenler,

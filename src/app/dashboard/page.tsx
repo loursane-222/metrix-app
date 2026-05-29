@@ -9,6 +9,7 @@ import InAppToast, { showToast } from "@/components/push/InAppToast";
 import TaskDetailModal from "@/components/schedule/TaskDetailModal";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 import ReportsTab from "@/components/dashboard/ReportsTab";
+import { buildOperationsSummary } from "@/lib/ai/operations-summary";
 
 // ─── Live Ops types ───────────────────────────────────────────────────────────
 type RiskState = "NO_PLAN" | "NORMAL" | "OVERRUN" | "CRITICAL" | "STALE";
@@ -241,6 +242,34 @@ function activityColor(type: string) {
   if (type?.includes("photo") || type?.includes("foto")) return "#a78bfa";
   if (type?.includes("montaj") || type?.includes("imalat") || type?.includes("olcu")) return "#a78bfa";
   return "#94a3b8";
+}
+
+function aiSummaryTone(status: "healthy" | "attention" | "critical") {
+  if (status === "critical") {
+    return {
+      border: "border-red-400/25",
+      bg: "bg-red-950/[0.20]",
+      text: "text-red-300",
+      dot: "bg-red-400",
+      label: "Kritik",
+    };
+  }
+  if (status === "attention") {
+    return {
+      border: "border-amber-400/25",
+      bg: "bg-amber-950/[0.16]",
+      text: "text-amber-300",
+      dot: "bg-amber-400",
+      label: "Dikkat",
+    };
+  }
+  return {
+    border: "border-emerald-400/20",
+    bg: "bg-emerald-950/[0.14]",
+    text: "text-emerald-300",
+    dot: "bg-emerald-400",
+    label: "Normal",
+  };
 }
 
 function getActivityTitle(a: any) {
@@ -501,6 +530,14 @@ export default function DashboardPage() {
   const liveToplamBlocked = useMemo(() => liveOps?.toplamBlocked ?? 0, [liveOps]);
   const vadesiGelenler = useMemo(() => data?.vadesiGelenler || [], [data]);
   const atelye = useMemo(() => data?.atelye || {}, [data]);
+  const aiSummary = useMemo(() => buildOperationsSummary({
+    riskSignals,
+    anaAkis,
+    operasyonKpi,
+    blockedItems,
+    vadesiGelenler,
+    sicakTeklifler,
+  }), [riskSignals, anaAkis, operasyonKpi, blockedItems, vadesiGelenler, sicakTeklifler]);
 
   const toplamBar = finans.onaylanan + finans.kaybedilen + finans.devam;
   const onayPct = toplamBar > 0 ? Math.round((finans.onaylanan / toplamBar) * 100) : 0;
@@ -795,6 +832,50 @@ export default function DashboardPage() {
             </div>
           ))}
         </section>
+
+        {(() => {
+          const tone = aiSummaryTone(aiSummary.status);
+          return (
+            <section className={`shrink-0 rounded-[24px] border ${tone.border} ${tone.bg} px-5 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-xl`}>
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                <div className="min-w-0">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">AI Operasyon Özeti</p>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border ${tone.border} bg-white/[0.045] px-2.5 py-1 text-[10px] font-black ${tone.text}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                      {tone.label}
+                    </span>
+                  </div>
+                  <h2 className="truncate text-lg font-black tracking-[-0.015em] text-white">{aiSummary.headline}</h2>
+                  <div className="mt-2 grid gap-1.5 md:grid-cols-3">
+                    {aiSummary.attentionItems.map((item, index) => (
+                      <div key={index} className="flex min-w-0 items-start gap-2">
+                        <span className={`mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${tone.dot}`} />
+                        <p className="text-xs leading-5 text-slate-300">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 lg:w-[360px]">
+                  <div className="rounded-2xl border border-white/[0.07] bg-slate-950/35 px-3 py-2">
+                    <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Blokaj</p>
+                    <p className="mt-1 text-lg font-black tabular-nums text-white">{aiSummary.metrics.blockedJobs}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/[0.07] bg-slate-950/35 px-3 py-2">
+                    <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Geciken</p>
+                    <p className="mt-1 text-lg font-black tabular-nums text-white">{aiSummary.metrics.delayedJobs}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/[0.07] bg-slate-950/35 px-3 py-2">
+                    <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Risk</p>
+                    <p className={`mt-1 truncate text-lg font-black tabular-nums ${aiSummary.metrics.financialRiskAmount > 0 ? "text-red-300" : "text-emerald-300"}`}>
+                      {"₺" + fmt(aiSummary.metrics.financialRiskAmount)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          );
+        })()}
 
         <nav className="grid shrink-0 grid-cols-5 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] p-1 shadow-[0_14px_45px_rgba(0,0,0,0.16)] backdrop-blur-xl">
           {dashboardTabs.map((tab) => (
@@ -1752,6 +1833,48 @@ export default function DashboardPage() {
           {/* ── ÖZET SEGMENT ──────────────────────────────────────────────────── */}
           {activeMobileDashboardTab === "summary" && (
             <div className="space-y-3 pt-3">
+
+              {/* AI Operasyon Özeti */}
+              {(() => {
+                const tone = aiSummaryTone(aiSummary.status);
+                return (
+                  <div className={`rounded-2xl border ${tone.border} ${tone.bg} p-4`}>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">AI Operasyon Özeti</p>
+                        <p className="mt-1 truncate text-[14px] font-black text-white">{aiSummary.headline}</p>
+                      </div>
+                      <span className={`flex-shrink-0 rounded-full border ${tone.border} bg-white/[0.045] px-2.5 py-1 text-[10px] font-black ${tone.text}`}>
+                        {tone.label}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {aiSummary.attentionItems.map((item, index) => (
+                        <div key={index} className="flex items-start gap-2.5">
+                          <span className={`mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${tone.dot}`} />
+                          <p className="text-[12px] leading-relaxed text-slate-300">{item}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <div className="rounded-xl border border-white/[0.06] bg-slate-950/30 p-2">
+                        <p className="text-[9px] text-slate-500">Blokaj</p>
+                        <p className="mt-0.5 text-[15px] font-black leading-none tabular-nums text-white">{aiSummary.metrics.blockedJobs}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/[0.06] bg-slate-950/30 p-2">
+                        <p className="text-[9px] text-slate-500">Geciken</p>
+                        <p className="mt-0.5 text-[15px] font-black leading-none tabular-nums text-white">{aiSummary.metrics.delayedJobs}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/[0.06] bg-slate-950/30 p-2">
+                        <p className="text-[9px] text-slate-500">Risk</p>
+                        <p className={`mt-0.5 truncate text-[15px] font-black leading-none tabular-nums ${aiSummary.metrics.financialRiskAmount > 0 ? "text-red-300" : "text-emerald-300"}`}>
+                          {"₺" + fmt(aiSummary.metrics.financialRiskAmount)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Sağlık Skoru */}
               <div className="rounded-2xl border border-emerald-500/15 bg-white/[0.03] p-4">
