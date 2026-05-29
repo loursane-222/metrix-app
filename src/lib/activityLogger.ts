@@ -10,6 +10,7 @@ interface LogParams {
   message: string;
   refId?: string;
   url?: string;
+  awaitPush?: boolean;
 }
 
 export async function logActivity(params: LogParams) {
@@ -47,10 +48,21 @@ export async function logActivity(params: LogParams) {
     console.error("logActivity error:", e);
   }
 
-  // Fire-and-forget Web Push — errors must not bubble to callers
-  void pushToAtolye(params.atolyeId, {
+  const pushPayload = {
     title: "Metrix",
     body: params.message,
     url: params.url ?? "/dashboard",
-  }).catch((e) => console.error("[push] unhandled:", e));
+  };
+
+  // Web Push errors must not bubble to callers. Critical paths can opt in to await.
+  if (params.awaitPush) {
+    try {
+      await pushToAtolye(params.atolyeId, pushPayload);
+    } catch (e) {
+      console.error("[push] unhandled:", e);
+    }
+    return;
+  }
+
+  void pushToAtolye(params.atolyeId, pushPayload).catch((e) => console.error("[push] unhandled:", e));
 }

@@ -376,76 +376,75 @@ export async function transitionExecution(input: TransitionInput) {
     toStatus,
   })
 
-  // Activity log — fire-and-forget.
+  // Activity log.
   // ActivityLog DB + Notification + SSE(type=activity) → dashboard canlı akış + toast.
-  void (async () => {
-    try {
-      const FAZ_LABEL: Record<string, string> = {
-        IMALAT: "imalat", MONTAJ: "montaj", OLCU: "ölçü", TAS_ALINACAK: "taş alınacak",
-      }
-      const CANNOT_START_LABELS: Record<string, string> = {
-        CUSTOMER_NOT_READY:      "Müşteri hazır değil",
-        MATERIAL_MISSING:        "Malzeme eksik",
-        MEASUREMENT_MISSING:     "Ölçü eksik",
-        MACHINE_BUSY:            "Makine meşgul",
-        PERSONNEL_UNAVAILABLE:   "Personel yok",
-        SITE_NOT_READY:          "Saha hazır değil",
-        STONE_BROKEN_IN_CUTTING: "Kesimde taş kırıldı",
-        OTHER:                   "Diğer",
-      }
-      const isResumed = toStatus === "STARTED" && fromStatus === "PAUSED"
-      const actType = isResumed
-        ? "execution_resumed"
-        : `execution_${String(toStatus).toLowerCase()}`
-
-      const [phaseCtx, actorName] = await Promise.all([
-        prisma.schedulePhase.findUnique({
-          where: { id: execution.schedulePhaseId },
-          select: {
-            phase: true,
-            workSchedule: { select: { is: { select: { musteriAdi: true } } } },
-          },
-        }),
-        personelId
-          ? prisma.personel
-              .findUnique({ where: { id: personelId }, select: { ad: true, soyad: true } })
-              .then((p) => (p ? `${p.ad}${p.soyad ? " " + p.soyad : ""}`.trim() : null))
-          : userId
-          ? prisma.user
-              .findUnique({ where: { id: userId }, select: { ad: true } })
-              .then((u) => u?.ad || "Admin")
-          : Promise.resolve(null),
-      ])
-
-      const fazLabel = FAZ_LABEL[phaseCtx?.phase ?? ""] ?? "faz"
-      const musteriAdi = phaseCtx?.workSchedule?.is?.musteriAdi || "—"
-      const actorLabel = actorName || "Atölye"
-      const reasonSuffix = toStatus === "CANNOT_START" && cannotStartReason
-        ? ` (${CANNOT_START_LABELS[cannotStartReason] ?? cannotStartReason})`
-        : ""
-
-      const MSG: Record<string, string> = {
-        execution_started:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını başlattı`,
-        execution_resumed:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını devam ettirdi`,
-        execution_paused:       `${actorLabel} — ${musteriAdi} ${fazLabel} fazını duraklattı`,
-        execution_completed:    `${actorLabel} — ${musteriAdi} ${fazLabel} fazını tamamladı`,
-        execution_cancelled:    `${actorLabel} — ${musteriAdi} ${fazLabel} fazı iptal edildi`,
-        execution_cannot_start: `${actorLabel} — ${musteriAdi} ${fazLabel} fazı başlatılamadı${reasonSuffix}`,
-      }
-
-      await logActivity({
-        atolyeId,
-        personelId: personelId ?? undefined,
-        userId: userId ?? undefined,
-        type: actType,
-        message: MSG[actType] ?? `${actorLabel} — ${musteriAdi} ${fazLabel} durumu değişti`,
-        refId: executionId,
-        url: `/dashboard/is-programi?phaseId=${execution.schedulePhaseId}`,
-      })
-    } catch {
-      // fire-and-forget — hata yutulur
+  try {
+    const FAZ_LABEL: Record<string, string> = {
+      IMALAT: "imalat", MONTAJ: "montaj", OLCU: "ölçü", TAS_ALINACAK: "taş alınacak",
     }
-  })()
+    const CANNOT_START_LABELS: Record<string, string> = {
+      CUSTOMER_NOT_READY:      "Müşteri hazır değil",
+      MATERIAL_MISSING:        "Malzeme eksik",
+      MEASUREMENT_MISSING:     "Ölçü eksik",
+      MACHINE_BUSY:            "Makine meşgul",
+      PERSONNEL_UNAVAILABLE:   "Personel yok",
+      SITE_NOT_READY:          "Saha hazır değil",
+      STONE_BROKEN_IN_CUTTING: "Kesimde taş kırıldı",
+      OTHER:                   "Diğer",
+    }
+    const isResumed = toStatus === "STARTED" && fromStatus === "PAUSED"
+    const actType = isResumed
+      ? "execution_resumed"
+      : `execution_${String(toStatus).toLowerCase()}`
+
+    const [phaseCtx, actorName] = await Promise.all([
+      prisma.schedulePhase.findUnique({
+        where: { id: execution.schedulePhaseId },
+        select: {
+          phase: true,
+          workSchedule: { select: { is: { select: { musteriAdi: true } } } },
+        },
+      }),
+      personelId
+        ? prisma.personel
+            .findUnique({ where: { id: personelId }, select: { ad: true, soyad: true } })
+            .then((p) => (p ? `${p.ad}${p.soyad ? " " + p.soyad : ""}`.trim() : null))
+        : userId
+        ? prisma.user
+            .findUnique({ where: { id: userId }, select: { ad: true } })
+            .then((u) => u?.ad || "Admin")
+        : Promise.resolve(null),
+    ])
+
+    const fazLabel = FAZ_LABEL[phaseCtx?.phase ?? ""] ?? "faz"
+    const musteriAdi = phaseCtx?.workSchedule?.is?.musteriAdi || "—"
+    const actorLabel = actorName || "Atölye"
+    const reasonSuffix = toStatus === "CANNOT_START" && cannotStartReason
+      ? ` (${CANNOT_START_LABELS[cannotStartReason] ?? cannotStartReason})`
+      : ""
+
+    const MSG: Record<string, string> = {
+      execution_started:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını başlattı`,
+      execution_resumed:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını devam ettirdi`,
+      execution_paused:       `${actorLabel} — ${musteriAdi} ${fazLabel} fazını duraklattı`,
+      execution_completed:    `${actorLabel} — ${musteriAdi} ${fazLabel} fazını tamamladı`,
+      execution_cancelled:    `${actorLabel} — ${musteriAdi} ${fazLabel} fazı iptal edildi`,
+      execution_cannot_start: `${actorLabel} — ${musteriAdi} ${fazLabel} fazı başlatılamadı${reasonSuffix}`,
+    }
+
+    await logActivity({
+      atolyeId,
+      personelId: personelId ?? undefined,
+      userId: userId ?? undefined,
+      type: actType,
+      message: MSG[actType] ?? `${actorLabel} — ${musteriAdi} ${fazLabel} durumu değişti`,
+      refId: executionId,
+      url: `/dashboard/is-programi?phaseId=${execution.schedulePhaseId}`,
+      awaitPush: true,
+    })
+  } catch (error) {
+    console.warn("execution activity notification failed:", error)
+  }
 
   return updated
 }
