@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SkeletonCard, SkeletonLine, Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import InAppToast, { showToast } from "@/components/push/InAppToast";
 import TaskDetailModal from "@/components/schedule/TaskDetailModal";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
@@ -209,8 +210,38 @@ function activityColor(type: string) {
   if (type?.includes("onayla") || type?.includes("tahsilat")) return "#22c55e";
   if (type?.includes("teklif") || type?.includes("yeni")) return "#60a5fa";
   if (type?.includes("kayb") || type?.includes("iptal")) return "#f87171";
+  if (type?.includes("photo") || type?.includes("foto")) return "#a78bfa";
   if (type?.includes("montaj") || type?.includes("imalat") || type?.includes("olcu")) return "#a78bfa";
   return "#94a3b8";
+}
+
+function getActivityTitle(a: any) {
+  return a?.title || a?.message || "Dashboard hareketi";
+}
+
+function getActivityMessage(a: any) {
+  const title = getActivityTitle(a);
+  const message = a?.message || "";
+  return message && message !== title ? message : "";
+}
+
+function getActivityAttachmentUrl(a: any) {
+  const metadataPhoto = a?.metadata && typeof a.metadata === "object" && typeof a.metadata.photoUrl === "string"
+    ? a.metadata.photoUrl
+    : null;
+  return a?.attachmentUrl || metadataPhoto || null;
+}
+
+function getActivitySeverityClass(a: any) {
+  if (a?.severity === "critical") return "border-red-400/20 bg-red-500/[0.075]";
+  if (a?.severity === "warning") return "border-amber-400/20 bg-amber-500/[0.07]";
+  if (a?.severity === "success") return "border-emerald-400/20 bg-emerald-500/[0.065]";
+  return "border-white/[0.075] bg-white/[0.045]";
+}
+
+function isPhotoActivity(a: any) {
+  const eventType = String(a?.eventType || a?.type || "").toUpperCase();
+  return eventType === "PHOTO_ADDED" || eventType.includes("PHOTO");
 }
 
 function phaseColor(phase: string) {
@@ -316,6 +347,7 @@ function AiWaButon({
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [sekme, setSekme] = useState<"yillik" | "aylik">("aylik");
@@ -769,23 +801,46 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  {anaAkis.map((a: any, i: number) => (
-                    <button key={a.id || i} type="button" onClick={() => setSelectedActivity(a)}
-                      className="grid grid-cols-[72px_28px_minmax(0,1fr)_auto] gap-4 rounded-2xl border border-white/[0.075] bg-white/[0.045] px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-blue-400/25 hover:bg-blue-500/[0.06]">
-                      <span className="pt-0.5 text-[12px] font-black tabular-nums text-slate-500">{timeAgo(a.createdAt)}</span>
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-slate-900">
-                        <span className="h-3 w-3 rounded-full shadow-[0_0_18px_currentColor]" style={{ background: activityColor(a.type), color: activityColor(a.type) }} />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[14px] font-semibold leading-snug text-slate-100">{a.message || "Dashboard hareketi"}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          {a.actorAdi && <span className="rounded-full border border-white/8 bg-white/[0.055] px-2 py-0.5 text-[10px] font-bold text-slate-400">{a.actorAdi}</span>}
-                          <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">{a.type?.replace(/_/g, " ") || "activity"}</span>
+                  {anaAkis.map((a: any, i: number) => {
+                    const attachmentUrl = getActivityAttachmentUrl(a);
+                    const detail = getActivityMessage(a);
+                    return (
+                      <button key={a.id || i} type="button" onClick={() => setSelectedActivity(a)}
+                        className={`grid grid-cols-[72px_28px_minmax(0,1fr)_auto] gap-4 rounded-2xl border px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-blue-400/25 hover:bg-blue-500/[0.06] ${getActivitySeverityClass(a)}`}>
+                        <span className="pt-0.5 text-[12px] font-black tabular-nums text-slate-500">{timeAgo(a.createdAt)}</span>
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-slate-900">
+                          <span className="h-3 w-3 rounded-full shadow-[0_0_18px_currentColor]" style={{ background: activityColor(a.eventType || a.type), color: activityColor(a.eventType || a.type) }} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-semibold leading-snug text-slate-100">{getActivityTitle(a)}</p>
+                          {detail && <p className="mt-1 text-xs leading-snug text-slate-500">{detail}</p>}
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {(a.actorName || a.actorAdi) && <span className="rounded-full border border-white/8 bg-white/[0.055] px-2 py-0.5 text-[10px] font-bold text-slate-400">{a.actorName || a.actorAdi}</span>}
+                            <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">{(a.eventType || a.type)?.replace(/_/g, " ") || "activity"}</span>
+                            {a.category && <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-700">{a.category}</span>}
+                          </div>
                         </div>
-                      </div>
-                      <span className="mt-1 h-px w-10 bg-gradient-to-r from-white/20 to-transparent" />
-                    </button>
-                  ))}
+                        <span className="flex items-start gap-2">
+                          {isPhotoActivity(a) && attachmentUrl && (
+                            <img src={attachmentUrl} alt="Aktivite fotoğrafı" className="h-14 w-20 rounded-xl border border-white/10 object-cover" loading="lazy" />
+                          )}
+                          {a.url ? (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => { e.stopPropagation(); router.push(a.url); }}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); router.push(a.url); } }}
+                              className="rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-[10px] font-black text-blue-300 hover:bg-blue-500/15"
+                            >
+                              Aç
+                            </span>
+                          ) : (
+                            <span className="mt-1 h-px w-10 bg-gradient-to-r from-white/20 to-transparent" />
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1122,16 +1177,17 @@ export default function DashboardPage() {
               ) : (
                 <div className="grid gap-1.5">
                   {anaAkis.map((a: any, i: number) => (
-                    <div key={a.id || i} className="grid grid-cols-[54px_24px_minmax(0,1fr)_auto] gap-3 rounded-2xl border border-white/[0.075] bg-white/[0.045] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div key={a.id || i} className={`grid grid-cols-[54px_24px_minmax(0,1fr)_auto] gap-3 rounded-2xl border px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] ${getActivitySeverityClass(a)}`}>
                       <span className="pt-0.5 text-[11px] font-black tabular-nums text-slate-500">{timeAgo(a.createdAt)}</span>
                       <span className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-slate-900">
-                        <span className="h-2.5 w-2.5 rounded-full shadow-[0_0_18px_currentColor]" style={{ background: activityColor(a.type), color: activityColor(a.type) }} />
+                        <span className="h-2.5 w-2.5 rounded-full shadow-[0_0_18px_currentColor]" style={{ background: activityColor(a.eventType || a.type), color: activityColor(a.eventType || a.type) }} />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-[13px] font-semibold leading-snug text-slate-100">{a.message}</p>
+                        <p className="text-[13px] font-semibold leading-snug text-slate-100">{getActivityTitle(a)}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          {a.actorAdi && <span className="rounded-full border border-white/8 bg-white/[0.055] px-2 py-0.5 text-[10px] font-bold text-slate-400">{a.actorAdi}</span>}
-                          <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">{a.type?.replace(/_/g, " ")}</span>
+                          {(a.actorName || a.actorAdi) && <span className="rounded-full border border-white/8 bg-white/[0.055] px-2 py-0.5 text-[10px] font-bold text-slate-400">{a.actorName || a.actorAdi}</span>}
+                          <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">{(a.eventType || a.type)?.replace(/_/g, " ")}</span>
+                          {isPhotoActivity(a) && getActivityAttachmentUrl(a) && <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-300">Fotoğraf</span>}
                         </div>
                       </div>
                       <span className="mt-1 h-px w-5 bg-gradient-to-r from-white/20 to-transparent" />
@@ -1517,8 +1573,8 @@ export default function DashboardPage() {
                   </div>
                   {anaAkis.slice(0, 5).map((a: any, i: number) => (
                     <div key={a.id || i} className="flex items-start gap-3 border-b border-white/[0.04] px-4 py-2.5 last:border-0">
-                      <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: activityColor(a.type) }} />
-                      <p className="flex-1 text-[11px] leading-snug text-slate-300">{a.message}</p>
+                      <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: activityColor(a.eventType || a.type) }} />
+                      <p className="flex-1 text-[11px] leading-snug text-slate-300">{getActivityTitle(a)}</p>
                       <span className="flex-shrink-0 text-[10px] text-slate-600">{timeAgo(a.createdAt)}</span>
                     </div>
                   ))}
@@ -1846,16 +1902,25 @@ export default function DashboardPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Activity Detail</p>
-                <h3 className="mt-1 text-xl font-black tracking-[-0.02em]">{selectedActivity.message || "Operasyon hareketi"}</h3>
+                <h3 className="mt-1 text-xl font-black tracking-[-0.02em]">{getActivityTitle(selectedActivity)}</h3>
+                {getActivityMessage(selectedActivity) && (
+                  <p className="mt-2 text-sm leading-relaxed text-slate-400">{getActivityMessage(selectedActivity)}</p>
+                )}
               </div>
               <button type="button" onClick={() => setSelectedActivity(null)} className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.055] text-xl text-slate-400 hover:text-white">
                 ×
               </button>
             </div>
+            {getActivityAttachmentUrl(selectedActivity) && (
+              <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035]">
+                <img src={getActivityAttachmentUrl(selectedActivity)} alt="Aktivite fotoğrafı" className="max-h-72 w-full object-cover" loading="lazy" />
+              </div>
+            )}
             <div className="mt-5 grid gap-2">
               {[
-                ["Kişi", selectedActivity.actorAdi || "Sistem"],
-                ["Event Türü", selectedActivity.type?.replace(/_/g, " ") || "activity"],
+                ["Kişi", selectedActivity.actorName || selectedActivity.actorAdi || "Sistem"],
+                ["Event Türü", (selectedActivity.eventType || selectedActivity.type)?.replace(/_/g, " ") || "activity"],
+                ["Kategori", [selectedActivity.category, selectedActivity.severity].filter(Boolean).join(" / ") || "—"],
                 ["Zaman", selectedActivity.createdAt ? new Date(selectedActivity.createdAt).toLocaleString("tr-TR") : "Zaman yok"],
                 ["Açıklama", selectedActivity.message || "Detay bilgisi bulunmuyor"],
               ].map(([label, value]) => (
@@ -1865,6 +1930,15 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
+            {selectedActivity.url && (
+              <button
+                type="button"
+                onClick={() => { const url = selectedActivity.url; setSelectedActivity(null); router.push(url); }}
+                className="mt-4 w-full rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-200 transition hover:bg-blue-500/15"
+              >
+                İlgili kayda git
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -264,13 +264,36 @@ export async function GET() {
           )
         : {};
 
-    const anaAkis = anaAkisRaw.map((a) => ({
-      ...a,
-      actorAdi:
+    const anaAkis = anaAkisRaw.map((a) => {
+      const metadata = a.metadata && typeof a.metadata === "object" && !Array.isArray(a.metadata)
+        ? a.metadata as Record<string, unknown>
+        : null
+      const actorAdi =
+        a.actorName ??
         (a.personelId ? personelMap[a.personelId] : null) ??
         (a.userId ? (userMap[a.userId] || null) : null) ??
-        null,
-    }));
+        null
+      const metadataPhotoUrl = typeof metadata?.photoUrl === "string" ? metadata.photoUrl : null
+
+      return {
+        id: a.id,
+        type: a.type,
+        eventType: a.eventType ?? a.type,
+        category: a.category ?? null,
+        severity: a.severity ?? "info",
+        source: a.source ?? null,
+        title: a.title ?? null,
+        message: a.message,
+        actorName: a.actorName ?? actorAdi,
+        actorAdi,
+        createdAt: a.createdAt,
+        url: a.url ?? null,
+        refType: a.refType ?? null,
+        refId: a.refId ?? null,
+        attachmentUrl: a.attachmentUrl ?? metadataPhotoUrl,
+        metadata,
+      }
+    });
 
     // --- BUGÜNÜN PLANI ---
     const schedulePhases = await prisma.schedulePhase.findMany({
