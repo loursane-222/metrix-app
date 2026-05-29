@@ -67,11 +67,19 @@ export async function POST(req: NextRequest) {
     operasyonlar, isTarihi,
     manuelPlakaSayisi,
     plakaFiyatiTl,
+    stoneSource,
+    selectedStockPlateId,
+    stockMaterialSnapshot,
+    customerOwnedMaterialNote,
 
     ozelIscilik1Mtul, ozelIscilik1Dakika,
     ozelIscilik2Mtul, ozelIscilik2Dakika,
     ozelIscilik3Mtul, ozelIscilik3Dakika,
   } = veri
+
+  const normalizedStoneSource = ["STOCK", "PURCHASE", "CUSTOMER_OWNED"].includes(String(stoneSource || ""))
+    ? String(stoneSource)
+    : null
 
   let bagliMusteriId: string | null = null
   let yeniMusteriOlusturuldu = false
@@ -186,7 +194,7 @@ export async function POST(req: NextRequest) {
     : (parseFloat(plakaFiyatiEuro) || 0) * (parseFloat(kullanilanKur) || 0)
 
   const malzemeMaliyeti =
-    kullanilanPlakaSayisi * plakaFiyatiTlHesap
+    normalizedStoneSource === "CUSTOMER_OWNED" ? 0 : kullanilanPlakaSayisi * plakaFiyatiTlHesap
 
   const toplamMaliyet = iscilikMaliyeti + malzemeMaliyeti
   const satisFiyati = toplamMaliyet * (1 + (parseFloat(karYuzdesi) || 0) / 100)
@@ -199,6 +207,29 @@ export async function POST(req: NextRequest) {
 
   const teklifGecerlilikTarihi = new Date()
   teklifGecerlilikTarihi.setDate(teklifGecerlilikTarihi.getDate() + teklifGecerlilik)
+
+  let safeSelectedStockPlateId: string | null = null
+  if (normalizedStoneSource === "STOCK" && selectedStockPlateId) {
+    const plate = await prisma.stockPlate.findFirst({
+      where: { id: String(selectedStockPlateId), atolyeId },
+      select: { id: true },
+    })
+    safeSelectedStockPlateId = plate?.id || null
+  }
+
+  const safeStockMaterialSnapshot =
+    normalizedStoneSource === "STOCK" && stockMaterialSnapshot && typeof stockMaterialSnapshot === "object"
+      ? stockMaterialSnapshot
+      : undefined
+
+  const legacyTasDurumu =
+    normalizedStoneSource === "STOCK"
+      ? "stokta"
+      : normalizedStoneSource === "PURCHASE"
+      ? "alinacak"
+      : normalizedStoneSource === "CUSTOMER_OWNED"
+      ? "stokta"
+      : (veri as any).tasDurumu || null
 
   const is = await prisma.is.create({
     data: {
@@ -236,6 +267,11 @@ export async function POST(req: NextRequest) {
       teklifGecerlilikTarihi,
       isTarihi: isTarihi ? new Date(isTarihi) : null,
       durum: 'teklif_verildi',
+      tasDurumu: legacyTasDurumu,
+      stoneSource: normalizedStoneSource,
+      selectedStockPlateId: safeSelectedStockPlateId,
+      stockMaterialSnapshot: safeStockMaterialSnapshot,
+      customerOwnedMaterialNote: normalizedStoneSource === "CUSTOMER_OWNED" ? String(customerOwnedMaterialNote || "").trim() || null : null,
       operasyonlar: {
         create: (operasyonlar || []).map((op: { operasyonTipi: string; makineId?: string; adet: number; birimDakika: number; toplamDakika: number }) => ({
           operasyonTipi: op.operasyonTipi,

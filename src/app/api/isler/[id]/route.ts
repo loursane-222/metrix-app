@@ -40,6 +40,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const body = await req.json()
   const onaylandi = body.onaylandi === true
+  const normalizedStoneSource = ["STOCK", "PURCHASE", "CUSTOMER_OWNED"].includes(String(body.stoneSource || ""))
+    ? String(body.stoneSource)
+    : null
 
   let bagliMusteriId = mevcutIs.musteriId || null
 
@@ -84,7 +87,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       : (otomatikPlakaSayisi + ekPlaka)
 
   const malzemeMaliyeti =
-    toplamPlakaSayisi * body.plakaFiyatiEuro * body.kullanilanKur
+    normalizedStoneSource === "CUSTOMER_OWNED" ? 0 : toplamPlakaSayisi * body.plakaFiyatiEuro * body.kullanilanKur
 
   const toplamSureDakika =
     normalTezgahMtul * normalizeMtulInput(body.birMtulDakika || 0) +
@@ -109,6 +112,29 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     kdvDahilFiyat = satisFiyati + kdvTutari
     mtulSatisFiyati = toplamMetraj > 0 ? satisFiyati / toplamMetraj : 0
   }
+
+  let safeSelectedStockPlateId: string | null = null
+  if (normalizedStoneSource === "STOCK" && body.selectedStockPlateId) {
+    const plate = await prisma.stockPlate.findFirst({
+      where: { id: String(body.selectedStockPlateId), atolyeId },
+      select: { id: true },
+    })
+    safeSelectedStockPlateId = plate?.id || null
+  }
+
+  const safeStockMaterialSnapshot =
+    normalizedStoneSource === "STOCK" && body.stockMaterialSnapshot && typeof body.stockMaterialSnapshot === "object"
+      ? body.stockMaterialSnapshot
+      : undefined
+
+  const legacyTasDurumu =
+    normalizedStoneSource === "STOCK"
+      ? "stokta"
+      : normalizedStoneSource === "PURCHASE"
+      ? "alinacak"
+      : normalizedStoneSource === "CUSTOMER_OWNED"
+      ? "stokta"
+      : body.tasDurumu || mevcutIs.tasDurumu
 
   await prisma.isOperasyon.deleteMany({ where: { isId: id } })
 
@@ -144,6 +170,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       kdvDahilFiyat,
       mtulSatisFiyati,
       notlar: body.notlar,
+      tasDurumu: legacyTasDurumu,
+      stoneSource: normalizedStoneSource,
+      selectedStockPlateId: safeSelectedStockPlateId,
+      stockMaterialSnapshot: safeStockMaterialSnapshot,
+      customerOwnedMaterialNote: normalizedStoneSource === "CUSTOMER_OWNED" ? String(body.customerOwnedMaterialNote || "").trim() || null : null,
       operasyonlar: {
         create: (body.operasyonlar || []).map((op: any) => ({
           operasyonTipi: op.operasyonTipi,

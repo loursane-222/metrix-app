@@ -205,6 +205,10 @@ model Is {
   durum String @default("teklif_verildi")
 
   tasDurumu String?
+  stoneSource String?
+  selectedStockPlateId String?
+  stockMaterialSnapshot Json?
+  customerOwnedMaterialNote String?
 
   whatsappOnay       Boolean @default(false)
   whatsappOnayOkundu Boolean @default(false)

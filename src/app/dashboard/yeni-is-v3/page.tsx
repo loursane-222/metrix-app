@@ -20,6 +20,9 @@ function n(v: any): number {
 function tl(v: number) {
   return v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
 }
+function m2(cm2: number) {
+  return (Number(cm2 || 0) / 10000).toLocaleString("tr-TR", { maximumFractionDigits: 2 }) + " m²";
+}
 function uid() { return Math.random().toString(36).slice(2, 8); }
 function parcaMtul(p: Pick<Parca, "en" | "boy" | "adet">): number {
   const en = n(p.en), boy = n(p.boy), adet = n(p.adet) || 1;
@@ -46,6 +49,7 @@ const TASLAK_KEY_LEGACY = "metrix_yeni_is_v4_taslak";
 // ─── Tipler ───────────────────────────────────────────────────────────────────
 type Adim = "musteri" | "olculer" | "fiyat";
 type IsModeli = "tam" | "sadece_iscilik" | "fason";
+type StoneSource = "STOCK" | "PURCHASE" | "CUSTOMER_OWNED" | "";
 type MutfakTipi = "duz" | "l" | "u" | "paralel" | "coffee" | "ozel";
 type SekilTipi = "dikdortgen" | "oval" | "kapsul" | "l_parca" | "ozel_sablon";
 
@@ -70,6 +74,10 @@ interface FormState {
   urunAdi: string;
   // İş modeli
   isModeli: IsModeli;
+  stoneSource: StoneSource;
+  selectedStockPlateId: string;
+  stockMaterialSnapshot: any;
+  customerOwnedMaterialNote: string;
   mutfakTipi: MutfakTipi;
   // Parçalar
   parcalar: Parca[];
@@ -103,6 +111,22 @@ interface FormState {
   notlar: string;
   onAlinEnOverride?: Record<string, string>;
 }
+
+type StockSelectPlate = {
+  id: string;
+  plateCode: string;
+  productName: string;
+  materialType: string | null;
+  warehouse: { id: string; name: string; code: string | null } | null;
+  widthCm: number;
+  heightCm: number;
+  remainingAreaCm2: number;
+  remainingAreaM2: number;
+  purchaseTotalCost: number;
+  purchaseCurrency: string;
+  status: string;
+  sourceType: string | null;
+};
 
 // ─── Mutfak tipleri ───────────────────────────────────────────────────────────
 const MUTFAK_TIPLERI: { id: MutfakTipi; label: string; aciklama: string; svg: string }[] = [
@@ -161,6 +185,27 @@ const IS_MODELLERI = [
   { id: "tam"           as IsModeli, label: "Taş + İşçilik", ikon: "🪨", aciklama: "Taş bizden, her şey dahil" },
   { id: "sadece_iscilik"as IsModeli, label: "Sadece İşçilik", ikon: "⚙️", aciklama: "Taşı müşteri alıyor" },
   { id: "fason"         as IsModeli, label: "Fason Kesim",   ikon: "✂️", aciklama: "Sadece kesim/ebatlama" },
+];
+
+const STONE_SOURCE_OPTIONS = [
+  {
+    id: "STOCK" as StoneSource,
+    title: "Stoktan Kullan",
+    icon: "▣",
+    description: "Depodaki mevcut plakayı bu işe bağla. Gerçek maliyet ve plaka geçmişi ileride buradan takip edilir.",
+  },
+  {
+    id: "PURCHASE" as StoneSource,
+    title: "Satın Alınacak",
+    icon: "↧",
+    description: "Bu iş için taş satın alınacak. Satın alma fazı sonraki adımda operasyon akışına bağlanacak.",
+  },
+  {
+    id: "CUSTOMER_OWNED" as StoneSource,
+    title: "Müşteriye Ait",
+    icon: "◇",
+    description: "Taş müşteriye ait. Metrix taş maliyeti eklemez; işçilik ve operasyon takibi devam eder.",
+  },
 ];
 
 const SEKIL_TIPLERI: { id: SekilTipi; label: string }[] = [
@@ -302,7 +347,7 @@ function hesapla(form: FormState, makineler: any[]) {
     ? n(form.plakaFiyati)
     : n(form.plakaFiyatiEuro) * n(form.kullanilanKur);
 
-  const malzemeMaliyeti = form.isModeli === "tam" ? plakaSayisi * plakaFiyatiTl : 0;
+  const malzemeMaliyeti = form.isModeli === "tam" && form.stoneSource !== "CUSTOMER_OWNED" ? plakaSayisi * plakaFiyatiTl : 0;
   const operasyonMtul = operasyonMtulHesapla(form.parcalar, form.pahlamaMtul, form.kesim45Mtul);
 
   // İşçilik maliyeti (makine dakika ücreti)
@@ -360,6 +405,7 @@ function defaultForm(): FormState {
     musteriId: "", musteriAdi: "", musteriTipi: "Ev sahibi",
     isTarihi: new Date().toISOString().slice(0, 10),
     urunAdi: "", isModeli: "tam", mutfakTipi: "duz",
+    stoneSource: "", selectedStockPlateId: "", stockMaterialSnapshot: null, customerOwnedMaterialNote: "",
     parcalar: defaultParcalar("duz"),
     eviyes: "0", ocaklar: "0", prizler: "0",
     pahlamaMtul: "", kesim45Mtul: "",
@@ -402,6 +448,10 @@ export default function YeniIsV3Page() {
   const [musteriListeAcik, setMusteriListeAcik] = useState(false);
   const [plakaAcik, setPlakaAcik]           = useState(false);
   const [plakaInitialRows, setPlakaInitialRows] = useState<any[]>([]);
+  const [stockPickerOpen, setStockPickerOpen] = useState(false);
+  const [stockQ, setStockQ] = useState("");
+  const [stockPlates, setStockPlates] = useState<StockSelectPlate[]>([]);
+  const [stockLoading, setStockLoading] = useState(false);
   const [aiMode, setAiMode]                 = useState(false);
   const [kaydediliyor, setKaydediliyor]     = useState(false);
   const [basariEkrani, setBasariEkrani]     = useState(false);
@@ -518,6 +568,10 @@ export default function YeniIsV3Page() {
             karHedefi:       String(is.karYuzdesi || '30'),
             plakaLayoutJson: is.plakaLayoutJson || null,
             plakaImageUrl:   is.plakaImageUrl || '',
+            stoneSource:     is.stoneSource || '',
+            selectedStockPlateId: is.selectedStockPlateId || '',
+            stockMaterialSnapshot: is.stockMaterialSnapshot || null,
+            customerOwnedMaterialNote: is.customerOwnedMaterialNote || '',
             // Ölçüleri parcalar'a dönüştür
             parcalar: yuklenenParcalar,
           }));
@@ -569,6 +623,66 @@ export default function YeniIsV3Page() {
   const setAlan = useCallback((key: keyof FormState, val: any) => {
     setForm((p) => ({ ...p, [key]: val }));
   }, []);
+
+  function stockSnapshotFromPlate(plate: StockSelectPlate) {
+    return {
+      plateCode: plate.plateCode,
+      productName: plate.productName,
+      materialType: plate.materialType,
+      warehouseName: plate.warehouse?.name || null,
+      widthCm: plate.widthCm,
+      heightCm: plate.heightCm,
+      remainingAreaCm2: plate.remainingAreaCm2,
+      purchaseTotalCost: plate.purchaseTotalCost,
+      purchaseCurrency: plate.purchaseCurrency,
+      selectedAt: new Date().toISOString(),
+    };
+  }
+
+  function selectStoneSource(source: StoneSource) {
+    setForm((prev) => ({
+      ...prev,
+      stoneSource: source,
+      selectedStockPlateId: source === "STOCK" ? prev.selectedStockPlateId : "",
+      stockMaterialSnapshot: source === "STOCK" ? prev.stockMaterialSnapshot : null,
+      customerOwnedMaterialNote: source === "CUSTOMER_OWNED" ? prev.customerOwnedMaterialNote : "",
+    }));
+    if (source === "STOCK") setStockPickerOpen(true);
+  }
+
+  async function loadStockPlates(qValue = stockQ) {
+    setStockLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("status", "AVAILABLE");
+      if (qValue.trim()) params.set("q", qValue.trim());
+      const json = await fetch(`/api/stock/plates?${params.toString()}`, { credentials: "include" }).then((r) => r.json());
+      setStockPlates(Array.isArray(json?.plates) ? json.plates : []);
+    } finally {
+      setStockLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!stockPickerOpen) return;
+    const id = setTimeout(() => loadStockPlates(stockQ), 220);
+    return () => clearTimeout(id);
+  }, [stockPickerOpen, stockQ]);
+
+  function selectStockPlate(plate: StockSelectPlate) {
+    setForm((prev) => ({
+      ...prev,
+      stoneSource: "STOCK",
+      selectedStockPlateId: plate.id,
+      stockMaterialSnapshot: stockSnapshotFromPlate(plate),
+      urunAdi: prev.urunAdi || plate.productName,
+      plakaEn: String(plate.widthCm || prev.plakaEn),
+      plakaBoy: String(plate.heightCm || prev.plakaBoy),
+      plakaFiyati: prev.plakaFiyati || String(plate.purchaseTotalCost || ""),
+      customerOwnedMaterialNote: "",
+    }));
+    setStockPickerOpen(false);
+  }
 
   // Parça adını API'nin anlayacağı parcaTuru'na normalize et
   function normalizeParcaTuru(ad: string): string {
@@ -787,6 +901,10 @@ export default function YeniIsV3Page() {
         plakaImageUrl: form.plakaImageUrl || "",
         notlar: form.notlar,
         tasDurumu: form.isModeli,
+        stoneSource: form.stoneSource || null,
+        selectedStockPlateId: form.stoneSource === "STOCK" ? form.selectedStockPlateId || null : null,
+        stockMaterialSnapshot: form.stoneSource === "STOCK" ? form.stockMaterialSnapshot || null : null,
+        customerOwnedMaterialNote: form.stoneSource === "CUSTOMER_OWNED" ? form.customerOwnedMaterialNote || "" : "",
         ozelIscilik1Mtul: "0", ozelIscilik1Dakika: "0",
         ozelIscilik2Mtul: "0", ozelIscilik2Dakika: "0",
         ozelIscilik3Mtul: "0", ozelIscilik3Dakika: "0",
@@ -1209,6 +1327,55 @@ export default function YeniIsV3Page() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Taş kaynağı */}
+              <div className="yi-kart">
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
+                  <div>
+                    <p style={{ fontSize: "14px", fontWeight: 800 }}>▣ Taş Kaynağı</p>
+                    <p style={{ marginTop: "4px", fontSize: "11px", color: "#6b7280", lineHeight: 1.45 }}>Fiyatlama modeli ayrı kalır; burada malzemenin nereden geldiğini seçersin.</p>
+                  </div>
+                  {!form.stoneSource && (
+                    <span style={{ flexShrink: 0, border: "1px solid rgba(148,163,184,.18)", background: "rgba(148,163,184,.08)", borderRadius: "999px", padding: "5px 9px", fontSize: "10px", fontWeight: 800, color: "#94a3b8" }}>Eski kayıt uyumlu</span>
+                  )}
+                </div>
+                <div className="ikon-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+                  {STONE_SOURCE_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => selectStoneSource(option.id)}
+                      className={`ikon-btn${form.stoneSource === option.id ? " aktif" : ""}`}
+                      style={{ padding: "13px 9px", alignItems: "flex-start", textAlign: "left" }}
+                    >
+                      <span style={{ fontSize: "20px", color: form.stoneSource === option.id ? "#10b981" : "#64748b" }}>{option.icon}</span>
+                      <span style={{ fontWeight: 900 }}>{option.title}</span>
+                      <span style={{ fontSize: "10px", opacity: 0.7, lineHeight: 1.35 }}>{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+                {form.stoneSource === "STOCK" && (
+                  <div style={{ marginTop: "12px", border: "1px solid rgba(16,185,129,.22)", background: "rgba(16,185,129,.07)", borderRadius: "16px", padding: "12px" }}>
+                    {form.stockMaterialSnapshot ? (
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: "12px", fontWeight: 900, color: "#d1fae5" }}>{form.stockMaterialSnapshot.plateCode} · {form.stockMaterialSnapshot.productName}</p>
+                          <p style={{ marginTop: "3px", fontSize: "11px", color: "#86efac" }}>{form.stockMaterialSnapshot.warehouseName || "Depo yok"} · {form.stockMaterialSnapshot.widthCm} x {form.stockMaterialSnapshot.heightCm} cm · {m2(form.stockMaterialSnapshot.remainingAreaCm2)}</p>
+                        </div>
+                        <button type="button" onClick={() => setStockPickerOpen(true)} style={{ flexShrink: 0, border: "1px solid rgba(16,185,129,.28)", background: "rgba(16,185,129,.12)", borderRadius: "12px", padding: "9px 12px", color: "#bbf7d0", fontSize: "12px", fontWeight: 900 }}>Değiştir</button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => setStockPickerOpen(true)} style={{ width: "100%", border: "1px dashed rgba(16,185,129,.35)", background: "rgba(2,6,23,.35)", borderRadius: "14px", padding: "12px", color: "#bbf7d0", fontSize: "12px", fontWeight: 900 }}>Stoktan plaka seç</button>
+                    )}
+                  </div>
+                )}
+                {form.stoneSource === "CUSTOMER_OWNED" && (
+                  <div style={{ marginTop: "12px" }}>
+                    <span className="yi-label">Müşteriye ait taş notu</span>
+                    <input className="yi-inp" placeholder="Örn: müşteri taşı kendisi getirecek" value={form.customerOwnedMaterialNote} onChange={(e) => setAlan("customerOwnedMaterialNote", e.target.value)} />
+                  </div>
+                )}
               </div>
 
               {/* Mutfak tipi */}
@@ -1944,6 +2111,62 @@ export default function YeniIsV3Page() {
           <span style={{ fontSize: "19px", lineHeight: 1 }}>✨</span>
           <span style={{ whiteSpace: "nowrap" }}>AI / Plan Yükle</span>
         </button>
+      )}
+
+      {/* Stoktan plaka seçici */}
+      {stockPickerOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(0,0,0,0.78)", display: "flex", alignItems: "flex-end", justifyContent: "center", backdropFilter: "blur(8px)" }} onClick={() => setStockPickerOpen(false)}>
+          <div style={{ width: "100%", maxWidth: "880px", maxHeight: "88dvh", overflow: "hidden", background: "#030712", border: "1px solid rgba(255,255,255,.10)", borderRadius: "28px 28px 0 0", boxShadow: "0 -30px 90px rgba(0,0,0,.55)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ position: "sticky", top: 0, zIndex: 2, background: "rgba(3,7,18,.96)", borderBottom: "1px solid rgba(255,255,255,.08)", padding: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+                <div>
+                  <p style={{ fontSize: "10px", fontWeight: 900, letterSpacing: ".18em", color: "#60a5fa", textTransform: "uppercase" }}>Stoktan Kullan</p>
+                  <h2 style={{ marginTop: "4px", fontSize: "20px", fontWeight: 900, color: "#fff" }}>Uygun plaka seç</h2>
+                  <p style={{ marginTop: "4px", fontSize: "12px", color: "#64748b" }}>Bu patch plaka bilgisini işe bağlar; rezervasyon sonraki fazda yazılacak.</p>
+                </div>
+                <button type="button" onClick={() => setStockPickerOpen(false)} style={{ border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.06)", color: "#cbd5e1", borderRadius: "999px", width: "40px", height: "40px", fontWeight: 900 }}>×</button>
+              </div>
+              <input
+                className="yi-inp"
+                style={{ marginTop: "14px" }}
+                placeholder="Ürün, plaka kodu, marka veya renk ara"
+                value={stockQ}
+                onChange={(e) => setStockQ(e.target.value)}
+              />
+            </div>
+            <div style={{ maxHeight: "calc(88dvh - 148px)", overflowY: "auto", padding: "14px", paddingBottom: "calc(24px + env(safe-area-inset-bottom,0px))" }}>
+              {stockLoading ? (
+                <div style={{ border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.04)", borderRadius: "18px", padding: "18px", color: "#94a3b8", fontSize: "13px" }}>Stok plakaları yükleniyor...</div>
+              ) : stockPlates.length === 0 ? (
+                <div style={{ border: "1px dashed rgba(255,255,255,.12)", background: "rgba(255,255,255,.035)", borderRadius: "18px", padding: "18px", color: "#64748b", fontSize: "13px" }}>Uygun kullanılabilir plaka bulunamadı.</div>
+              ) : (
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {stockPlates.map((plate) => (
+                    <button
+                      key={plate.id}
+                      type="button"
+                      onClick={() => selectStockPlate(plate)}
+                      style={{ width: "100%", border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.04)", borderRadius: "18px", padding: "13px", color: "#fff", textAlign: "left", cursor: "pointer" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: "13px", fontWeight: 900 }}>{plate.plateCode} · {plate.productName}</p>
+                          <p style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>{plate.materialType || "Malzeme tipi yok"} · {plate.warehouse?.name || "Depo yok"} · {plate.sourceType || "Kaynak yok"}</p>
+                        </div>
+                        <span style={{ flexShrink: 0, border: "1px solid rgba(16,185,129,.25)", background: "rgba(16,185,129,.1)", color: "#86efac", borderRadius: "999px", padding: "5px 9px", fontSize: "10px", fontWeight: 900 }}>{plate.status}</span>
+                      </div>
+                      <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px" }}>
+                        <YiChip label="Ölçü" value={`${plate.widthCm} x ${plate.heightCm}`} />
+                        <YiChip label="Kalan" value={m2(plate.remainingAreaCm2)} tone="text-blue-300" />
+                        <YiChip label="Maliyet" value={tl(plate.purchaseTotalCost)} tone="text-emerald-300" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Plaka modal */}
