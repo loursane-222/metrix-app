@@ -1,6 +1,7 @@
 import { getAtolyeAuth } from "@/lib/getAtolyeId"
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
+import { appendExecutionTimelineEvent } from "@/lib/execution/events";
 import { NextRequest, NextResponse } from "next/server";
 
 const phaseLabel: Record<string, string> = { OLCU: "Olcu", IMALAT: "Imalat", MONTAJ: "Montaj", TAS_ALINACAK: "Tas Alinacak" };
@@ -79,6 +80,18 @@ export async function PATCH(req: NextRequest) {
     if (notes !== undefined && notes.trim() !== "" && notes.trim() !== prevNotes.trim()) {
       const deepLink = `/dashboard/is-programi?phaseId=${phaseId}`;
       await logActivity({ atolyeId: auth.atolyeId, type: "program_not_eklendi", message: musteriAdi + " – " + fazAdi + " fazina not eklendi.", refId: phaseId, url: deepLink, userId: auth.userId, personelId: auth.personelId || undefined });
+      try {
+        await appendExecutionTimelineEvent({
+          schedulePhaseId: phaseId,
+          atolyeId: auth.atolyeId,
+          userId: auth.userId,
+          personelId: auth.personelId || null,
+          operationStep: phase.phase === "OLCU" ? "OLCU" : phase.phase === "MONTAJ" ? "MONTAJ" : "DIGER",
+          eventType: "NOTE_ADDED",
+          note: notes.trim(),
+          metadata: { source: "phase-full" },
+        });
+      } catch {}
     }
 
     const updated = await prisma.schedulePhase.findUnique({
