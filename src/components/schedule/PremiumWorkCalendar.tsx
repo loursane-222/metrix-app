@@ -22,9 +22,10 @@ type PremiumWorkCalendarProps = {
   initialSchedules?: any[];
   initialYear?: number;
   initialMonth?: number;
+  initialDay?: number;
 };
 
-export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initialMonth }: PremiumWorkCalendarProps) {
+export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initialMonth, initialDay }: PremiumWorkCalendarProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const rawSeg = searchParams.get("seg");
@@ -41,7 +42,10 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
   const [view, setView] = useState<ViewMode>("week");
   const [currentDate, setCurrentDate] = useState(() => {
     if (initialYear && initialMonth) {
-      return dayjs(new Date(initialYear, initialMonth - 1, 1));
+      const today = dayjs();
+      const isCurrentMonth = initialYear === today.year() && initialMonth === today.month() + 1;
+      const day = initialDay || (isCurrentMonth ? today.date() : 1);
+      return dayjs(new Date(initialYear, initialMonth - 1, day));
     }
     return dayjs();
   });
@@ -293,19 +297,12 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
   }
 
   function goToDate(nextDate: dayjs.Dayjs) {
-    const currentMonthKey = currentDate.format("YYYY-MM");
-    const nextMonthKey = nextDate.format("YYYY-MM");
-
-    if (currentMonthKey === nextMonthKey) {
-      setCurrentDate(nextDate);
-      return;
-    }
-
+    setCurrentDate(nextDate);
     const params = new URLSearchParams(searchParams.toString());
     params.set("year", String(nextDate.year()));
     params.set("month", String(nextDate.month() + 1));
-    params.delete("phaseId");
-    window.location.href = `/dashboard/is-programi?${params.toString()}`;
+    params.set("day", String(nextDate.date()));
+    router.replace(`/dashboard/is-programi?${params.toString()}`);
   }
 
   function goPrev() {
@@ -332,7 +329,7 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
       return;
     }
 
-    window.location.href = `/dashboard/is-programi?year=${targetDate.year()}&month=${targetDate.month() + 1}`;
+    window.location.href = `/dashboard/is-programi?year=${targetDate.year()}&month=${targetDate.month() + 1}&day=${targetDate.date()}`;
   }
 
   async function moveTaskToDay(taskId: string, targetDay: dayjs.Dayjs) {

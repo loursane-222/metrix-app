@@ -13,13 +13,16 @@ function safeJson<T>(data: T): T {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; month?: string }>;
+  searchParams: Promise<{ year?: string; month?: string; day?: string }>;
 }) {
   const params = await searchParams;
   const today = new Date();
 
   const year = Number(params.year) || today.getFullYear();
   const month = Math.max(1, Math.min(12, Number(params.month) || today.getMonth() + 1));
+  const day = Number(params.day);
+  const initialDay = Number.isFinite(day) && day >= 1 && day <= 31 ? day : undefined;
+  const hasExplicitDateParams = Boolean(params.year || params.month || params.day);
 
   const schedulesRaw: any[] = await getSchedulesForMonth(year, month);
   const schedules = safeJson(schedulesRaw);
@@ -29,8 +32,9 @@ export default async function Page({
       <WhatsappOnayPopup />
       <PremiumWorkCalendar
         initialSchedules={schedules}
-        initialYear={year}
-        initialMonth={month}
+        initialYear={hasExplicitDateParams ? year : undefined}
+        initialMonth={hasExplicitDateParams ? month : undefined}
+        initialDay={hasExplicitDateParams ? initialDay : undefined}
       />
     </div>
   );

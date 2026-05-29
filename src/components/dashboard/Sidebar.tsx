@@ -9,12 +9,6 @@ type Atolye = {
   logoUrl?: string;
 };
 
-type SidebarStats = {
-  toplamIs: number;
-  onaylananIs: number;
-  bekleyenIs: number;
-};
-
 type CurrentUser = {
   role?: "admin" | "personel";
   personelId?: string | null;
@@ -26,6 +20,7 @@ const menuItems = [
   { href: "/dashboard/isler", label: "İşler", badge: "Teklifler", onboardingTarget: "yeni-is" },
   { href: "/dashboard/musteriler", label: "Müşteriler", badge: "CRM", onboardingTarget: "musteriler" },
   { href: "/dashboard/is-programi", label: "İş Programı", badge: "Planlama", onboardingTarget: "is-programi" },
+  { href: "/dashboard/stok", label: "Stok", badge: "Malzeme", onboardingTarget: "stok" },
   { href: "/dashboard/atolye", label: "Atölye", badge: "Maliyet", onboardingTarget: "atolye-gideri" },
   { href: "/dashboard/personel", label: "Personel", badge: "Ekip", onboardingTarget: "personel" },
   { href: "/dashboard/plaka-planlayici", label: "Plaka Planlayıcı", badge: "Optimizasyon", onboardingTarget: "plaka-planlayici" },
@@ -36,9 +31,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [atolye, setAtolye] = useState<Atolye | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [stats, setStats] = useState<SidebarStats | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [vadeTaksitler, setVadeTaksitler] = useState<any[]>([]);
 
   useEffect(() => {
     function userGetir() {
@@ -55,38 +48,13 @@ export default function Sidebar() {
         .catch(() => setAtolye(null));
     }
 
-    function ozetGetir() {
-      fetch("/api/dashboard", { cache: "no-store", credentials: "include" })
-        .then((res) => res.json())
-        .then((data) =>
-          setStats({
-            toplamIs: Number(data?.toplamIs || 0),
-            onaylananIs: Number(data?.onaylananIs || 0),
-            bekleyenIs: Number(data?.bekleyenIs || 0),
-          })
-        )
-        .catch(() => setStats(null));
-    }
-
-    function vadeleriGetir() {
-      fetch("/api/odeme-plani?vadeler=1", { cache: "no-store", credentials: "include" })
-        .then((res) => res.json())
-        .then((data) => setVadeTaksitler(data?.taksitler || []))
-        .catch(() => setVadeTaksitler([]));
-    }
-
     userGetir();
     atolyeGetir();
-    ozetGetir();
-    vadeleriGetir();
-
-    const interval = window.setInterval(() => { ozetGetir(); vadeleriGetir(); }, 60000);
 
     function aktifOluncaYenile() {
       if (document.visibilityState === "visible") {
         userGetir();
-        ozetGetir();
-        vadeleriGetir();
+        atolyeGetir();
       }
     }
 
@@ -94,7 +62,6 @@ export default function Sidebar() {
     document.addEventListener("visibilitychange", aktifOluncaYenile);
 
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener("focus", aktifOluncaYenile);
       document.removeEventListener("visibilitychange", aktifOluncaYenile);
     };
@@ -136,10 +103,10 @@ export default function Sidebar() {
             <img
               src={atolye.logoUrl}
               alt="Firma logosu"
-              className="h-12 w-12 shrink-0 rounded-2xl border border-white/10 bg-white object-cover"
+              className="h-11 w-11 shrink-0 rounded-2xl border border-white/10 bg-white object-cover"
             />
           ) : (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-lg font-bold">
               {logoFallback}
             </div>
           )}
@@ -157,20 +124,10 @@ export default function Sidebar() {
             )}
           </div>
         </div>
-
-        <div className="mt-3 rounded-xl bg-gradient-to-br from-blue-500/20 via-violet-500/20 to-fuchsia-500/20 p-3">
-          <p className="text-xs text-slate-300">Bugünün Özeti</p>
-          <p className="mt-1 text-xl font-bold leading-none">
-            {stats?.toplamIs ?? 0} aktif teklif
-          </p>
-          <p className="mt-2 text-xs leading-snug text-slate-300">
-            {stats?.onaylananIs ?? 0} onay, {stats?.bekleyenIs ?? 0} takip bekliyor
-          </p>
-        </div>
       </div>
 
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
-        <nav className="space-y-1">
+        <nav className="space-y-0.5">
           {visibleMenuItems.map((item) => {
             const active = pathname === item.href;
             return (
@@ -180,7 +137,7 @@ export default function Sidebar() {
                 onClick={() => mobile && setMobileOpen(false)}
                 data-onboarding-target={item.onboardingTarget}
                 className={[
-                  "group flex items-center justify-between rounded-2xl border px-4 py-2.5 text-sm transition",
+                  "group flex items-center justify-between rounded-xl border px-3 py-2 text-sm transition",
                   active
                     ? "border-blue-400/50 bg-blue-500/15 text-white shadow-[0_0_0_1px_rgba(96,165,250,0.3)]"
                     : "border-transparent text-slate-200 hover:border-white/10 hover:bg-white/5 hover:text-white",
@@ -194,38 +151,11 @@ export default function Sidebar() {
             );
           })}
         </nav>
-
-        {currentUser?.role !== "personel" && vadeTaksitler.length > 0 && (
-          <div className="mt-3 rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-3">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-amber-300">
-              Tahsilat Takibi
-            </p>
-            <h3 className="mt-1 text-sm font-semibold leading-tight">
-              {vadeTaksitler.length} taksit vadesi geliyor
-            </h3>
-            <div className="mt-2 space-y-1">
-              {vadeTaksitler.slice(0, 3).map((t: any) => {
-                const gun = Math.ceil((new Date(t.vadeTarihi).getTime() - Date.now()) / 86400000);
-                const gecti = gun < 0;
-                const musteri = t.plan?.musteri;
-                const musteriAdi = musteri?.firmaAdi || musteri?.ad || "—";
-                return (
-                  <div key={t.id} className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[11px] text-slate-300">{musteriAdi}</span>
-                    <span className={`shrink-0 text-[11px] font-bold ${gecti ? "text-red-400" : "text-amber-300"}`}>
-                      {gecti ? `${Math.abs(gun)}g gecikti` : gun === 0 ? "Bugün" : `${gun}g`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       <button
         onClick={logout}
-        className="mt-3 flex w-full shrink-0 items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300"
+        className="mt-3 flex w-full shrink-0 items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300"
       >
         <span>Çıkış Yap</span>
         <span>→</span>
