@@ -4,6 +4,7 @@ import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import { releaseOpenReservationsForJob, syncJobStockDraftReservation } from "@/lib/stock/reservations";
 
 
 
@@ -231,57 +232,67 @@ export async function POST(req: NextRequest) {
       ? "stokta"
       : (veri as any).tasDurumu || null
 
-  const is = await prisma.is.create({
-    data: {
-      plakaLayoutJson: (veri as any).plakaLayoutJson || null,
-      plakaImageUrl: (veri as any).plakaImageUrl || null,
-      atolyeId: atolyeId,
-      musteriId: bagliMusteriId,
-      teklifNo,
-      musteriAdi,
-      urunAdi,
-      malzemeTipi,
-      musteriTipi,
-      plakaFiyatiEuro: parseFloat(plakaFiyatiEuro) || 0,
-      metrajMtul: normalTezgahMtul,
-      birMtulDakika: normalizeMtulInput(birMtulDakika) || 0,
-      tezgahArasiMtul: normalTezgahArasiMtul,
-      tezgahArasiDakika: parseFloat(tezgahArasiDakika) || 0,
-      adaTezgahMtul: normalAdaTezgahMtul,
-      adaTezgahDakika: parseFloat(adaTezgahDakika) || 0,
-      kullanilanKur: parseFloat(kullanilanKur) || 0,
-      plakaGenislikCm: parseFloat(plakaGenislikCm) || 0,
-      plakaUzunlukCm: parseFloat(plakaUzunlukCm) || 0,
-      plakadanAlinanMtul: gercekPlakaMtul,
-      kullanilanPlakaSayisi,
-      karYuzdesi: parseFloat(karYuzdesi) || 0,
-      notlar,
-      toplamSureDakika,
-      iscilikMaliyeti,
-      malzemeMaliyeti,
-      toplamMaliyet,
-      kdvTutari,
-      kdvDahilFiyat,
-      satisFiyati,
-      mtulSatisFiyati,
-      teklifGecerlilikTarihi,
-      isTarihi: isTarihi ? new Date(isTarihi) : null,
-      durum: 'teklif_verildi',
-      tasDurumu: legacyTasDurumu,
-      stoneSource: normalizedStoneSource,
-      selectedStockPlateId: safeSelectedStockPlateId,
-      stockMaterialSnapshot: safeStockMaterialSnapshot,
-      customerOwnedMaterialNote: normalizedStoneSource === "CUSTOMER_OWNED" ? String(customerOwnedMaterialNote || "").trim() || null : null,
-      operasyonlar: {
-        create: (operasyonlar || []).map((op: { operasyonTipi: string; makineId?: string; adet: number; birimDakika: number; toplamDakika: number }) => ({
-          operasyonTipi: op.operasyonTipi,
-          makineId: op.makineId || null,
-          adet: op.adet,
-          birimDakika: op.birimDakika,
-          toplamDakika: op.toplamDakika,
-        })),
+  const is = await prisma.$transaction(async (tx) => {
+    const created = await tx.is.create({
+      data: {
+        plakaLayoutJson: (veri as any).plakaLayoutJson || null,
+        plakaImageUrl: (veri as any).plakaImageUrl || null,
+        atolyeId: atolyeId,
+        musteriId: bagliMusteriId,
+        teklifNo,
+        musteriAdi,
+        urunAdi,
+        malzemeTipi,
+        musteriTipi,
+        plakaFiyatiEuro: parseFloat(plakaFiyatiEuro) || 0,
+        metrajMtul: normalTezgahMtul,
+        birMtulDakika: normalizeMtulInput(birMtulDakika) || 0,
+        tezgahArasiMtul: normalTezgahArasiMtul,
+        tezgahArasiDakika: parseFloat(tezgahArasiDakika) || 0,
+        adaTezgahMtul: normalAdaTezgahMtul,
+        adaTezgahDakika: parseFloat(adaTezgahDakika) || 0,
+        kullanilanKur: parseFloat(kullanilanKur) || 0,
+        plakaGenislikCm: parseFloat(plakaGenislikCm) || 0,
+        plakaUzunlukCm: parseFloat(plakaUzunlukCm) || 0,
+        plakadanAlinanMtul: gercekPlakaMtul,
+        kullanilanPlakaSayisi,
+        karYuzdesi: parseFloat(karYuzdesi) || 0,
+        notlar,
+        toplamSureDakika,
+        iscilikMaliyeti,
+        malzemeMaliyeti,
+        toplamMaliyet,
+        kdvTutari,
+        kdvDahilFiyat,
+        satisFiyati,
+        mtulSatisFiyati,
+        teklifGecerlilikTarihi,
+        isTarihi: isTarihi ? new Date(isTarihi) : null,
+        durum: 'teklif_verildi',
+        tasDurumu: legacyTasDurumu,
+        stoneSource: normalizedStoneSource,
+        selectedStockPlateId: safeSelectedStockPlateId,
+        stockMaterialSnapshot: safeStockMaterialSnapshot,
+        customerOwnedMaterialNote: normalizedStoneSource === "CUSTOMER_OWNED" ? String(customerOwnedMaterialNote || "").trim() || null : null,
+        operasyonlar: {
+          create: (operasyonlar || []).map((op: { operasyonTipi: string; makineId?: string; adet: number; birimDakika: number; toplamDakika: number }) => ({
+            operasyonTipi: op.operasyonTipi,
+            makineId: op.makineId || null,
+            adet: op.adet,
+            birimDakika: op.birimDakika,
+            toplamDakika: op.toplamDakika,
+          })),
+        },
       },
-    },
+    })
+
+    await syncJobStockDraftReservation(tx, {
+      atolyeId,
+      isId: created.id,
+      stockPlateId: safeSelectedStockPlateId,
+    })
+
+    return created
   })
 
   const tumIsler = await prisma.is.findMany({
@@ -327,6 +338,9 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ hata: 'id gerekli.' }, { status: 400 })
   const is = await prisma.is.findFirst({ where: { id, atolyeId } })
   if (!is) return NextResponse.json({ hata: 'İş bulunamadı.' }, { status: 404 })
-  await prisma.is.delete({ where: { id } })
+  await prisma.$transaction(async (tx) => {
+    await releaseOpenReservationsForJob(tx, { atolyeId, isId: id })
+    await tx.is.delete({ where: { id } })
+  })
   return NextResponse.json({ ok: true })
 }

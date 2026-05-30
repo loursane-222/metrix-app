@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { PhaseType, PHASE_ORDER, canCompletePhase } from "@/lib/types/schedule";
+import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
 
 async function authBilgisiAl(): Promise<{
   userId: string | null;
@@ -188,53 +189,80 @@ export async function upsertWorkSchedule(data: {
   });
   if (!is) throw new Error("İş bulunamadı");
 
-  const schedule = await prisma.workSchedule.upsert({
+  const existingSchedule = await prisma.workSchedule.findUnique({
     where: { isId: data.isId },
-    create: {
-      isId: data.isId,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      notes: data.notes,
-      phases: {
-        create: PHASE_ORDER.map((phase) => {
-          const p = data.phases?.find((x) => x.phase === phase);
-          return {
-            phase,
-            plannedStart: p?.plannedStart ?? null,
-            plannedEnd: p?.plannedEnd ?? null,
-          };
-        }),
-      },
-    },
-    update: {
-      startDate: data.startDate,
-      endDate: data.endDate,
-      notes: data.notes,
-    },
-    include: { phases: true },
+    select: { id: true },
   });
 
-  if (data.phases) {
-    for (const phaseData of data.phases) {
-      await prisma.schedulePhase.upsert({
-        where: {
-          workScheduleId_phase: {
-            workScheduleId: schedule.id,
-            phase: phaseData.phase,
+  let schedule;
+  try {
+    schedule = await prisma.$transaction(async (tx) => {
+      const saved = await tx.workSchedule.upsert({
+        where: { isId: data.isId },
+        create: {
+          isId: data.isId,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          notes: data.notes,
+          phases: {
+            create: PHASE_ORDER.map((phase) => {
+              const p = data.phases?.find((x) => x.phase === phase);
+              return {
+                phase,
+                plannedStart: p?.plannedStart ?? null,
+                plannedEnd: p?.plannedEnd ?? null,
+              };
+            }),
           },
         },
-        create: {
-          workScheduleId: schedule.id,
-          phase: phaseData.phase,
-          plannedStart: phaseData.plannedStart ?? null,
-          plannedEnd: phaseData.plannedEnd ?? null,
-        },
         update: {
-          plannedStart: phaseData.plannedStart ?? null,
-          plannedEnd: phaseData.plannedEnd ?? null,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          notes: data.notes,
         },
+        include: { phases: true },
       });
+
+      if (data.phases) {
+        for (const phaseData of data.phases) {
+          await tx.schedulePhase.upsert({
+            where: {
+              workScheduleId_phase: {
+                workScheduleId: saved.id,
+                phase: phaseData.phase,
+              },
+            },
+            create: {
+              workScheduleId: saved.id,
+              phase: phaseData.phase,
+              plannedStart: phaseData.plannedStart ?? null,
+              plannedEnd: phaseData.plannedEnd ?? null,
+            },
+            update: {
+              plannedStart: phaseData.plannedStart ?? null,
+              plannedEnd: phaseData.plannedEnd ?? null,
+            },
+          });
+        }
+      }
+
+      const phases = await tx.schedulePhase.findMany({ where: { workScheduleId: saved.id } });
+      if (!existingSchedule) {
+        const imalatPhase = phases.find((phase) => phase.phase === "IMALAT");
+        await activateDraftReservationsForJob(tx, {
+          atolyeId,
+          isId: data.isId,
+          schedulePhaseId: imalatPhase?.id ?? null,
+        });
+      }
+
+      return { ...saved, phases };
+    });
+  } catch (error) {
+    if (isStockReservationConflict(error)) {
+      throw new Error("Bu plaka başka bir aktif işte rezerve.");
     }
+    throw error;
   }
 
   revalidatePath("/dashboard/is-programi");

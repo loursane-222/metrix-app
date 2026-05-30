@@ -508,7 +508,7 @@ model StockReservation {
   isId            String?
   schedulePhaseId String?
   reservedAreaCm2 Decimal?
-  status          String    @default("ACTIVE")
+  status          String    @default("DRAFT")
   releasedAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -516,6 +516,7 @@ model StockReservation {
   @@index([atolyeId])
   @@index([atolyeId, stockPlateId])
   @@index([atolyeId, isId])
+  @@index([atolyeId, isId, stockPlateId, status])
   @@index([atolyeId, schedulePhaseId])
   @@index([atolyeId, status])
   @@map("stock_reservations")

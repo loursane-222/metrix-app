@@ -4,6 +4,7 @@ import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import { releaseOpenReservationsForJob, syncJobStockDraftReservation } from "@/lib/stock/reservations";
 
 
 
@@ -136,55 +137,63 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       ? "stokta"
       : body.tasDurumu || mevcutIs.tasDurumu
 
-  await prisma.isOperasyon.deleteMany({ where: { isId: id } })
+  await prisma.$transaction(async (tx) => {
+    await tx.isOperasyon.deleteMany({ where: { isId: id } })
 
-  await prisma.is.update({
-    where: { id },
-    data: {
-      musteriId: bagliMusteriId,
-      musteriAdi: body.musteriAdi,
-      urunAdi: body.urunAdi,
-      malzemeTipi: body.malzemeTipi,
-      musteriTipi: body.musteriTipi,
-      plakaFiyatiEuro: body.plakaFiyatiEuro,
-      metrajMtul: normalTezgahMtul,
-      birMtulDakika: body.birMtulDakika,
-      tezgahArasiMtul: normalTezgahArasiMtul,
-      tezgahArasiDakika: body.tezgahArasiDakika || 0,
-      adaTezgahMtul: normalAdaTezgahMtul,
-      adaTezgahDakika: body.adaTezgahDakika || 0,
-      kullanilanKur: body.kullanilanKur,
-      karYuzdesi: body.karYuzdesi,
-      plakaGenislikCm: body.plakaGenislikCm || 0,
-      plakaUzunlukCm: body.plakaUzunlukCm || 0,
-      plakadanAlinanMtul: body.plakadanAlinanMtul || 0,
-      kullanilanPlakaSayisi: toplamPlakaSayisi,
-      kirilanTasPlaka: body.kirilanTasPlaka || 0,
-      hataliKesimPlaka: body.hataliKesimPlaka || 0,
-      toplamSureDakika,
-      iscilikMaliyeti,
-      malzemeMaliyeti,
-      toplamMaliyet,
-      satisFiyati,
-      kdvTutari,
-      kdvDahilFiyat,
-      mtulSatisFiyati,
-      notlar: body.notlar,
-      tasDurumu: legacyTasDurumu,
-      stoneSource: normalizedStoneSource,
-      selectedStockPlateId: safeSelectedStockPlateId,
-      stockMaterialSnapshot: safeStockMaterialSnapshot,
-      customerOwnedMaterialNote: normalizedStoneSource === "CUSTOMER_OWNED" ? String(body.customerOwnedMaterialNote || "").trim() || null : null,
-      operasyonlar: {
-        create: (body.operasyonlar || []).map((op: any) => ({
-          operasyonTipi: op.operasyonTipi,
-          makineId: op.makineId || null,
-          adet: op.adet,
-          birimDakika: op.birimDakika,
-          toplamDakika: op.toplamDakika,
-        }))
+    await tx.is.update({
+      where: { id },
+      data: {
+        musteriId: bagliMusteriId,
+        musteriAdi: body.musteriAdi,
+        urunAdi: body.urunAdi,
+        malzemeTipi: body.malzemeTipi,
+        musteriTipi: body.musteriTipi,
+        plakaFiyatiEuro: body.plakaFiyatiEuro,
+        metrajMtul: normalTezgahMtul,
+        birMtulDakika: body.birMtulDakika,
+        tezgahArasiMtul: normalTezgahArasiMtul,
+        tezgahArasiDakika: body.tezgahArasiDakika || 0,
+        adaTezgahMtul: normalAdaTezgahMtul,
+        adaTezgahDakika: body.adaTezgahDakika || 0,
+        kullanilanKur: body.kullanilanKur,
+        karYuzdesi: body.karYuzdesi,
+        plakaGenislikCm: body.plakaGenislikCm || 0,
+        plakaUzunlukCm: body.plakaUzunlukCm || 0,
+        plakadanAlinanMtul: body.plakadanAlinanMtul || 0,
+        kullanilanPlakaSayisi: toplamPlakaSayisi,
+        kirilanTasPlaka: body.kirilanTasPlaka || 0,
+        hataliKesimPlaka: body.hataliKesimPlaka || 0,
+        toplamSureDakika,
+        iscilikMaliyeti,
+        malzemeMaliyeti,
+        toplamMaliyet,
+        satisFiyati,
+        kdvTutari,
+        kdvDahilFiyat,
+        mtulSatisFiyati,
+        notlar: body.notlar,
+        tasDurumu: legacyTasDurumu,
+        stoneSource: normalizedStoneSource,
+        selectedStockPlateId: safeSelectedStockPlateId,
+        stockMaterialSnapshot: safeStockMaterialSnapshot,
+        customerOwnedMaterialNote: normalizedStoneSource === "CUSTOMER_OWNED" ? String(body.customerOwnedMaterialNote || "").trim() || null : null,
+        operasyonlar: {
+          create: (body.operasyonlar || []).map((op: any) => ({
+            operasyonTipi: op.operasyonTipi,
+            makineId: op.makineId || null,
+            adet: op.adet,
+            birimDakika: op.birimDakika,
+            toplamDakika: op.toplamDakika,
+          }))
+        }
       }
-    }
+    })
+
+    await syncJobStockDraftReservation(tx, {
+      atolyeId,
+      isId: id,
+      stockPlateId: safeSelectedStockPlateId,
+    })
   })
 
   return NextResponse.json({
@@ -249,10 +258,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data.kaybedilmeTarihi = null
     }
 
-    const updated = await prisma.is.update({
-      where: { id },
-      data,
-      include: { musteri: true }
+    const updated = await prisma.$transaction(async (tx) => {
+      const job = await tx.is.update({
+        where: { id },
+        data,
+        include: { musteri: true }
+      })
+
+      if (durum === 'kaybedildi') {
+        await releaseOpenReservationsForJob(tx, { atolyeId: job.atolyeId, isId: id })
+      }
+
+      return job
     })
 
     // Onaylandığında otomatik ödeme planı oluştur

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
+import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
 
 async function ownerAtolyeIdAl() {
   const cookieStore = await cookies();
@@ -103,29 +104,40 @@ export async function POST(req: NextRequest) {
     const imalat = safeDate(plan.IMALAT, defaultImalat);
     const montaj = safeDate(plan.MONTAJ, defaultMontaj);
 
-    const schedule = await prisma.workSchedule.create({
-      data: {
-        isId,
-        startDate: olcu,
-        endDate: montaj,
-        phases: {
-          create: [
-            { phase: "OLCU", plannedStart: olcu, plannedEnd: olcu },
-            { phase: "IMALAT", plannedStart: imalat, plannedEnd: imalat },
-            { phase: "MONTAJ", plannedStart: montaj, plannedEnd: montaj },
-          ],
+    const schedule = await prisma.$transaction(async (tx) => {
+      const created = await tx.workSchedule.create({
+        data: {
+          isId,
+          startDate: olcu,
+          endDate: montaj,
+          phases: {
+            create: [
+              { phase: "OLCU", plannedStart: olcu, plannedEnd: olcu },
+              { phase: "IMALAT", plannedStart: imalat, plannedEnd: imalat },
+              { phase: "MONTAJ", plannedStart: montaj, plannedEnd: montaj },
+            ],
+          },
         },
-      },
-      include: {
-        is: true,
-        phases: {
-          include: {
-            fazAtamalar: {
-              include: { personel: true },
+        include: {
+          is: true,
+          phases: {
+            include: {
+              fazAtamalar: {
+                include: { personel: true },
+              },
             },
           },
         },
-      },
+      });
+
+      const imalatPhase = created.phases.find((phase) => phase.phase === "IMALAT");
+      await activateDraftReservationsForJob(tx, {
+        atolyeId,
+        isId,
+        schedulePhaseId: imalatPhase?.id ?? null,
+      });
+
+      return created;
     });
 
     // ── AI mod personel ataması ─────────────────────────────────────────────
@@ -200,6 +212,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, schedule });
   } catch (error) {
+    if (isStockReservationConflict(error)) {
+      return NextResponse.json({ error: "Bu plaka başka bir aktif işte rezerve." }, { status: 409 });
+    }
     console.error(error);
     return NextResponse.json({ error: "İş programa eklenemedi" }, { status: 500 });
   }

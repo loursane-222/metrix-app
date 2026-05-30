@@ -2,6 +2,7 @@ import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
 import { NextResponse } from "next/server";
+import { releaseOpenReservationsForJob } from "@/lib/stock/reservations";
 
 
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
@@ -42,7 +43,13 @@ export async function POST(req: Request) {
     if (durum === "kaybedildi") { data.kaybedilmeTarihi = new Date(); data.onaylanmaTarihi = null; }
     if (durum === "teklif_verildi") { data.onaylanmaTarihi = null; data.kaybedilmeTarihi = null; }
 
-    const updated = await prisma.is.update({ where: { id }, data, include: { musteri: true } });
+    const updated = await prisma.$transaction(async (tx) => {
+      const job = await tx.is.update({ where: { id }, data, include: { musteri: true } });
+      if (durum === "kaybedildi") {
+        await releaseOpenReservationsForJob(tx, { atolyeId: job.atolyeId, isId: id });
+      }
+      return job;
+    });
 
     if (atolyeId) {
       const tutar = Number(fiyat || updated.satisFiyati || 0);
