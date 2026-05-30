@@ -465,6 +465,8 @@ export default function StokPage() {
 
       <MobileStockView
         summary={summary}
+        plates={plates}
+        platesLoading={platesLoading}
         tabs={tabs}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -520,7 +522,7 @@ function PlateList({ plates, loading }: { plates: StockPlate[]; loading: boolean
     <div className="min-h-0 flex-1 overflow-y-auto pr-1">
       <div className="grid gap-2">
         {plates.map((plate) => (
-          <div key={plate.id} className="grid grid-cols-[120px_minmax(0,1fr)_120px_120px_120px] items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.045] px-4 py-3">
+          <div key={plate.id} className="grid gap-2 rounded-2xl border border-white/8 bg-white/[0.045] px-4 py-3 md:grid-cols-[120px_minmax(0,1fr)_120px_120px_120px] md:items-center md:gap-3">
             <p className="text-sm font-black text-white">{plate.plateCode}</p>
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-slate-100">{plate.productName}</p>
@@ -528,7 +530,7 @@ function PlateList({ plates, loading }: { plates: StockPlate[]; loading: boolean
             </div>
             <p className="text-xs font-bold text-slate-400">{plate.widthCm} x {plate.heightCm} cm</p>
             <p className="text-sm font-black tabular-nums text-blue-200">{fmtArea(plate.remainingAreaCm2)}</p>
-            <div className="text-right">
+            <div className="text-left md:text-right">
               <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-black ${statusClass(plate.status)}`}>{statusLabel(plate.status)}</span>
               <p className="mt-1 text-xs font-bold text-emerald-300">{fmtMoney(plate.purchaseTotalCost, plate.purchaseCurrency)}</p>
             </div>
@@ -756,8 +758,10 @@ function ImportModal({
   );
 }
 
-function MobileStockView({ summary, tabs, activeTab, setActiveTab, hasStock, openProduct, onImportClick }: {
+function MobileStockView({ summary, plates, platesLoading, tabs, activeTab, setActiveTab, hasStock, openProduct, onImportClick }: {
   summary: SummaryResponse;
+  plates: StockPlate[];
+  platesLoading: boolean;
   tabs: readonly (readonly [string, string])[];
   activeTab: string;
   setActiveTab: (tab: any) => void;
@@ -790,35 +794,53 @@ function MobileStockView({ summary, tabs, activeTab, setActiveTab, hasStock, ope
           <ActionButton onClick={() => { window.location.href = "/api/stock/import/template"; }}>Şablon İndir</ActionButton>
           <ActionButton onClick={onImportClick}>Excel Yükle</ActionButton>
         </div>
-        {!hasStock ? (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
-            <p className="text-[12px] font-bold text-white">Stok modülü hazır.</p>
-            <p className="mt-1 text-[11px] leading-5 text-slate-500">Metrix stokları ürün bazında gösterir, ama her plakayı ayrı takip eder. Shade/ton kodunu girerek aynı işte ton karışmasını önleyebilirsin.</p>
-          </div>
-        ) : activeTab === "products" || activeTab === "overview" ? (
-          <div className="space-y-2">
-            {summary.products.map((product) => (
-              <button key={`${product.productName}-${product.materialType ?? ""}`} onClick={() => openProduct(product)} className="w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-left active:bg-white/[0.055]">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-black text-white">{product.productName}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-slate-500">{product.materialType || "Malzeme tipi yok"}</p>
-                    {product.shadeGroups.length > 0 && (
-                      <p className="mt-1 truncate text-[10px] font-bold text-cyan-200">
-                        {product.shadeGroups.slice(0, 2).map((s) => `${s.shadeCode}: ${s.plateCount}`).join(" · ")}
-                      </p>
-                    )}
+        {activeTab === "overview" ? (
+          !hasStock ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
+              <p className="text-[12px] font-bold text-white">Stok modülü hazır.</p>
+              <p className="mt-1 text-[11px] leading-5 text-slate-500">Genel özet, ilk Excel yüklemesinden sonra stok değeri, plaka sayısı ve fire durumunu gösterecek.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <KpiMini label="Ürün" value={String(summary.totals.productCount)} />
+              <KpiMini label="Depo" value={String(summary.totals.warehouseCount)} />
+              <KpiMini label="Rezerve" value={String(summary.totals.reservedPlateCount)} />
+              <KpiMini label="Fire / Kırık" value={String(summary.totals.openFireRecordCount || summary.totals.brokenPlateCount)} />
+            </div>
+          )
+        ) : activeTab === "products" ? (
+          !hasStock ? (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
+              <p className="text-[12px] font-bold text-white">Henüz ürün yok.</p>
+              <p className="mt-1 text-[11px] leading-5 text-slate-500">Excel yüklediğinde ürünler burada ürün adı, malzeme tipi, shade ve stok değeriyle listelenecek.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {summary.products.map((product) => (
+                <button key={`${product.productName}-${product.materialType ?? ""}`} onClick={() => openProduct(product)} className="w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 text-left active:bg-white/[0.055]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-black text-white">{product.productName}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-slate-500">{product.materialType || "Malzeme tipi yok"}</p>
+                      {product.shadeGroups.length > 0 && (
+                        <p className="mt-1 truncate text-[10px] font-bold text-cyan-200">
+                          {product.shadeGroups.slice(0, 2).map((s) => `${s.shadeCode}: ${s.plateCount}`).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-[13px] font-black text-emerald-300">{fmtMoney(product.totalStockValue)}</p>
                   </div>
-                  <p className="text-[13px] font-black text-emerald-300">{fmtMoney(product.totalStockValue)}</p>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-black text-emerald-300">{product.availablePlateCount} tam</span>
-                  <span className="rounded-full border border-blue-400/20 bg-blue-500/10 px-2 py-1 text-[10px] font-black text-blue-300">{fmtArea(product.totalRemainingAreaCm2)}</span>
-                  <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2 py-1 text-[10px] font-black text-violet-300">{product.offcutCount} offcut</span>
-                </div>
-              </button>
-            ))}
-          </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-black text-emerald-300">{product.availablePlateCount} tam</span>
+                    <span className="rounded-full border border-blue-400/20 bg-blue-500/10 px-2 py-1 text-[10px] font-black text-blue-300">{fmtArea(product.totalRemainingAreaCm2)}</span>
+                    <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2 py-1 text-[10px] font-black text-violet-300">{product.offcutCount} offcut</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )
+        ) : activeTab === "plates" ? (
+          <PlateList plates={plates} loading={platesLoading} />
         ) : (
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
             <p className="text-[12px] font-bold text-white">Bu segment read-only foundation.</p>
