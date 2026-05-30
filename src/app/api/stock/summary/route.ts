@@ -127,7 +127,7 @@ export async function GET() {
       offcutCount: offcuts.length,
       fireRecordCount: fireRecords.length,
       openFireRecordCount: fireRecords.filter((r) => String(r.status).toUpperCase() !== "RESOLVED").length,
-      pendingPurchaseCount: purchases.filter((p) => !["COMPLETED", "CANCELLED"].includes(String(p.status).toUpperCase())).length,
+      pendingPurchaseCount: purchases.filter((p) => !["COMPLETED", "RECEIVED", "CANCELLED"].includes(String(p.status).toUpperCase())).length,
       totalRemainingAreaCm2: productRows.reduce((sum, p) => sum + p.totalRemainingAreaCm2, 0),
       totalStockValue: productRows.reduce((sum, p) => sum + p.totalStockValue, 0),
     };

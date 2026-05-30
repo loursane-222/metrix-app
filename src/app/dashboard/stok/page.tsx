@@ -59,6 +59,46 @@ type StockMovementRow = {
   createdAt: string;
 };
 
+type StockPurchaseRow = {
+  id: string;
+  purchaseCode: string;
+  isId: string | null;
+  jobId: string | null;
+  customerName: string | null;
+  jobProductName: string | null;
+  offerNo: string | null;
+  supplierName: string | null;
+  productName: string;
+  materialType: string | null;
+  widthCm: number;
+  heightCm: number;
+  quantity: number;
+  currency: string;
+  unitCost: number;
+  totalCost: number;
+  warehouseId: string | null;
+  warehouseName: string | null;
+  status: string;
+  expectedDate: string | null;
+  completedAt: string | null;
+  createdStockPlateIds: string[];
+  createdAt: string;
+};
+
+type PurchaseFormState = {
+  productName: string;
+  materialType: string;
+  widthCm: string;
+  heightCm: string;
+  quantity: string;
+  supplierName: string;
+  expectedDate: string;
+  unitCost: string;
+  currency: string;
+  warehouseId: string;
+  isId: string;
+};
+
 type SummaryResponse = {
   totals: {
     productCount: number;
@@ -77,7 +117,7 @@ type SummaryResponse = {
   };
   products: StockProduct[];
   warehouses: Array<{ id: string; name: string; code: string | null; isDefault: boolean; isActive: boolean }>;
-  recentPurchases: Array<{ id: string; purchaseCode: string; productName: string; supplierName: string | null; quantity: number; status: string; totalCost: number; currency: string }>;
+  recentPurchases: Array<{ id: string; purchaseCode: string; productName: string; supplierName: string | null; quantity: number; status: string; totalCost: number; currency: string; expectedDate?: string | null; completedAt?: string | null }>;
   recentFireRecords: Array<{ id: string; fireType: string; status: string; reasonCode: string | null; finalCost: number | null; estimatedCost: number | null; currency: string; createdAt: string }>;
 };
 
@@ -153,6 +193,35 @@ const STATUS_CLASS: Record<string, string> = {
   SCRAPPED: "border-red-400/25 bg-red-500/10 text-red-300",
 };
 
+const EMPTY_PURCHASE_FORM: PurchaseFormState = {
+  productName: "",
+  materialType: "",
+  widthCm: "",
+  heightCm: "",
+  quantity: "1",
+  supplierName: "",
+  expectedDate: "",
+  unitCost: "",
+  currency: "TRY",
+  warehouseId: "",
+  isId: "",
+};
+
+const PURCHASE_FILTERS = [
+  { value: "", label: "Tümü" },
+  { value: "PLANNED", label: "Planlandı" },
+  { value: "ORDERED", label: "Siparişte" },
+  { value: "RECEIVED", label: "Teslim Alındı" },
+  { value: "CANCELLED", label: "İptal" },
+] as const;
+
+const PURCHASE_META: Record<string, { label: string; className: string }> = {
+  PLANNED: { label: "Planlandı", className: "border-blue-400/25 bg-blue-500/10 text-blue-300" },
+  ORDERED: { label: "Siparişte", className: "border-amber-400/25 bg-amber-500/10 text-amber-300" },
+  RECEIVED: { label: "Teslim Alındı", className: "border-emerald-400/25 bg-emerald-500/10 text-emerald-300" },
+  CANCELLED: { label: "İptal", className: "border-slate-400/15 bg-slate-500/10 text-slate-300" },
+};
+
 function fmtMoney(v: number, currency = "TRY") {
   const prefix = currency === "TRY" ? "₺" : `${currency} `;
   return prefix + Number(v || 0).toLocaleString("tr-TR", { maximumFractionDigits: 0 });
@@ -168,6 +237,21 @@ function statusLabel(status: string) {
 
 function statusClass(status: string) {
   return STATUS_CLASS[String(status || "").toUpperCase()] ?? "border-white/10 bg-white/[0.055] text-slate-300";
+}
+
+function purchaseMeta(status: string) {
+  return PURCHASE_META[String(status || "").toUpperCase()] ?? {
+    label: status || "Durum yok",
+    className: "border-white/10 bg-white/[0.055] text-slate-300",
+  };
+}
+
+function isPurchaseOverdue(purchase: StockPurchaseRow) {
+  if (!purchase.expectedDate || ["RECEIVED", "CANCELLED"].includes(String(purchase.status).toUpperCase())) return false;
+  const expected = new Date(purchase.expectedDate);
+  if (Number.isNaN(expected.getTime())) return false;
+  expected.setHours(23, 59, 59, 999);
+  return expected.getTime() < Date.now();
 }
 
 function KpiCard({ label, value, sub, tone = "text-white" }: { label: string; value: string; sub: string; tone?: string }) {
@@ -210,9 +294,12 @@ export default function StokPage() {
   const [summary, setSummary] = useState<SummaryResponse>(EMPTY_SUMMARY);
   const [plates, setPlates] = useState<StockPlate[]>([]);
   const [movements, setMovements] = useState<StockMovementRow[]>([]);
+  const [purchases, setPurchases] = useState<StockPurchaseRow[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<StockProduct | null>(null);
   const [selectedProductPlates, setSelectedProductPlates] = useState<StockPlate[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "products" | "plates" | "offcuts" | "purchases" | "movements">("overview");
+  const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>(EMPTY_PURCHASE_FORM);
+  const [purchaseError, setPurchaseError] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importFileName, setImportFileName] = useState("");
   const [importPreview, setImportPreview] = useState<StockImportPreview | null>(null);
@@ -222,11 +309,14 @@ export default function StokPage() {
   const [loading, setLoading] = useState(true);
   const [platesLoading, setPlatesLoading] = useState(false);
   const [movementsLoading, setMovementsLoading] = useState(false);
+  const [purchasesLoading, setPurchasesLoading] = useState(false);
+  const [purchaseSaving, setPurchaseSaving] = useState(false);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [materialType, setMaterialType] = useState("");
   const [movementType, setMovementType] = useState("");
+  const [purchaseStatus, setPurchaseStatus] = useState("");
 
   async function loadSummary() {
     setLoading(true);
@@ -268,10 +358,21 @@ export default function StokPage() {
     }
   }
 
+  async function loadPurchases() {
+    setPurchasesLoading(true);
+    try {
+      const json = await fetch("/api/stock/purchases", { credentials: "include" }).then((r) => r.json());
+      setPurchases(Array.isArray(json?.purchases) ? json.purchases : []);
+    } finally {
+      setPurchasesLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadSummary();
     loadPlates();
     loadMovements("");
+    loadPurchases();
   }, []);
 
   useEffect(() => {
@@ -283,6 +384,84 @@ export default function StokPage() {
     if (activeTab !== "movements") return;
     loadMovements();
   }, [activeTab, movementType]);
+
+  useEffect(() => {
+    if (activeTab !== "purchases") return;
+    loadPurchases();
+  }, [activeTab, purchaseStatus]);
+
+  async function createPurchase() {
+    setPurchaseError("");
+    setPurchaseSaving(true);
+    try {
+      const quantity = Number(purchaseForm.quantity || 1);
+      const unitCost = Number(purchaseForm.unitCost || 0);
+      const res = await fetch("/api/stock/purchases", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...purchaseForm,
+          widthCm: Number(purchaseForm.widthCm),
+          heightCm: Number(purchaseForm.heightCm),
+          quantity,
+          unitCost,
+          totalCost: unitCost * quantity,
+          warehouseId: purchaseForm.warehouseId || null,
+          isId: purchaseForm.isId || null,
+          materialType: purchaseForm.materialType || null,
+          supplierName: purchaseForm.supplierName || null,
+          expectedDate: purchaseForm.expectedDate || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Satın alma kaydı oluşturulamadı.");
+      setPurchaseForm(EMPTY_PURCHASE_FORM);
+      await Promise.all([loadPurchases(), loadSummary()]);
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : "Satın alma kaydı oluşturulamadı.");
+    } finally {
+      setPurchaseSaving(false);
+    }
+  }
+
+  async function updatePurchaseStatus(id: string, nextStatus: string) {
+    setPurchaseError("");
+    setPurchaseSaving(true);
+    try {
+      const res = await fetch(`/api/stock/purchases/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Satın alma durumu güncellenemedi.");
+      await Promise.all([loadPurchases(), loadSummary()]);
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : "Satın alma durumu güncellenemedi.");
+    } finally {
+      setPurchaseSaving(false);
+    }
+  }
+
+  async function receivePurchase(id: string) {
+    setPurchaseError("");
+    setPurchaseSaving(true);
+    try {
+      const res = await fetch(`/api/stock/purchases/${id}/receive`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Satın alma teslim alınamadı.");
+      await Promise.all([loadPurchases(), loadSummary(), loadPlates(), loadMovements("")]);
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : "Satın alma teslim alınamadı.");
+    } finally {
+      setPurchaseSaving(false);
+    }
+  }
 
   async function openProduct(product: StockProduct) {
     setSelectedProduct(product);
@@ -484,6 +663,22 @@ export default function StokPage() {
                   movementType={movementType}
                   onMovementTypeChange={setMovementType}
                 />
+              ) : activeTab === "purchases" ? (
+                <PurchaseList
+                  purchases={purchases}
+                  warehouses={summary.warehouses}
+                  loading={purchasesLoading}
+                  saving={purchaseSaving}
+                  error={purchaseError}
+                  statusFilter={purchaseStatus}
+                  form={purchaseForm}
+                  onStatusFilterChange={setPurchaseStatus}
+                  onFormChange={(patch) => setPurchaseForm((prev) => ({ ...prev, ...patch }))}
+                  onCreate={createPurchase}
+                  onOrder={(id) => updatePurchaseStatus(id, "ORDERED")}
+                  onCancel={(id) => updatePurchaseStatus(id, "CANCELLED")}
+                  onReceive={receivePurchase}
+                />
               ) : (
                 <PlaceholderPanel tab={activeTab} purchases={summary.recentPurchases} fireRecords={summary.recentFireRecords} />
               )
@@ -522,8 +717,20 @@ export default function StokPage() {
         platesLoading={platesLoading}
         movements={movements}
         movementsLoading={movementsLoading}
+        purchases={purchases}
+        purchasesLoading={purchasesLoading}
+        purchaseSaving={purchaseSaving}
+        purchaseError={purchaseError}
+        purchaseStatus={purchaseStatus}
+        purchaseForm={purchaseForm}
         movementType={movementType}
         onMovementTypeChange={setMovementType}
+        onPurchaseStatusChange={setPurchaseStatus}
+        onPurchaseFormChange={(patch) => setPurchaseForm((prev) => ({ ...prev, ...patch }))}
+        onCreatePurchase={createPurchase}
+        onOrderPurchase={(id) => updatePurchaseStatus(id, "ORDERED")}
+        onCancelPurchase={(id) => updatePurchaseStatus(id, "CANCELLED")}
+        onReceivePurchase={receivePurchase}
         tabs={tabs}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -695,6 +902,159 @@ function MovementList({
                   <div className="text-left md:text-right">
                     <p className="text-xs font-black text-slate-300">{new Date(movement.createdAt).toLocaleDateString("tr-TR")}</p>
                     <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{new Date(movement.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PurchaseList({
+  purchases,
+  warehouses,
+  loading,
+  saving,
+  error,
+  statusFilter,
+  form,
+  onStatusFilterChange,
+  onFormChange,
+  onCreate,
+  onOrder,
+  onCancel,
+  onReceive,
+}: {
+  purchases: StockPurchaseRow[];
+  warehouses: SummaryResponse["warehouses"];
+  loading: boolean;
+  saving: boolean;
+  error: string;
+  statusFilter: string;
+  form: PurchaseFormState;
+  onStatusFilterChange: (status: string) => void;
+  onFormChange: (patch: Partial<PurchaseFormState>) => void;
+  onCreate: () => void;
+  onOrder: (id: string) => void;
+  onCancel: (id: string) => void;
+  onReceive: (id: string) => void;
+}) {
+  const counts = PURCHASE_FILTERS.reduce<Record<string, number>>((acc, filter) => {
+    acc[filter.value || "ALL"] = filter.value ? purchases.filter((p) => p.status === filter.value).length : purchases.length;
+    return acc;
+  }, {});
+  const visiblePurchases = statusFilter ? purchases.filter((purchase) => purchase.status === statusFilter) : purchases;
+  const canCreate =
+    form.productName.trim() &&
+    Number(form.widthCm) > 0 &&
+    Number(form.heightCm) > 0 &&
+    Number(form.quantity || 1) > 0;
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Satın Alma Workflow</p>
+          <h2 className="mt-1 text-xl font-black tracking-[-0.02em] text-white">Plaka Alım Takibi</h2>
+        </div>
+        <div className="grid grid-cols-4 gap-1 md:w-[460px]">
+          <KpiMini label="Planlandı" value={String(counts.PLANNED ?? 0)} />
+          <KpiMini label="Siparişte" value={String(counts.ORDERED ?? 0)} />
+          <KpiMini label="Teslim" value={String(counts.RECEIVED ?? 0)} />
+          <KpiMini label="İptal" value={String(counts.CANCELLED ?? 0)} />
+        </div>
+      </div>
+
+      <div className="mb-3 rounded-3xl border border-white/10 bg-white/[0.035] p-3">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1.3fr)_120px_120px_88px_120px]">
+          <input value={form.productName} onChange={(e) => onFormChange({ productName: e.target.value })} placeholder="Ürün" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+          <input value={form.widthCm} onChange={(e) => onFormChange({ widthCm: e.target.value })} placeholder="En cm" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+          <input value={form.heightCm} onChange={(e) => onFormChange({ heightCm: e.target.value })} placeholder="Boy cm" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+          <input value={form.quantity} onChange={(e) => onFormChange({ quantity: e.target.value })} placeholder="Adet" inputMode="numeric" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+          <input value={form.unitCost} onChange={(e) => onFormChange({ unitCost: e.target.value })} placeholder="Birim maliyet" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+        </div>
+        <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_160px_160px_minmax(0,1fr)_120px]">
+          <input value={form.materialType} onChange={(e) => onFormChange({ materialType: e.target.value })} placeholder="Malzeme tipi" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+          <input value={form.supplierName} onChange={(e) => onFormChange({ supplierName: e.target.value })} placeholder="Tedarikçi" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+          <input value={form.expectedDate} onChange={(e) => onFormChange({ expectedDate: e.target.value })} type="date" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+          <select value={form.warehouseId} onChange={(e) => onFormChange({ warehouseId: e.target.value })} className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none">
+            <option value="">Depo yok</option>
+            {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+          </select>
+          <button type="button" onClick={onCreate} disabled={!canCreate || saving} className="h-10 rounded-2xl border border-emerald-400/25 bg-emerald-500/16 px-3 text-xs font-black text-emerald-100 disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-slate-600">
+            Oluştur
+          </button>
+        </div>
+        <input value={form.isId} onChange={(e) => onFormChange({ isId: e.target.value })} placeholder="İlişkili iş ID (opsiyonel)" className="mt-2 h-10 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+        {error && <p className="mt-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-200">{error}</p>}
+      </div>
+
+      <div className="mb-3 flex gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/45 p-1">
+        {PURCHASE_FILTERS.map((filter) => (
+          <button
+            key={filter.value || "all"}
+            type="button"
+            onClick={() => onStatusFilterChange(filter.value)}
+            className={[
+              "shrink-0 rounded-xl px-3 py-2 text-[11px] font-black transition",
+              statusFilter === filter.value ? "bg-blue-500/20 text-white" : "text-slate-500 hover:bg-white/[0.055] hover:text-slate-200",
+            ].join(" ")}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-500">Satın alma kayıtları yükleniyor...</p>
+      ) : visiblePurchases.length === 0 ? (
+        <div className="flex min-h-[260px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.035] p-8 text-center">
+          <div>
+            <p className="text-sm font-black text-white">Satın alma kaydı yok.</p>
+            <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">Planlanan taş alımları oluşturulduğunda teslim alma ve stok girişi buradan yönetilecek.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid gap-2">
+            {visiblePurchases.map((purchase) => {
+              const meta = purchaseMeta(purchase.status);
+              const overdue = isPurchaseOverdue(purchase);
+              const canOrder = purchase.status === "PLANNED";
+              const canReceive = purchase.status === "PLANNED" || purchase.status === "ORDERED";
+              const canCancel = purchase.status === "PLANNED" || purchase.status === "ORDERED";
+              return (
+                <div key={purchase.id} className={`grid gap-3 rounded-2xl border px-4 py-3 md:grid-cols-[minmax(0,1fr)_140px_150px_210px] md:items-center ${overdue ? "border-red-400/30 bg-red-500/[0.07]" : "border-white/8 bg-white/[0.045]"}`}>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${meta.className}`}>{meta.label}</span>
+                      {overdue && <span className="rounded-full border border-red-400/25 bg-red-500/10 px-2.5 py-1 text-[10px] font-black text-red-200">Tarih geçti</span>}
+                    </div>
+                    <p className="mt-2 truncate text-sm font-black text-white">{purchase.productName}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {purchase.purchaseCode} · {purchase.widthCm} x {purchase.heightCm} cm · {purchase.quantity} adet{purchase.materialType ? ` · ${purchase.materialType}` : ""}
+                    </p>
+                    {(purchase.customerName || purchase.offerNo) && (
+                      <p className="mt-1 truncate text-[11px] font-semibold text-blue-200">{purchase.customerName || "İş"}{purchase.offerNo ? ` · ${purchase.offerNo}` : ""}</p>
+                    )}
+                  </div>
+                  <div className="text-xs font-bold text-slate-400">
+                    <p>{purchase.supplierName || "Tedarikçi yok"}</p>
+                    <p className="mt-0.5 text-slate-500">{purchase.warehouseName || "Depo yok"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-emerald-300">{fmtMoney(purchase.totalCost, purchase.currency)}</p>
+                    <p className={`mt-0.5 text-[11px] font-semibold ${overdue ? "text-red-200" : "text-slate-500"}`}>
+                      {purchase.expectedDate ? new Date(purchase.expectedDate).toLocaleDateString("tr-TR") : "Tarih yok"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 md:justify-end">
+                    {canOrder && <button type="button" disabled={saving} onClick={() => onOrder(purchase.id)} className="rounded-xl border border-blue-400/20 bg-blue-500/12 px-3 py-2 text-[11px] font-black text-blue-100 disabled:opacity-50">Siparişe Al</button>}
+                    {canReceive && <button type="button" disabled={saving} onClick={() => onReceive(purchase.id)} className="rounded-xl border border-emerald-400/20 bg-emerald-500/12 px-3 py-2 text-[11px] font-black text-emerald-100 disabled:opacity-50">Teslim Al</button>}
+                    {canCancel && <button type="button" disabled={saving} onClick={() => onCancel(purchase.id)} className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-[11px] font-black text-red-100 disabled:opacity-50">İptal Et</button>}
                   </div>
                 </div>
               );
@@ -929,8 +1289,20 @@ function MobileStockView({
   platesLoading,
   movements,
   movementsLoading,
+  purchases,
+  purchasesLoading,
+  purchaseSaving,
+  purchaseError,
+  purchaseStatus,
+  purchaseForm,
   movementType,
   onMovementTypeChange,
+  onPurchaseStatusChange,
+  onPurchaseFormChange,
+  onCreatePurchase,
+  onOrderPurchase,
+  onCancelPurchase,
+  onReceivePurchase,
   tabs,
   activeTab,
   setActiveTab,
@@ -943,8 +1315,20 @@ function MobileStockView({
   platesLoading: boolean;
   movements: StockMovementRow[];
   movementsLoading: boolean;
+  purchases: StockPurchaseRow[];
+  purchasesLoading: boolean;
+  purchaseSaving: boolean;
+  purchaseError: string;
+  purchaseStatus: string;
+  purchaseForm: PurchaseFormState;
   movementType: string;
   onMovementTypeChange: (type: string) => void;
+  onPurchaseStatusChange: (status: string) => void;
+  onPurchaseFormChange: (patch: Partial<PurchaseFormState>) => void;
+  onCreatePurchase: () => void;
+  onOrderPurchase: (id: string) => void;
+  onCancelPurchase: (id: string) => void;
+  onReceivePurchase: (id: string) => void;
   tabs: readonly (readonly [string, string])[];
   activeTab: string;
   setActiveTab: (tab: any) => void;
@@ -1030,6 +1414,22 @@ function MobileStockView({
             loading={movementsLoading}
             movementType={movementType}
             onMovementTypeChange={onMovementTypeChange}
+          />
+        ) : activeTab === "purchases" ? (
+          <PurchaseList
+            purchases={purchases}
+            warehouses={summary.warehouses}
+            loading={purchasesLoading}
+            saving={purchaseSaving}
+            error={purchaseError}
+            statusFilter={purchaseStatus}
+            form={purchaseForm}
+            onStatusFilterChange={onPurchaseStatusChange}
+            onFormChange={onPurchaseFormChange}
+            onCreate={onCreatePurchase}
+            onOrder={onOrderPurchase}
+            onCancel={onCancelPurchase}
+            onReceive={onReceivePurchase}
           />
         ) : (
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
