@@ -36,6 +36,29 @@ type StockPlate = {
   createdAt: string;
 };
 
+type StockMovementRow = {
+  id: string;
+  stockPlateId: string | null;
+  offcutId: string | null;
+  movementType: string;
+  quantityAreaCm2: number | null;
+  warehouseName: string | null;
+  fromWarehouseName: string | null;
+  toWarehouseName: string | null;
+  isId: string | null;
+  jobId: string | null;
+  customerName: string | null;
+  jobProductName: string | null;
+  offerNo: string | null;
+  plateCode: string | null;
+  productName: string | null;
+  materialType: string | null;
+  shadeCode: string | null;
+  reasonCode: string | null;
+  note: string | null;
+  createdAt: string;
+};
+
 type SummaryResponse = {
   totals: {
     productCount: number;
@@ -186,6 +209,7 @@ export default function StokPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [summary, setSummary] = useState<SummaryResponse>(EMPTY_SUMMARY);
   const [plates, setPlates] = useState<StockPlate[]>([]);
+  const [movements, setMovements] = useState<StockMovementRow[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<StockProduct | null>(null);
   const [selectedProductPlates, setSelectedProductPlates] = useState<StockPlate[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "products" | "plates" | "offcuts" | "purchases" | "movements">("overview");
@@ -197,10 +221,12 @@ export default function StokPage() {
   const [importLoading, setImportLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [platesLoading, setPlatesLoading] = useState(false);
+  const [movementsLoading, setMovementsLoading] = useState(false);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [materialType, setMaterialType] = useState("");
+  const [movementType, setMovementType] = useState("");
 
   async function loadSummary() {
     setLoading(true);
@@ -230,15 +256,33 @@ export default function StokPage() {
     }
   }
 
+  async function loadMovements(type = movementType) {
+    setMovementsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (type) params.set("movementType", type);
+      const json = await fetch(`/api/stock/movements?${params.toString()}`, { credentials: "include" }).then((r) => r.json());
+      setMovements(Array.isArray(json?.movements) ? json.movements : []);
+    } finally {
+      setMovementsLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadSummary();
     loadPlates();
+    loadMovements("");
   }, []);
 
   useEffect(() => {
     const id = setTimeout(() => loadPlates(), 250);
     return () => clearTimeout(id);
   }, [q, status, warehouseId, materialType]);
+
+  useEffect(() => {
+    if (activeTab !== "movements") return;
+    loadMovements();
+  }, [activeTab, movementType]);
 
   async function openProduct(product: StockProduct) {
     setSelectedProduct(product);
@@ -433,7 +477,16 @@ export default function StokPage() {
             )}
 
             {["offcuts", "purchases", "movements"].includes(activeTab) && (
-              <PlaceholderPanel tab={activeTab} purchases={summary.recentPurchases} fireRecords={summary.recentFireRecords} />
+              activeTab === "movements" ? (
+                <MovementList
+                  movements={movements}
+                  loading={movementsLoading}
+                  movementType={movementType}
+                  onMovementTypeChange={setMovementType}
+                />
+              ) : (
+                <PlaceholderPanel tab={activeTab} purchases={summary.recentPurchases} fireRecords={summary.recentFireRecords} />
+              )
             )}
           </div>
 
@@ -467,6 +520,10 @@ export default function StokPage() {
         summary={summary}
         plates={plates}
         platesLoading={platesLoading}
+        movements={movements}
+        movementsLoading={movementsLoading}
+        movementType={movementType}
+        onMovementTypeChange={setMovementType}
         tabs={tabs}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -537,6 +594,114 @@ function PlateList({ plates, loading }: { plates: StockPlate[]; loading: boolean
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+const MOVEMENT_FILTERS = [
+  { value: "", label: "Tümü" },
+  { value: "IN", label: "Giriş" },
+  { value: "RESERVE", label: "Rezervasyon" },
+  { value: "RELEASE", label: "Serbest Bırakma" },
+  { value: "CONSUME", label: "Tüketim" },
+] as const;
+
+const MOVEMENT_META: Record<string, { label: string; className: string }> = {
+  IN: { label: "Giriş", className: "border-emerald-400/25 bg-emerald-500/10 text-emerald-300" },
+  RESERVE: { label: "Rezervasyon", className: "border-blue-400/25 bg-blue-500/10 text-blue-300" },
+  RELEASE: { label: "Serbest", className: "border-amber-400/25 bg-amber-500/10 text-amber-300" },
+  CONSUME: { label: "Tüketim", className: "border-red-400/25 bg-red-500/10 text-red-300" },
+};
+
+function movementMeta(type: string) {
+  return MOVEMENT_META[String(type || "").toUpperCase()] ?? {
+    label: type || "Hareket",
+    className: "border-white/10 bg-white/[0.055] text-slate-300",
+  };
+}
+
+function MovementList({
+  movements,
+  loading,
+  movementType,
+  onMovementTypeChange,
+}: {
+  movements: StockMovementRow[];
+  loading: boolean;
+  movementType: string;
+  onMovementTypeChange: (type: string) => void;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Stok Hareketleri</p>
+          <h2 className="mt-1 text-xl font-black tracking-[-0.02em] text-white">Plaka Zaman Çizelgesi</h2>
+        </div>
+        <div className="flex gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/45 p-1">
+          {MOVEMENT_FILTERS.map((filter) => (
+            <button
+              key={filter.value || "all"}
+              type="button"
+              onClick={() => onMovementTypeChange(filter.value)}
+              className={[
+                "shrink-0 rounded-xl px-3 py-2 text-[11px] font-black transition",
+                movementType === filter.value ? "bg-blue-500/20 text-white" : "text-slate-500 hover:bg-white/[0.055] hover:text-slate-200",
+              ].join(" ")}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-500">Hareketler yükleniyor...</p>
+      ) : movements.length === 0 ? (
+        <div className="flex min-h-[260px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.035] p-8 text-center">
+          <div>
+            <p className="text-sm font-black text-white">Hareket kaydı yok.</p>
+            <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">Stok girişi, rezervasyon, serbest bırakma veya tüketim oluştuğunda burada listelenecek.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid gap-2">
+            {movements.map((movement) => {
+              const meta = movementMeta(movement.movementType);
+              const title = movement.plateCode || movement.productName || "Stok hareketi";
+              const product = movement.productName || movement.jobProductName || "Ürün bilgisi yok";
+              const warehouse = movement.warehouseName || movement.toWarehouseName || movement.fromWarehouseName;
+              return (
+                <div key={movement.id} className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.045] px-4 py-3 md:grid-cols-[140px_minmax(0,1fr)_150px_150px] md:items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${meta.className}`}>{meta.label}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-white">{title}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {product}{movement.materialType ? ` · ${movement.materialType}` : ""}{movement.shadeCode ? ` · Shade ${movement.shadeCode}` : ""}
+                    </p>
+                    {(movement.customerName || movement.note) && (
+                      <p className="mt-1 truncate text-[11px] font-semibold text-slate-400">
+                        {movement.customerName ? `${movement.customerName}${movement.offerNo ? ` · ${movement.offerNo}` : ""}` : movement.note}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-xs font-bold text-slate-400">
+                    <p>{fmtArea(movement.quantityAreaCm2 ?? 0)}</p>
+                    {warehouse && <p className="mt-0.5 truncate text-slate-500">{warehouse}</p>}
+                  </div>
+                  <div className="text-left md:text-right">
+                    <p className="text-xs font-black text-slate-300">{new Date(movement.createdAt).toLocaleDateString("tr-TR")}</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{new Date(movement.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -758,10 +923,28 @@ function ImportModal({
   );
 }
 
-function MobileStockView({ summary, plates, platesLoading, tabs, activeTab, setActiveTab, hasStock, openProduct, onImportClick }: {
+function MobileStockView({
+  summary,
+  plates,
+  platesLoading,
+  movements,
+  movementsLoading,
+  movementType,
+  onMovementTypeChange,
+  tabs,
+  activeTab,
+  setActiveTab,
+  hasStock,
+  openProduct,
+  onImportClick,
+}: {
   summary: SummaryResponse;
   plates: StockPlate[];
   platesLoading: boolean;
+  movements: StockMovementRow[];
+  movementsLoading: boolean;
+  movementType: string;
+  onMovementTypeChange: (type: string) => void;
   tabs: readonly (readonly [string, string])[];
   activeTab: string;
   setActiveTab: (tab: any) => void;
@@ -777,7 +960,7 @@ function MobileStockView({ summary, plates, platesLoading, tabs, activeTab, setA
           <h1 className="mt-0.5 text-[17px] font-black tracking-[-0.02em] text-white">Stok & Malzeme</h1>
           <p className="mb-3 mt-0.5 text-[11px] text-slate-500">{summary.totals.totalPlateCount} plaka · {fmtArea(summary.totals.totalRemainingAreaCm2)} kalan alan</p>
           <div className="flex gap-1 overflow-x-auto rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1">
-            {tabs.slice(0, 4).map(([id, label]) => (
+            {tabs.map(([id, label]) => (
               <button key={id} type="button" onClick={() => setActiveTab(id)} className={`whitespace-nowrap rounded-xl px-3 py-2 text-[12px] font-bold transition-all ${activeTab === id ? "bg-blue-500 text-white" : "text-slate-400"}`}>
                 {label}
               </button>
@@ -841,6 +1024,13 @@ function MobileStockView({ summary, plates, platesLoading, tabs, activeTab, setA
           )
         ) : activeTab === "plates" ? (
           <PlateList plates={plates} loading={platesLoading} />
+        ) : activeTab === "movements" ? (
+          <MovementList
+            movements={movements}
+            loading={movementsLoading}
+            movementType={movementType}
+            onMovementTypeChange={onMovementTypeChange}
+          />
         ) : (
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
             <p className="text-[12px] font-bold text-white">Bu segment read-only foundation.</p>
