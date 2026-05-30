@@ -58,6 +58,7 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
   const [personelTipleri, setPersonelTipleri] = useState({ olcucu: 0, usta: 0, montajci: 0 });
   const autoOpenedRef = useRef(false);
   const [liveOpsData, setLiveOpsData] = useState<LiveOpsData | null>(null);
+  const [scheduleRisks, setScheduleRisks] = useState<any[]>([]);
   const liveOpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Modal açıkken body scroll/zoom kilit
@@ -112,6 +113,14 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
       }
     };
   }, [mobileSeg]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (mobileSeg !== "risks") return;
+    fetch("/api/schedule/risks", { credentials: "include", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setScheduleRisks(Array.isArray(d?.risks) ? d.risks : []))
+      .catch(() => setScheduleRisks([]));
+  }, [mobileSeg]);
 
   const tasks = useMemo(() => {
     const mapped: any[] = [];
@@ -285,12 +294,15 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
     }
     if (mobileSeg === "team") return `${personelSayisi} personel`;
 
+    const criticalCount = scheduleRisks.filter((risk) => risk.severity === "critical").length;
+    const highCount = scheduleRisks.filter((risk) => risk.severity === "high").length;
+    if (criticalCount > 0 || highCount > 0) return `${criticalCount} kritik · ${highCount} yüksek`;
     const delayedCount = tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length;
     return delayedCount > 0 ? `${delayedCount} geciken iş` : "Kritik risk yok";
   })();
 
   const hasLiveAlerts = (liveOpsData?.toplamAktif ?? tasks.filter(t => t.executionStatus === "STARTED").length) > 0;
-  const hasRiskAlerts = (tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length + tasks.filter(t => t.executionStatus === "PAUSED").length) > 0;
+  const hasRiskAlerts = scheduleRisks.length > 0 || (tasks.filter(t => !t.completed && dayjs(t.date).isBefore(dayjs(), "day")).length + tasks.filter(t => t.executionStatus === "PAUSED").length) > 0;
 
   function meta(phase: string) {
     return PHASE_META[phase] || PHASE_META.OLCU;
@@ -921,7 +933,7 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
         {mobileSeg === "today" && <MobileTodayTab tasks={tasks} renderTask={(task) => <TaskCard task={task} />} />}
         {mobileSeg === "calendar" && <MobileCalendarTab />}
         {mobileSeg === "team" && <MobileTeamTab tasks={tasks} personelSayisi={personelSayisi} onSelectTask={setSelectedTask} />}
-        {mobileSeg === "risks" && <MobileRisksTab tasks={tasks} onSelectTask={setSelectedTask} />}
+        {mobileSeg === "risks" && <MobileRisksTab tasks={tasks} risks={scheduleRisks} onSelectTask={setSelectedTask} />}
       </OperationsCockpitShell>
       {/* ── END MOBILE COCKPIT ────────────────────────────────────────── */}
       <div className="mt-5 hidden md:grid grid-cols-1 gap-3 md:grid-cols-4">
