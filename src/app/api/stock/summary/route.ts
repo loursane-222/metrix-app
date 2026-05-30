@@ -18,6 +18,16 @@ function stockValue(plate: { purchaseTotalCost: unknown; totalAreaCm2: unknown; 
   return total;
 }
 
+function offcutValue(offcut: { totalCost: unknown; areaCm2: unknown; remainingAreaCm2: unknown; status?: unknown }) {
+  const status = String(offcut.status || "").toUpperCase();
+  if (["CONSUMED", "SCRAPPED"].includes(status)) return 0;
+  const total = n(offcut.totalCost);
+  const area = n(offcut.areaCm2);
+  const remaining = n(offcut.remainingAreaCm2);
+  if (area > 0 && remaining >= 0) return total * Math.min(remaining / area, 1);
+  return total;
+}
+
 function emptyProduct(productName: string, materialType: string | null) {
   return {
     productName,
@@ -99,6 +109,7 @@ export async function GET() {
       const row = products.get(key)!;
       row.offcutCount += 1;
       row.totalRemainingAreaCm2 += n(offcut.remainingAreaCm2);
+      row.totalStockValue += offcutValue(offcut);
     }
 
     const productRows = [...products.values()]

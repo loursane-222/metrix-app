@@ -51,12 +51,50 @@ type StockMovementRow = {
   jobProductName: string | null;
   offerNo: string | null;
   plateCode: string | null;
+  offcutCode: string | null;
   productName: string | null;
   materialType: string | null;
   shadeCode: string | null;
+  offcutWidthCm: number | null;
+  offcutHeightCm: number | null;
   reasonCode: string | null;
   note: string | null;
   createdAt: string;
+};
+
+type StockOffcutRow = {
+  id: string;
+  parentPlateId: string;
+  parentPlateCode: string | null;
+  parentOffcutId: string | null;
+  offcutCode: string;
+  warehouseId: string | null;
+  warehouseName: string | null;
+  productName: string;
+  materialType: string | null;
+  shadeCode: string | null;
+  widthCm: number;
+  heightCm: number;
+  areaCm2: number;
+  areaM2: number;
+  remainingAreaCm2: number;
+  remainingAreaM2: number;
+  costPerM2: number;
+  totalCost: number;
+  currency: string;
+  status: string;
+  sourceJobId: string | null;
+  consumedAt: string | null;
+  scrappedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+};
+
+type OffcutFormState = {
+  parentPlateId: string;
+  widthCm: string;
+  heightCm: string;
+  notes: string;
 };
 
 type StockPurchaseRow = {
@@ -207,6 +245,29 @@ const EMPTY_PURCHASE_FORM: PurchaseFormState = {
   isId: "",
 };
 
+const EMPTY_OFFCUT_FORM: OffcutFormState = {
+  parentPlateId: "",
+  widthCm: "",
+  heightCm: "",
+  notes: "",
+};
+
+const OFFCUT_STATUS_LABELS: Record<string, string> = {
+  AVAILABLE: "Kullanılabilir",
+  RESERVED: "Rezerve",
+  PARTIAL_CONSUMED: "Kısmi Tüketildi",
+  CONSUMED: "Tüketildi",
+  SCRAPPED: "Hurda",
+};
+
+const OFFCUT_STATUS_CLASS: Record<string, string> = {
+  AVAILABLE: "border-emerald-400/25 bg-emerald-500/10 text-emerald-300",
+  RESERVED: "border-blue-400/25 bg-blue-500/10 text-blue-300",
+  PARTIAL_CONSUMED: "border-amber-400/25 bg-amber-500/10 text-amber-300",
+  CONSUMED: "border-red-400/25 bg-red-500/10 text-red-300",
+  SCRAPPED: "border-slate-400/15 bg-slate-500/10 text-slate-300",
+};
+
 const PURCHASE_FILTERS = [
   { value: "", label: "Tümü" },
   { value: "PLANNED", label: "Planlandı" },
@@ -243,6 +304,14 @@ function purchaseMeta(status: string) {
   return PURCHASE_META[String(status || "").toUpperCase()] ?? {
     label: status || "Durum yok",
     className: "border-white/10 bg-white/[0.055] text-slate-300",
+  };
+}
+
+function offcutMeta(status: string) {
+  const key = String(status || "").toUpperCase();
+  return {
+    label: OFFCUT_STATUS_LABELS[key] ?? status ?? "Durum yok",
+    className: OFFCUT_STATUS_CLASS[key] ?? "border-white/10 bg-white/[0.055] text-slate-300",
   };
 }
 
@@ -295,11 +364,14 @@ export default function StokPage() {
   const [plates, setPlates] = useState<StockPlate[]>([]);
   const [movements, setMovements] = useState<StockMovementRow[]>([]);
   const [purchases, setPurchases] = useState<StockPurchaseRow[]>([]);
+  const [offcuts, setOffcuts] = useState<StockOffcutRow[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<StockProduct | null>(null);
   const [selectedProductPlates, setSelectedProductPlates] = useState<StockPlate[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "products" | "plates" | "offcuts" | "purchases" | "movements">("overview");
   const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>(EMPTY_PURCHASE_FORM);
   const [purchaseError, setPurchaseError] = useState("");
+  const [offcutForm, setOffcutForm] = useState<OffcutFormState>(EMPTY_OFFCUT_FORM);
+  const [offcutError, setOffcutError] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importFileName, setImportFileName] = useState("");
   const [importPreview, setImportPreview] = useState<StockImportPreview | null>(null);
@@ -311,12 +383,19 @@ export default function StokPage() {
   const [movementsLoading, setMovementsLoading] = useState(false);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
   const [purchaseSaving, setPurchaseSaving] = useState(false);
+  const [offcutsLoading, setOffcutsLoading] = useState(false);
+  const [offcutSaving, setOffcutSaving] = useState(false);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [materialType, setMaterialType] = useState("");
   const [movementType, setMovementType] = useState("");
   const [purchaseStatus, setPurchaseStatus] = useState("");
+  const [offcutProduct, setOffcutProduct] = useState("");
+  const [offcutShade, setOffcutShade] = useState("");
+  const [offcutStatus, setOffcutStatus] = useState("");
+  const [offcutMinWidth, setOffcutMinWidth] = useState("");
+  const [offcutMinHeight, setOffcutMinHeight] = useState("");
 
   async function loadSummary() {
     setLoading(true);
@@ -368,11 +447,28 @@ export default function StokPage() {
     }
   }
 
+  async function loadOffcuts() {
+    setOffcutsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (offcutProduct.trim()) params.set("productName", offcutProduct.trim());
+      if (offcutShade.trim()) params.set("shadeCode", offcutShade.trim());
+      if (offcutStatus) params.set("status", offcutStatus);
+      if (offcutMinWidth) params.set("minWidthCm", offcutMinWidth);
+      if (offcutMinHeight) params.set("minHeightCm", offcutMinHeight);
+      const json = await fetch(`/api/stock/offcuts?${params.toString()}`, { credentials: "include" }).then((r) => r.json());
+      setOffcuts(Array.isArray(json?.offcuts) ? json.offcuts : []);
+    } finally {
+      setOffcutsLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadSummary();
     loadPlates();
     loadMovements("");
     loadPurchases();
+    loadOffcuts();
   }, []);
 
   useEffect(() => {
@@ -389,6 +485,38 @@ export default function StokPage() {
     if (activeTab !== "purchases") return;
     loadPurchases();
   }, [activeTab, purchaseStatus]);
+
+  useEffect(() => {
+    if (activeTab !== "offcuts") return;
+    const id = setTimeout(() => loadOffcuts(), 250);
+    return () => clearTimeout(id);
+  }, [activeTab, offcutProduct, offcutShade, offcutStatus, offcutMinWidth, offcutMinHeight]);
+
+  async function createOffcut() {
+    setOffcutError("");
+    setOffcutSaving(true);
+    try {
+      const res = await fetch("/api/stock/offcuts", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentPlateId: offcutForm.parentPlateId,
+          widthCm: Number(offcutForm.widthCm),
+          heightCm: Number(offcutForm.heightCm),
+          notes: offcutForm.notes || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Offcut oluşturulamadı.");
+      setOffcutForm(EMPTY_OFFCUT_FORM);
+      await Promise.all([loadOffcuts(), loadSummary(), loadPlates(), loadMovements("")]);
+    } catch (error) {
+      setOffcutError(error instanceof Error ? error.message : "Offcut oluşturulamadı.");
+    } finally {
+      setOffcutSaving(false);
+    }
+  }
 
   async function createPurchase() {
     setPurchaseError("");
@@ -663,6 +791,25 @@ export default function StokPage() {
                   movementType={movementType}
                   onMovementTypeChange={setMovementType}
                 />
+              ) : activeTab === "offcuts" ? (
+                <OffcutList
+                  offcuts={offcuts}
+                  plates={plates}
+                  loading={offcutsLoading}
+                  saving={offcutSaving}
+                  error={offcutError}
+                  form={offcutForm}
+                  filters={{ product: offcutProduct, shade: offcutShade, status: offcutStatus, minWidth: offcutMinWidth, minHeight: offcutMinHeight }}
+                  onFormChange={(patch) => setOffcutForm((prev) => ({ ...prev, ...patch }))}
+                  onFilterChange={(patch) => {
+                    if (patch.product !== undefined) setOffcutProduct(patch.product);
+                    if (patch.shade !== undefined) setOffcutShade(patch.shade);
+                    if (patch.status !== undefined) setOffcutStatus(patch.status);
+                    if (patch.minWidth !== undefined) setOffcutMinWidth(patch.minWidth);
+                    if (patch.minHeight !== undefined) setOffcutMinHeight(patch.minHeight);
+                  }}
+                  onCreate={createOffcut}
+                />
               ) : activeTab === "purchases" ? (
                 <PurchaseList
                   purchases={purchases}
@@ -717,6 +864,12 @@ export default function StokPage() {
         platesLoading={platesLoading}
         movements={movements}
         movementsLoading={movementsLoading}
+        offcuts={offcuts}
+        offcutsLoading={offcutsLoading}
+        offcutSaving={offcutSaving}
+        offcutError={offcutError}
+        offcutForm={offcutForm}
+        offcutFilters={{ product: offcutProduct, shade: offcutShade, status: offcutStatus, minWidth: offcutMinWidth, minHeight: offcutMinHeight }}
         purchases={purchases}
         purchasesLoading={purchasesLoading}
         purchaseSaving={purchaseSaving}
@@ -725,6 +878,15 @@ export default function StokPage() {
         purchaseForm={purchaseForm}
         movementType={movementType}
         onMovementTypeChange={setMovementType}
+        onOffcutFormChange={(patch) => setOffcutForm((prev) => ({ ...prev, ...patch }))}
+        onOffcutFilterChange={(patch) => {
+          if (patch.product !== undefined) setOffcutProduct(patch.product);
+          if (patch.shade !== undefined) setOffcutShade(patch.shade);
+          if (patch.status !== undefined) setOffcutStatus(patch.status);
+          if (patch.minWidth !== undefined) setOffcutMinWidth(patch.minWidth);
+          if (patch.minHeight !== undefined) setOffcutMinHeight(patch.minHeight);
+        }}
+        onCreateOffcut={createOffcut}
         onPurchaseStatusChange={setPurchaseStatus}
         onPurchaseFormChange={(patch) => setPurchaseForm((prev) => ({ ...prev, ...patch }))}
         onCreatePurchase={createPurchase}
@@ -811,6 +973,7 @@ const MOVEMENT_FILTERS = [
   { value: "RESERVE", label: "Rezervasyon" },
   { value: "RELEASE", label: "Serbest Bırakma" },
   { value: "CONSUME", label: "Tüketim" },
+  { value: "OFFCUT_CREATE", label: "Offcut" },
 ] as const;
 
 const MOVEMENT_META: Record<string, { label: string; className: string }> = {
@@ -818,6 +981,12 @@ const MOVEMENT_META: Record<string, { label: string; className: string }> = {
   RESERVE: { label: "Rezervasyon", className: "border-blue-400/25 bg-blue-500/10 text-blue-300" },
   RELEASE: { label: "Serbest", className: "border-amber-400/25 bg-amber-500/10 text-amber-300" },
   CONSUME: { label: "Tüketim", className: "border-red-400/25 bg-red-500/10 text-red-300" },
+  OFFCUT_CREATE: { label: "Offcut", className: "border-violet-400/25 bg-violet-500/10 text-violet-300" },
+  OFFCUT_RESERVE: { label: "Offcut Rezerve", className: "border-blue-400/25 bg-blue-500/10 text-blue-300" },
+  OFFCUT_RELEASE: { label: "Offcut Serbest", className: "border-amber-400/25 bg-amber-500/10 text-amber-300" },
+  OFFCUT_CONSUME: { label: "Offcut Tüketim", className: "border-red-400/25 bg-red-500/10 text-red-300" },
+  OFFCUT_SCRAP: { label: "Offcut Hurda", className: "border-slate-400/15 bg-slate-500/10 text-slate-300" },
+  PLATE_PARTIAL_CONSUME: { label: "Kısmi Plaka", className: "border-cyan-400/25 bg-cyan-500/10 text-cyan-300" },
 };
 
 function movementMeta(type: string) {
@@ -902,6 +1071,121 @@ function MovementList({
                   <div className="text-left md:text-right">
                     <p className="text-xs font-black text-slate-300">{new Date(movement.createdAt).toLocaleDateString("tr-TR")}</p>
                     <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{new Date(movement.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OffcutList({
+  offcuts,
+  plates,
+  loading,
+  saving,
+  error,
+  form,
+  filters,
+  onFormChange,
+  onFilterChange,
+  onCreate,
+}: {
+  offcuts: StockOffcutRow[];
+  plates: StockPlate[];
+  loading: boolean;
+  saving: boolean;
+  error: string;
+  form: OffcutFormState;
+  filters: { product: string; shade: string; status: string; minWidth: string; minHeight: string };
+  onFormChange: (patch: Partial<OffcutFormState>) => void;
+  onFilterChange: (patch: Partial<{ product: string; shade: string; status: string; minWidth: string; minHeight: string }>) => void;
+  onCreate: () => void;
+}) {
+  const parentOptions = plates.filter((plate) => ["AVAILABLE", "RESERVED", "PARTIAL"].includes(String(plate.status).toUpperCase()));
+  const canCreate = form.parentPlateId && Number(form.widthCm) > 0 && Number(form.heightCm) > 0;
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-300">Offcut Foundation</p>
+          <h2 className="mt-1 text-xl font-black tracking-[-0.02em] text-white">Fiziksel Parça Stoku</h2>
+        </div>
+        <div className="grid grid-cols-3 gap-1 md:w-[340px]">
+          <KpiMini label="Offcut" value={String(offcuts.length)} />
+          <KpiMini label="Alan" value={fmtArea(offcuts.reduce((sum, row) => sum + row.remainingAreaCm2, 0))} />
+          <KpiMini label="Değer" value={fmtMoney(offcuts.reduce((sum, row) => sum + row.totalCost, 0), offcuts[0]?.currency || "TRY")} />
+        </div>
+      </div>
+
+      <div className="mb-3 rounded-3xl border border-white/10 bg-white/[0.035] p-3">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_110px_110px_minmax(0,1fr)_120px]">
+          <select value={form.parentPlateId} onChange={(e) => onFormChange({ parentPlateId: e.target.value })} className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none">
+            <option value="">Parent plaka seç</option>
+            {parentOptions.map((plate) => (
+              <option key={plate.id} value={plate.id}>
+                {plate.plateCode} · {plate.productName} · {fmtArea(plate.remainingAreaCm2)}
+              </option>
+            ))}
+          </select>
+          <input value={form.widthCm} onChange={(e) => onFormChange({ widthCm: e.target.value })} placeholder="En cm" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-violet-400/50" />
+          <input value={form.heightCm} onChange={(e) => onFormChange({ heightCm: e.target.value })} placeholder="Boy cm" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-violet-400/50" />
+          <input value={form.notes} onChange={(e) => onFormChange({ notes: e.target.value })} placeholder="Not" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-violet-400/50" />
+          <button type="button" onClick={onCreate} disabled={!canCreate || saving} className="h-10 rounded-2xl border border-violet-400/25 bg-violet-500/16 px-3 text-xs font-black text-violet-100 disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-slate-600">
+            Oluştur
+          </button>
+        </div>
+        {error && <p className="mt-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-200">{error}</p>}
+      </div>
+
+      <div className="mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_120px_160px_120px_120px]">
+        <input value={filters.product} onChange={(e) => onFilterChange({ product: e.target.value })} placeholder="Ürün" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-violet-400/50" />
+        <input value={filters.shade} onChange={(e) => onFilterChange({ shade: e.target.value })} placeholder="Ton" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-violet-400/50" />
+        <select value={filters.status} onChange={(e) => onFilterChange({ status: e.target.value })} className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none">
+          <option value="">Tüm durumlar</option>
+          {Object.entries(OFFCUT_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <input value={filters.minWidth} onChange={(e) => onFilterChange({ minWidth: e.target.value })} placeholder="Min en" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-violet-400/50" />
+        <input value={filters.minHeight} onChange={(e) => onFilterChange({ minHeight: e.target.value })} placeholder="Min boy" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-violet-400/50" />
+      </div>
+
+      {loading ? (
+        <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-slate-500">Offcutlar yükleniyor...</p>
+      ) : offcuts.length === 0 ? (
+        <div className="flex min-h-[260px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.035] p-8 text-center">
+          <div>
+            <p className="text-sm font-black text-white">Offcut kaydı yok.</p>
+            <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">Parent plaka seçip fiziksel ölçü girerek kalan parçaları stokta ayrı takip edebilirsin.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid gap-2">
+            {offcuts.map((offcut) => {
+              const meta = offcutMeta(offcut.status);
+              return (
+                <div key={offcut.id} className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.045] px-4 py-3 md:grid-cols-[130px_minmax(0,1fr)_140px_120px_120px] md:items-center">
+                  <div>
+                    <p className="text-sm font-black text-white">{offcut.offcutCode}</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{offcut.parentPlateCode || "Parent yok"}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-white">{offcut.productName}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {offcut.materialType || "Malzeme tipi yok"}{offcut.shadeCode ? ` · Ton ${offcut.shadeCode}` : ""}{offcut.warehouseName ? ` · ${offcut.warehouseName}` : ""}
+                    </p>
+                  </div>
+                  <p className="text-xs font-bold text-slate-400">{offcut.widthCm} x {offcut.heightCm} cm</p>
+                  <div>
+                    <p className="text-sm font-black text-blue-200">{fmtArea(offcut.remainingAreaCm2)}</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-emerald-300">{fmtMoney(offcut.totalCost, offcut.currency)}</p>
+                  </div>
+                  <div className="text-left md:text-right">
+                    <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-black ${meta.className}`}>{meta.label}</span>
                   </div>
                 </div>
               );
@@ -1289,6 +1573,12 @@ function MobileStockView({
   platesLoading,
   movements,
   movementsLoading,
+  offcuts,
+  offcutsLoading,
+  offcutSaving,
+  offcutError,
+  offcutForm,
+  offcutFilters,
   purchases,
   purchasesLoading,
   purchaseSaving,
@@ -1297,6 +1587,9 @@ function MobileStockView({
   purchaseForm,
   movementType,
   onMovementTypeChange,
+  onOffcutFormChange,
+  onOffcutFilterChange,
+  onCreateOffcut,
   onPurchaseStatusChange,
   onPurchaseFormChange,
   onCreatePurchase,
@@ -1315,6 +1608,12 @@ function MobileStockView({
   platesLoading: boolean;
   movements: StockMovementRow[];
   movementsLoading: boolean;
+  offcuts: StockOffcutRow[];
+  offcutsLoading: boolean;
+  offcutSaving: boolean;
+  offcutError: string;
+  offcutForm: OffcutFormState;
+  offcutFilters: { product: string; shade: string; status: string; minWidth: string; minHeight: string };
   purchases: StockPurchaseRow[];
   purchasesLoading: boolean;
   purchaseSaving: boolean;
@@ -1323,6 +1622,9 @@ function MobileStockView({
   purchaseForm: PurchaseFormState;
   movementType: string;
   onMovementTypeChange: (type: string) => void;
+  onOffcutFormChange: (patch: Partial<OffcutFormState>) => void;
+  onOffcutFilterChange: (patch: Partial<{ product: string; shade: string; status: string; minWidth: string; minHeight: string }>) => void;
+  onCreateOffcut: () => void;
   onPurchaseStatusChange: (status: string) => void;
   onPurchaseFormChange: (patch: Partial<PurchaseFormState>) => void;
   onCreatePurchase: () => void;
@@ -1414,6 +1716,19 @@ function MobileStockView({
             loading={movementsLoading}
             movementType={movementType}
             onMovementTypeChange={onMovementTypeChange}
+          />
+        ) : activeTab === "offcuts" ? (
+          <OffcutList
+            offcuts={offcuts}
+            plates={plates}
+            loading={offcutsLoading}
+            saving={offcutSaving}
+            error={offcutError}
+            form={offcutForm}
+            filters={offcutFilters}
+            onFormChange={onOffcutFormChange}
+            onFilterChange={onOffcutFilterChange}
+            onCreate={onCreateOffcut}
           />
         ) : activeTab === "purchases" ? (
           <PurchaseList

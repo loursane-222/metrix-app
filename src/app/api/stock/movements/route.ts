@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     });
 
     const plateIds = [...new Set(movements.map((m) => m.stockPlateId).filter(Boolean))] as string[];
+    const offcutIds = [...new Set(movements.map((m) => m.offcutId).filter(Boolean))] as string[];
     const warehouseIds = [
       ...new Set(
         movements
@@ -41,11 +42,17 @@ export async function GET(req: NextRequest) {
     ] as string[];
     const jobIds = [...new Set(movements.map((m) => m.isId).filter(Boolean))] as string[];
 
-    const [plates, warehouses, jobs] = await Promise.all([
+    const [plates, offcuts, warehouses, jobs] = await Promise.all([
       plateIds.length
         ? prisma.stockPlate.findMany({
             where: { atolyeId: auth.atolyeId, id: { in: plateIds } },
             select: { id: true, plateCode: true, productName: true, materialType: true, shadeCode: true, warehouseId: true },
+          })
+        : Promise.resolve([]),
+      offcutIds.length
+        ? prisma.stockOffcut.findMany({
+            where: { atolyeId: auth.atolyeId, id: { in: offcutIds } },
+            select: { id: true, offcutCode: true, productName: true, materialType: true, widthCm: true, heightCm: true, warehouseId: true, parentPlate: { select: { shadeCode: true } } },
           })
         : Promise.resolve([]),
       warehouseIds.length
@@ -63,12 +70,14 @@ export async function GET(req: NextRequest) {
     ]);
 
     const plateMap = new Map(plates.map((p) => [p.id, p]));
+    const offcutMap = new Map(offcuts.map((o) => [o.id, o]));
     const warehouseMap = new Map(warehouses.map((w) => [w.id, w]));
     const jobMap = new Map(jobs.map((job) => [job.id, job]));
 
     return NextResponse.json({
       movements: movements.map((m) => {
         const plate = m.stockPlateId ? plateMap.get(m.stockPlateId) : null;
+        const offcut = m.offcutId ? offcutMap.get(m.offcutId) : null;
         const fromWarehouse = m.fromWarehouseId ? warehouseMap.get(m.fromWarehouseId) : null;
         const toWarehouse = m.toWarehouseId ? warehouseMap.get(m.toWarehouseId) : null;
         const job = m.isId ? jobMap.get(m.isId) : null;
@@ -88,10 +97,13 @@ export async function GET(req: NextRequest) {
           customerName: job?.musteriAdi ?? null,
           jobProductName: job?.urunAdi ?? null,
           offerNo: job?.teklifNo ?? null,
-          plateCode: plate?.plateCode ?? null,
-          productName: plate?.productName ?? job?.urunAdi ?? null,
-          materialType: plate?.materialType ?? null,
-          shadeCode: plate?.shadeCode ?? null,
+          plateCode: plate?.plateCode ?? offcut?.offcutCode ?? null,
+          offcutCode: offcut?.offcutCode ?? null,
+          productName: plate?.productName ?? offcut?.productName ?? job?.urunAdi ?? null,
+          materialType: plate?.materialType ?? offcut?.materialType ?? null,
+          shadeCode: plate?.shadeCode ?? offcut?.parentPlate?.shadeCode ?? null,
+          offcutWidthCm: offcut?.widthCm != null ? n(offcut.widthCm) : null,
+          offcutHeightCm: offcut?.heightCm != null ? n(offcut.heightCm) : null,
           reasonCode: m.reasonCode,
           note: m.note,
           createdAt: m.createdAt,

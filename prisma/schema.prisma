@@ -493,6 +493,9 @@ model StockPlate {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  offcuts           StockOffcut[] @relation("PlateOffcuts")
+  movements         StockMovement[] @relation("PlateMovements")
+
   @@unique([atolyeId, plateCode])
   @@index([atolyeId, productName])
   @@index([atolyeId, status])
@@ -538,6 +541,9 @@ model StockMovement {
   note            String?
   createdAt       DateTime @default(now())
 
+  stockPlate      StockPlate? @relation("PlateMovements", fields: [stockPlateId], references: [id], onDelete: SetNull)
+  offcut          StockOffcut? @relation("OffcutMovements", fields: [offcutId], references: [id], onDelete: SetNull)
+
   @@index([atolyeId, stockPlateId])
   @@index([atolyeId, isId])
   @@index([atolyeId, offcutId])
@@ -549,6 +555,7 @@ model StockOffcut {
   id               String   @id @default(cuid())
   atolyeId         String
   parentPlateId    String
+  parentOffcutId   String?
   offcutCode       String
   warehouseId      String?
   productName      String
@@ -557,13 +564,25 @@ model StockOffcut {
   heightCm         Decimal?
   areaCm2          Decimal  @default(0)
   remainingAreaCm2 Decimal  @default(0)
+  costPerM2        Decimal  @default(0)
+  totalCost        Decimal  @default(0)
+  currency         String   @default("TRY")
   status           String   @default("AVAILABLE")
   sourceJobId      String?
+  consumedAt       DateTime?
+  scrappedAt       DateTime?
+  notes            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  parentPlate      StockPlate @relation("PlateOffcuts", fields: [parentPlateId], references: [id], onDelete: Restrict)
+  parentOffcut     StockOffcut? @relation("OffcutChildren", fields: [parentOffcutId], references: [id], onDelete: SetNull)
+  childOffcuts     StockOffcut[] @relation("OffcutChildren")
+  movements        StockMovement[] @relation("OffcutMovements")
+
   @@unique([atolyeId, offcutCode])
   @@index([atolyeId, parentPlateId])
+  @@index([atolyeId, parentOffcutId])
   @@index([atolyeId, productName])
   @@index([atolyeId, status])
   @@index([atolyeId, warehouseId])
