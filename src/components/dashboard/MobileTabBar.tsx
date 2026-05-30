@@ -71,6 +71,20 @@ const tabItems = [
 
 const moreItems = [
   {
+    href: "/dashboard/stok",
+    label: "Stok",
+    sub: "Malzeme / Stok",
+    color: "#06b6d4",
+    onboardingTarget: "stok",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+        <path d="M3.3 7L12 12l8.7-5"/>
+        <path d="M12 22V12"/>
+      </svg>
+    ),
+  },
+  {
     href: "/dashboard/musteriler",
     label: "Müşteriler",
     sub: "CRM & ekstre",
@@ -149,14 +163,20 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
     setMoreOpen(false);
   }, [pathname]);
 
-  const morePathlar = moreItems.map((m) => m.href);
-  const moreActive = morePathlar.some((p) => pathname.startsWith(p));
-
   const visibleTabs = useMemo(() => {
     if (!currentUser || currentUser.role !== "personel") return tabItems;
     const allowed = new Set(currentUser.allowedMenus || ["/dashboard"]);
     return tabItems.filter((item) => item.fab || item.more || allowed.has(item.href));
   }, [currentUser]);
+
+  const visibleMoreItems = useMemo(() => {
+    if (!currentUser || currentUser.role !== "personel") return moreItems;
+    const allowed = new Set(currentUser.allowedMenus || ["/dashboard"]);
+    return moreItems.filter((item) => allowed.has(item.href));
+  }, [currentUser]);
+
+  const morePathlar = visibleMoreItems.map((m) => m.href);
+  const moreActive = morePathlar.some((p) => pathname.startsWith(p));
 
   return (
     <>
@@ -194,7 +214,7 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
                   Daha Fazla
                 </p>
               </div>
-              {moreItems.map((item, i) => (
+              {visibleMoreItems.map((item, i) => (
                 <Link
                   key={item.href}
                   href={item.href}

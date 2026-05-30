@@ -8,6 +8,7 @@ const MENU_YETKI_MAP: Record<string, string> = {
   "/dashboard/isler": "teklifOlusturabilir",
   "/dashboard/musteriler": "musteriGorebilir",
   "/dashboard/is-programi": "isProgramiGorebilir",
+  "/dashboard/stok": "maliyetGorebilir",
   "/dashboard/atolye": "atolyeAyarGorebilir",
   "/dashboard/personel": "atolyeAyarGorebilir",
   "/dashboard/plaka-planlayici": "teklifOlusturabilir",
@@ -31,6 +32,7 @@ async function getPersonelMenuleri(personelId: string): Promise<string[]> {
     if (yetki.teklifOlusturabilir) allowed.push("/dashboard/isler");
     if (yetki.teklifOlusturabilir) allowed.push("/dashboard/plaka-planlayici");
     if (yetki.musteriGorebilir) allowed.push("/dashboard/musteriler");
+    if (yetki.maliyetGorebilir) allowed.push("/dashboard/stok");
     if (yetki.maliyetGorebilir) allowed.push("/dashboard/tahsilatlar");
     if (yetki.atolyeAyarGorebilir) allowed.push("/dashboard/atolye");
     if (yetki.atolyeAyarGorebilir) allowed.push("/dashboard/personel");
