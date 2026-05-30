@@ -2,7 +2,7 @@ import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
 import { NextResponse } from "next/server";
-import { releaseOpenReservationsForJob } from "@/lib/stock/reservations";
+import { isStockReservationReleaseBlocked, releaseOpenReservationsForJob } from "@/lib/stock/reservations";
 
 
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
@@ -115,6 +115,9 @@ export async function POST(req: Request) {
 
     return Response.json({ ok: true, data: updated });
   } catch (e: any) {
+    if (isStockReservationReleaseBlocked(e)) {
+      return Response.json({ error: e.message }, { status: 409 });
+    }
     return Response.json({ error: e.message }, { status: 500 });
   }
 }

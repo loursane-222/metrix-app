@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import ExecutionControlPanel from "@/components/execution/ExecutionControlPanel";
+import CutResultSheet from "@/components/execution/CutResultSheet";
 import { useExecution } from "@/hooks/useExecution";
 
 dayjs.locale("tr");
@@ -94,6 +95,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
   const [plannedDate, setPlannedDate] = useState(phaseRow?.plannedStart ? dayjs(phaseRow.plannedStart).format("YYYY-MM-DD") : "");
   const [notesDraft, setNotesDraft] = useState(schedule?.notes || job?.notlar || "");
   const [selectedPersonelIds, setSelectedPersonelIds] = useState<string[]>(initialIds);
+  const [cutResultOpen, setCutResultOpen] = useState(false);
 
   // ── Ölçü fotoğraf state ────────────────────────────────────────────────────
   const [olcuPhotoUrl, setOlcuPhotoUrl] = useState<string>(phaseRow?.photoUrl || "");
@@ -124,6 +126,10 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
       : "Personel atanmadı";
 
   const gecikme = delayDays(phaseRow?.plannedStart, !!phaseRow?.isCompleted);
+  const requiresCutResult =
+    phase === "IMALAT" &&
+    job?.stoneSource === "STOCK" &&
+    Boolean(job?.selectedStockPlateId || stockSnapshot);
 
   // Mevcut kayıtlı fotoğraf (tamamlanmış ölçülerde)
   const savedPhotoUrl = phaseRow?.photoUrl || "";
@@ -681,7 +687,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
                     {busy ? "..." : "Duraklat"}
                   </button>
                   <button
-                    onClick={() => exec.handleTransition("COMPLETED")}
+                    onClick={() => requiresCutResult ? setCutResultOpen(true) : exec.handleTransition("COMPLETED")}
                     disabled={busy}
                     className="flex-1 rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white hover:bg-blue-500 disabled:opacity-50"
                   >
@@ -699,7 +705,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
                     {busy ? "..." : "Devam Et"}
                   </button>
                   <button
-                    onClick={() => exec.handleTransition("COMPLETED")}
+                    onClick={() => requiresCutResult ? setCutResultOpen(true) : exec.handleTransition("COMPLETED")}
                     disabled={busy}
                     className="flex-1 rounded-2xl bg-blue-600 px-5 py-4 text-base font-black text-white hover:bg-blue-500 disabled:opacity-50"
                   >
@@ -735,6 +741,17 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
           </button>
         </div>
       )}
+      <CutResultSheet
+        open={cutResultOpen}
+        executionId={exec.execution?.id ?? null}
+        job={job}
+        onClose={() => setCutResultOpen(false)}
+        onSaved={async () => {
+          setCutResultOpen(false);
+          await exec.refetch();
+          onUpdated();
+        }}
+      />
     </>
   );
 }

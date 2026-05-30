@@ -4,7 +4,11 @@ import { normalizeMtulInput, normalizeMtulDisplay } from "@/lib/normalizeMtul";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
-import { releaseOpenReservationsForJob, syncJobStockDraftReservation } from "@/lib/stock/reservations";
+import {
+  isStockReservationReleaseBlocked,
+  releaseOpenReservationsForJob,
+  syncJobStockDraftReservation,
+} from "@/lib/stock/reservations";
 
 
 
@@ -139,8 +143,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       ? "stokta"
       : body.tasDurumu || mevcutIs.tasDurumu
 
-  await prisma.$transaction(async (tx) => {
-    await tx.isOperasyon.deleteMany({ where: { isId: id } })
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.isOperasyon.deleteMany({ where: { isId: id } })
 
     await tx.is.update({
       where: { id },
@@ -198,20 +203,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     })
   })
 
-  return NextResponse.json({
-    teklifNo: mevcutIs.teklifNo,
-    toplamMetraj,
-    toplamSureDakika,
-    iscilikMaliyeti,
-    malzemeMaliyeti,
-    toplamMaliyet,
-    satisFiyati,
-    mtulSatisFiyati,
-    kdvTutari,
-    kdvDahilFiyat,
-    kullanilanPlakaSayisi: toplamPlakaSayisi,
-    teklifGecerlilikTarihi: mevcutIs.teklifGecerlilikTarihi,
-  })
+    return NextResponse.json({
+      teklifNo: mevcutIs.teklifNo,
+      toplamMetraj,
+      toplamSureDakika,
+      iscilikMaliyeti,
+      malzemeMaliyeti,
+      toplamMaliyet,
+      satisFiyati,
+      mtulSatisFiyati,
+      kdvTutari,
+      kdvDahilFiyat,
+      kullanilanPlakaSayisi: toplamPlakaSayisi,
+      teklifGecerlilikTarihi: mevcutIs.teklifGecerlilikTarihi,
+    })
+  } catch (e: any) {
+    if (isStockReservationReleaseBlocked(e)) {
+      return NextResponse.json({ error: e.message }, { status: 409 })
+    }
+    return NextResponse.json({ error: e.message || "İş güncellenemedi" }, { status: 500 })
+  }
 }
 
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
@@ -322,6 +333,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     return NextResponse.json({ ok: true, data: updated })
   } catch (e: any) {
+    if (isStockReservationReleaseBlocked(e)) {
+      return NextResponse.json({ error: e.message }, { status: 409 })
+    }
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

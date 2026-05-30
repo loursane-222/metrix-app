@@ -24,6 +24,17 @@ export function isStockReservationConflict(error: unknown) {
   return false;
 }
 
+export class StockReservationReleaseBlockedError extends Error {
+  constructor(message = "Bu plaka imalata başlamış. Serbest bırakmadan önce kesim sonucu kaydedilmeli.") {
+    super(message);
+    this.name = "StockReservationReleaseBlockedError";
+  }
+}
+
+export function isStockReservationReleaseBlocked(error: unknown) {
+  return error instanceof StockReservationReleaseBlockedError;
+}
+
 async function updatePlateAvailabilityAfterRelease(tx: Db, atolyeId: string, stockPlateId: string) {
   const activeCount = await tx.stockReservation.count({
     where: { atolyeId, stockPlateId, status: "ACTIVE" },
@@ -36,13 +47,50 @@ async function updatePlateAvailabilityAfterRelease(tx: Db, atolyeId: string, sto
   }
 }
 
-export async function releaseReservation(tx: Db, reservationId: string) {
+async function hasStartedImalatWithoutCutResult(tx: Db, reservation: { atolyeId: string; isId: string | null }) {
+  if (!reservation.isId) return false;
+  const execution = await tx.phaseExecution.findFirst({
+    where: {
+      atolyeId: reservation.atolyeId,
+      status: { in: ["STARTED", "PAUSED"] },
+      schedulePhase: {
+        phase: "IMALAT",
+        workSchedule: { isId: reservation.isId },
+      },
+    },
+    select: { id: true },
+  });
+  if (!execution) return false;
+  const cutResult = await tx.phaseExecutionEvent.findFirst({
+    where: {
+      atolyeId: reservation.atolyeId,
+      phaseExecutionId: execution.id,
+      eventType: "CUT_RESULT_RECORDED",
+    },
+    select: { id: true },
+  });
+  return !cutResult;
+}
+
+export async function releaseReservation(
+  tx: Db,
+  reservationId: string,
+  options: { allowStartedImalatRelease?: boolean } = {},
+) {
   const reservation = await tx.stockReservation.findUnique({ where: { id: reservationId } });
   if (!reservation || reservation.status === "RELEASED" || reservation.status === "CONSUMED") {
     return reservation;
   }
 
   const previousStatus = reservation.status;
+  if (
+    previousStatus === "ACTIVE" &&
+    !options.allowStartedImalatRelease &&
+    await hasStartedImalatWithoutCutResult(tx, reservation)
+  ) {
+    throw new StockReservationReleaseBlockedError();
+  }
+
   const released = await tx.stockReservation.update({
     where: { id: reservation.id },
     data: { status: "RELEASED", releasedAt: new Date() },

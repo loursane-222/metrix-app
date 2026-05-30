@@ -66,8 +66,10 @@ function evidenceText(risk: ScheduleRisk) {
     return [sale ? `Satış ${sale}` : null, cost ? `Maliyet ${cost}` : null, profit ? `Kâr ${profit}` : null].filter(Boolean).join(" · ");
   }
   if (risk.type === "MULTIPLE_FIRE_ON_JOB") return `${e.fireCount || 0} fire kaydı`;
-  if (risk.type === "UNCONSUMED_ACTIVE_RESERVATION") return `${e.plateCode || "Plaka"} · ${e.reservationAgeDays || 0} gün aktif`;
-  if (risk.type === "CONSUMED_JOB_NOT_COMPLETED") return `${e.plateCode || "Plaka"} · ${e.consumedAgeDays || 0} gün önce tüketildi`;
+  if (risk.type === "UNCONSUMED_ACTIVE_RESERVATION") {
+    return `${e.plateCode || "Plaka"} · ${e.reservationAgeDays || 0} gün aktif${e.imalatActive ? " · imalatta" : ""}`;
+  }
+  if (risk.type === "CONSUMED_JOB_NOT_COMPLETED") return `${e.plateCode || "Plaka"} · ${e.consumedAgeDays || 0} gün önce kesimde tüketildi`;
   if (risk.type === "STONE_BROKEN_IN_CUTTING") return String(e.productName || "Kesim fire kaydı");
   return "";
 }

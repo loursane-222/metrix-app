@@ -974,6 +974,7 @@ const MOVEMENT_FILTERS = [
   { value: "RELEASE", label: "Serbest Bırakma" },
   { value: "CONSUME", label: "Tüketim" },
   { value: "OFFCUT_CREATE", label: "Offcut" },
+  { value: "CUTTING_WASTE", label: "Kesim Firesi" },
 ] as const;
 
 const MOVEMENT_META: Record<string, { label: string; className: string }> = {
@@ -987,6 +988,7 @@ const MOVEMENT_META: Record<string, { label: string; className: string }> = {
   OFFCUT_CONSUME: { label: "Offcut Tüketim", className: "border-red-400/25 bg-red-500/10 text-red-300" },
   OFFCUT_SCRAP: { label: "Offcut Hurda", className: "border-slate-400/15 bg-slate-500/10 text-slate-300" },
   PLATE_PARTIAL_CONSUME: { label: "Kısmi Plaka", className: "border-cyan-400/25 bg-cyan-500/10 text-cyan-300" },
+  CUTTING_WASTE: { label: "Kesim Firesi", className: "border-orange-400/25 bg-orange-500/10 text-orange-300" },
 };
 
 function movementMeta(type: string) {

@@ -1,10 +1,9 @@
-import { PhaseExecutionStatus, PhaseType } from "@prisma/client"
+import { PhaseExecutionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { sseEmitter } from "@/lib/sseEmitter"
 import { logActivity } from "@/lib/activityLogger"
 import { emitMetrixEvent } from "@/lib/events/emitMetrixEvent"
 import { canTransition, eventTypeForTransition } from "./transitions"
-import { consumeActiveReservationsForJob } from "@/lib/stock/reservations"
 
 // ─── Working-hours constants (Istanbul UTC+3, fixed shift) ────────────────────
 const WORK_TZ_OFFSET_MIN = 180                                   // UTC+3
@@ -361,32 +360,6 @@ export async function transitionExecution(input: TransitionInput) {
     })
 
     const jobId = execution.schedulePhase.workSchedule.isId
-    const isFirstImalatStart =
-      toStatus === "STARTED" &&
-      eventType === "STARTED" &&
-      execution.schedulePhase?.phase === PhaseType.IMALAT
-
-    if (isFirstImalatStart) {
-      const consumedCount = await consumeActiveReservationsForJob(tx, { atolyeId, isId: jobId })
-      if (consumedCount === 0 && execution.schedulePhase.workSchedule.is.stoneSource === "STOCK") {
-        await tx.phaseExecutionEvent.create({
-          data: {
-            phaseExecutionId: executionId,
-            schedulePhaseId: execution.schedulePhaseId,
-            personelId: personelId ?? null,
-            atolyeId,
-            eventType: "MATERIAL_CONSUME_SKIPPED",
-            note: "İmalat başlatıldı ancak aktif stok rezervasyonu bulunamadı.",
-            ...resolveActorAuditFields(personelId, userId),
-            operationStep: "DIGER",
-            fromStatus,
-            toStatus,
-            reasonCode: "ACTIVE_RESERVATION_NOT_FOUND",
-            metadata: { jobId },
-          },
-        })
-      }
-    }
 
     if (
       toStatus === "CANNOT_START" &&

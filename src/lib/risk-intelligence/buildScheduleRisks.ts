@@ -53,6 +53,25 @@ function isJobCompleted(job: { durum?: string | null; workSchedule?: { phases?: 
   return job.workSchedule?.phases?.some((phase) => phase.phase === "MONTAJ" && phase.isCompleted) ?? false;
 }
 
+function imalatState(job: {
+  workSchedule?: {
+    phases?: Array<{
+      phase: string;
+      isCompleted: boolean;
+      executions?: Array<{ status: string; actualStartedAt: Date | null; updatedAt: Date }>;
+    }>;
+  } | null;
+}) {
+  const imalat = job.workSchedule?.phases?.find((phase) => phase.phase === "IMALAT");
+  const executions = imalat?.executions ?? [];
+  const activeExecution = executions.find((execution) => execution.status === "STARTED" || execution.status === "PAUSED") ?? null;
+  return {
+    isCompleted: imalat?.isCompleted ?? false,
+    activeExecution,
+    hasStarted: executions.some((execution) => Boolean(execution.actualStartedAt) || ["STARTED", "PAUSED", "COMPLETED"].includes(execution.status)),
+  };
+}
+
 function riskSort(a: ScheduleRisk, b: ScheduleRisk) {
   const order: Record<ScheduleRiskSeverity, number> = {
     critical: 4,
@@ -143,7 +162,19 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
             urunAdi: true,
             durum: true,
             workSchedule: {
-              select: { phases: { select: { phase: true, isCompleted: true } } },
+              select: {
+                phases: {
+                  select: {
+                    phase: true,
+                    isCompleted: true,
+                    executions: {
+                      select: { status: true, actualStartedAt: true, updatedAt: true },
+                      orderBy: { updatedAt: "desc" },
+                      take: 3,
+                    },
+                  },
+                },
+              },
             },
           },
         })
@@ -252,12 +283,18 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
     const job = reservation.isId ? jobMap.get(reservation.isId) : null;
     const plate = stockPlateMap.get(reservation.stockPlateId);
     const ageDays = Math.floor((Date.now() - reservation.updatedAt.getTime()) / 86_400_000);
+    const state = job ? imalatState(job) : null;
+    if (state?.isCompleted) continue;
+    const title = state?.activeExecution ? "Üretimde bekleyen rezerve plaka" : "Rezerve plaka üretime alınmadı";
+    const message = state?.activeExecution
+      ? `${plate?.plateCode || "Stok plakası"} imalatta ${ageDays} gündür aktif rezervasyonda.`
+      : `${plate?.plateCode || "Stok plakası"} ${ageDays} gündür aktif rezervasyonda, imalat başlamamış görünüyor.`;
     risks.push({
       id: `unconsumed_active_reservation_${reservation.id}`,
       type: "UNCONSUMED_ACTIVE_RESERVATION",
       severity: "high",
-      title: "Rezerve plaka tüketilmedi",
-      message: `${plate?.plateCode || "Stok plakası"} ${ageDays} gündür aktif rezervasyonda.`,
+      title,
+      message,
       jobId: reservation.isId,
       customerName: job?.musteriAdi ?? null,
       costAmount: null,
@@ -268,6 +305,8 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
         plateCode: plate?.plateCode ?? null,
         productName: plate?.productName ?? job?.urunAdi ?? null,
         reservationAgeDays: ageDays,
+        imalatStarted: state?.hasStarted ?? false,
+        imalatActive: Boolean(state?.activeExecution),
       },
       createdAt: iso(reservation.updatedAt),
     });
@@ -283,8 +322,8 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
       id: `consumed_job_not_completed_${reservation.id}`,
       type: "CONSUMED_JOB_NOT_COMPLETED",
       severity: "high",
-      title: "Plaka tüketildi, iş tamamlanmadı",
-      message: `${plate?.plateCode || "Stok plakası"} tüketildi ancak iş tamamlanmış görünmüyor.`,
+      title: "Malzeme tüketildi, iş kapanmadı",
+      message: `${plate?.plateCode || "Stok plakası"} kesimde tüketildi ancak iş kapanmış görünmüyor.`,
       jobId: reservation.isId,
       customerName: job.musteriAdi || null,
       costAmount: null,
