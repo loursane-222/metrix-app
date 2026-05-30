@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAtolyeAuth } from "@/lib/getAtolyeId";
 
@@ -6,6 +7,39 @@ function n(value: unknown) {
   if (value == null) return 0;
   const num = Number(value);
   return Number.isFinite(num) ? num : 0;
+}
+
+function text(value: unknown) {
+  const s = String(value ?? "").trim();
+  return s || null;
+}
+
+function safeCodePart(value: string) {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toUpperCase();
+  return normalized.slice(0, 18) || "MANUEL";
+}
+
+async function nextManualPlateCode(tx: Prisma.TransactionClient, atolyeId: string, productName: string, offset: number) {
+  const prefix = `MAN-${safeCodePart(productName)}-`;
+  const count = await tx.stockPlate.count({
+    where: { atolyeId, plateCode: { startsWith: prefix } },
+  });
+
+  for (let index = count + offset + 1; index < count + offset + 1000; index += 1) {
+    const plateCode = `${prefix}${String(index).padStart(4, "0")}`;
+    const exists = await tx.stockPlate.findFirst({
+      where: { atolyeId, plateCode },
+      select: { id: true },
+    });
+    if (!exists) return plateCode;
+  }
+
+  return `${prefix}${Date.now()}-${offset + 1}`;
 }
 
 export async function GET(req: NextRequest) {
@@ -91,5 +125,142 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("[stock/plates]", error);
     return NextResponse.json({ error: "Plaka listesi alınamadı" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const auth = await getAtolyeAuth();
+    if (!auth?.atolyeId) {
+      return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const productName = text(body.productName);
+    const materialType = text(body.materialType);
+    const widthCm = n(body.widthCm);
+    const heightCm = n(body.heightCm);
+    const purchaseTotalCost = n(body.purchaseTotalCost);
+    const currency = text(body.currency) || "TRY";
+    const quantity = Math.max(1, Math.min(100, Math.floor(n(body.quantity) || 1)));
+    const shadeCode = text(body.shadeCode);
+    const thicknessMm = body.thicknessMm == null || body.thicknessMm === "" ? null : n(body.thicknessMm);
+    const supplierName = text(body.supplierName);
+    const batchNo = text(body.batchNo);
+    const notes = text(body.notes);
+    const warehouseId = text(body.warehouseId);
+
+    if (!productName) return NextResponse.json({ error: "Ürün adı zorunlu" }, { status: 400 });
+    if (!materialType) return NextResponse.json({ error: "Malzeme tipi zorunlu" }, { status: 400 });
+    if (widthCm <= 0 || heightCm <= 0) return NextResponse.json({ error: "En ve boy 0'dan büyük olmalı" }, { status: 400 });
+    if (purchaseTotalCost <= 0) return NextResponse.json({ error: "Alış toplam maliyeti 0'dan büyük olmalı" }, { status: 400 });
+
+    const result = await prisma.$transaction(async (tx) => {
+      let warehouse = warehouseId
+        ? await tx.stockWarehouse.findFirst({
+            where: { id: warehouseId, atolyeId: auth.atolyeId, isActive: true },
+          })
+        : null;
+
+      if (warehouseId && !warehouse) {
+        return { status: 404 as const, body: { error: "Depo bulunamadı" } };
+      }
+
+      if (!warehouse) {
+        warehouse =
+          await tx.stockWarehouse.findFirst({
+            where: { atolyeId: auth.atolyeId, isDefault: true, isActive: true },
+            orderBy: { createdAt: "asc" },
+          }) ??
+          await tx.stockWarehouse.findFirst({
+            where: { atolyeId: auth.atolyeId, isActive: true },
+            orderBy: { createdAt: "asc" },
+          });
+      }
+
+      if (!warehouse) {
+        warehouse = await tx.stockWarehouse.create({
+          data: {
+            atolyeId: auth.atolyeId,
+            name: "Ana Depo",
+            code: "ANA",
+            isDefault: true,
+            isActive: true,
+          },
+        });
+      }
+
+      const totalAreaCm2 = widthCm * heightCm;
+      const unitCost = purchaseTotalCost / quantity;
+      const purchaseUnitCost = totalAreaCm2 > 0 ? unitCost / (totalAreaCm2 / 10_000) : 0;
+      const plates = [];
+
+      for (let i = 0; i < quantity; i += 1) {
+        const plateCode = await nextManualPlateCode(tx, auth.atolyeId, productName, i);
+        const plate = await tx.stockPlate.create({
+          data: {
+            atolyeId: auth.atolyeId,
+            plateCode,
+            productName,
+            materialType,
+            shadeCode,
+            supplierName,
+            batchNo,
+            warehouseId: warehouse.id,
+            widthCm,
+            heightCm,
+            thicknessMm,
+            totalAreaCm2,
+            remainingAreaCm2: totalAreaCm2,
+            purchaseCurrency: currency,
+            purchaseUnitCost,
+            purchaseTotalCost: unitCost,
+            status: "AVAILABLE",
+            sourceType: "MANUAL_CREATE",
+            notes,
+          },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            atolyeId: auth.atolyeId,
+            stockPlateId: plate.id,
+            movementType: "IN",
+            quantityAreaCm2: totalAreaCm2,
+            toWarehouseId: warehouse.id,
+            reasonCode: "MANUAL_STOCK_CREATE",
+            note: "Manuel ürün/plaka girişi",
+          },
+        });
+
+        plates.push(plate);
+      }
+
+      return {
+        status: 201 as const,
+        body: {
+          ok: true,
+          createdPlateCount: plates.length,
+          plates: plates.map((plate) => ({
+            id: plate.id,
+            plateCode: plate.plateCode,
+            productName: plate.productName,
+            materialType: plate.materialType,
+            widthCm: n(plate.widthCm),
+            heightCm: n(plate.heightCm),
+            purchaseTotalCost: n(plate.purchaseTotalCost),
+            status: plate.status,
+          })),
+        },
+      };
+    });
+
+    return NextResponse.json(result.body, { status: result.status });
+  } catch (error) {
+    console.error("[stock/plates][POST]", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json({ error: "Plaka kodu çakıştı, lütfen tekrar deneyin" }, { status: 409 });
+    }
+    return NextResponse.json({ error: "Ürün/plaka oluşturulamadı" }, { status: 500 });
   }
 }

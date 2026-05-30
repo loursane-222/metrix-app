@@ -97,6 +97,22 @@ type OffcutFormState = {
   notes: string;
 };
 
+type ManualProductFormState = {
+  productName: string;
+  materialType: string;
+  widthCm: string;
+  heightCm: string;
+  purchaseTotalCost: string;
+  currency: string;
+  quantity: string;
+  shadeCode: string;
+  thicknessMm: string;
+  warehouseId: string;
+  supplierName: string;
+  batchNo: string;
+  notes: string;
+};
+
 type StockPurchaseRow = {
   id: string;
   purchaseCode: string;
@@ -252,6 +268,22 @@ const EMPTY_OFFCUT_FORM: OffcutFormState = {
   notes: "",
 };
 
+const EMPTY_MANUAL_PRODUCT_FORM: ManualProductFormState = {
+  productName: "",
+  materialType: "",
+  widthCm: "",
+  heightCm: "",
+  purchaseTotalCost: "",
+  currency: "TRY",
+  quantity: "1",
+  shadeCode: "",
+  thicknessMm: "",
+  warehouseId: "",
+  supplierName: "",
+  batchNo: "",
+  notes: "",
+};
+
 const OFFCUT_STATUS_LABELS: Record<string, string> = {
   AVAILABLE: "Kullanılabilir",
   RESERVED: "Rezerve",
@@ -334,18 +366,6 @@ function KpiCard({ label, value, sub, tone = "text-white" }: { label: string; va
   );
 }
 
-function SoonButton({ children }: { children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      disabled
-      className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-xs font-black text-slate-500"
-    >
-      {children} · yakında
-    </button>
-  );
-}
-
 function ActionButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
     <button
@@ -370,6 +390,11 @@ export default function StokPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "products" | "plates" | "offcuts" | "purchases" | "movements">("overview");
   const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>(EMPTY_PURCHASE_FORM);
   const [purchaseError, setPurchaseError] = useState("");
+  const [manualProductOpen, setManualProductOpen] = useState(false);
+  const [manualProductForm, setManualProductForm] = useState<ManualProductFormState>(EMPTY_MANUAL_PRODUCT_FORM);
+  const [manualProductSaving, setManualProductSaving] = useState(false);
+  const [manualProductError, setManualProductError] = useState("");
+  const [manualProductSuccess, setManualProductSuccess] = useState("");
   const [offcutForm, setOffcutForm] = useState<OffcutFormState>(EMPTY_OFFCUT_FORM);
   const [offcutError, setOffcutError] = useState("");
   const [importOpen, setImportOpen] = useState(false);
@@ -518,6 +543,45 @@ export default function StokPage() {
     }
   }
 
+  async function createManualProduct() {
+    setManualProductError("");
+    setManualProductSuccess("");
+    setManualProductSaving(true);
+    try {
+      const res = await fetch("/api/stock/plates", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName: manualProductForm.productName,
+          materialType: manualProductForm.materialType,
+          widthCm: Number(manualProductForm.widthCm),
+          heightCm: Number(manualProductForm.heightCm),
+          purchaseTotalCost: Number(manualProductForm.purchaseTotalCost),
+          currency: manualProductForm.currency || "TRY",
+          quantity: Number(manualProductForm.quantity || 1),
+          shadeCode: manualProductForm.shadeCode || null,
+          thicknessMm: manualProductForm.thicknessMm ? Number(manualProductForm.thicknessMm) : null,
+          warehouseId: manualProductForm.warehouseId || null,
+          supplierName: manualProductForm.supplierName || null,
+          batchNo: manualProductForm.batchNo || null,
+          notes: manualProductForm.notes || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Ürün/plaka oluşturulamadı.");
+      setManualProductForm(EMPTY_MANUAL_PRODUCT_FORM);
+      setManualProductOpen(false);
+      setManualProductSuccess(`${json?.createdPlateCount || 1} plaka oluşturuldu.`);
+      await Promise.all([loadSummary(), loadPlates(), loadMovements("")]);
+      window.setTimeout(() => setManualProductSuccess(""), 4500);
+    } catch (error) {
+      setManualProductError(error instanceof Error ? error.message : "Ürün/plaka oluşturulamadı.");
+    } finally {
+      setManualProductSaving(false);
+    }
+  }
+
   async function createPurchase() {
     setPurchaseError("");
     setPurchaseSaving(true);
@@ -600,6 +664,12 @@ export default function StokPage() {
   function openImportPicker() {
     setImportError("");
     fileInputRef.current?.click();
+  }
+
+  function openManualProduct() {
+    setManualProductError("");
+    setManualProductSuccess("");
+    setManualProductOpen(true);
   }
 
   function downloadTemplate() {
@@ -689,7 +759,7 @@ export default function StokPage() {
           <div className="flex shrink-0 gap-2">
             <ActionButton onClick={downloadTemplate}>Şablon İndir</ActionButton>
             <ActionButton onClick={openImportPicker}>Excel Yükle</ActionButton>
-            <SoonButton>Manuel Stok Ekle</SoonButton>
+            <ActionButton onClick={openManualProduct}>+ Ürün Ekle</ActionButton>
           </div>
         </header>
 
@@ -729,7 +799,7 @@ export default function StokPage() {
                   </div>
                 </div>
                 {!hasStock && !loading ? (
-                  <EmptyStockState onImportClick={openImportPicker} />
+                  <EmptyStockState onImportClick={openImportPicker} onManualProductClick={openManualProduct} />
                 ) : (
                   <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                     <div className="grid gap-2">
@@ -899,6 +969,7 @@ export default function StokPage() {
         hasStock={hasStock}
         openProduct={openProduct}
         onImportClick={openImportPicker}
+        onManualProductClick={openManualProduct}
       />
 
       {selectedProduct && (
@@ -921,11 +992,27 @@ export default function StokPage() {
           onCommit={commitImport}
         />
       )}
+      {manualProductSuccess && (
+        <div className="fixed bottom-24 left-1/2 z-[270] -translate-x-1/2 rounded-2xl border border-emerald-400/25 bg-emerald-500/15 px-4 py-3 text-sm font-black text-emerald-100 shadow-2xl backdrop-blur">
+          {manualProductSuccess}
+        </div>
+      )}
+      {manualProductOpen && (
+        <ManualProductSheet
+          form={manualProductForm}
+          warehouses={summary.warehouses}
+          saving={manualProductSaving}
+          error={manualProductError}
+          onChange={(patch) => setManualProductForm((prev) => ({ ...prev, ...patch }))}
+          onClose={() => setManualProductOpen(false)}
+          onCreate={createManualProduct}
+        />
+      )}
     </main>
   );
 }
 
-function EmptyStockState({ onImportClick }: { onImportClick: () => void }) {
+function EmptyStockState({ onImportClick, onManualProductClick }: { onImportClick: () => void; onManualProductClick: () => void }) {
   return (
     <div className="flex h-full min-h-[360px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.035] p-8 text-center">
       <div className="max-w-md">
@@ -934,7 +1021,7 @@ function EmptyStockState({ onImportClick }: { onImportClick: () => void }) {
         <p className="mt-2 text-sm leading-6 text-slate-500">Metrix stokları ürün bazında gösterir, ama her plakayı ayrı takip eder. Aynı üründe farklı shade/ton kodları olabilir; aynı işte farklı tonları karıştırmamak için shade kodunu gir.</p>
         <div className="mt-5 flex justify-center gap-2">
           <ActionButton onClick={onImportClick}>Excel Yükle</ActionButton>
-          <SoonButton>Manuel Stok Ekle</SoonButton>
+          <ActionButton onClick={onManualProductClick}>+ Ürün Ekle</ActionButton>
         </div>
       </div>
     </div>
@@ -1569,6 +1656,137 @@ function ImportModal({
   );
 }
 
+function ManualProductSheet({
+  form,
+  warehouses,
+  saving,
+  error,
+  onChange,
+  onClose,
+  onCreate,
+}: {
+  form: ManualProductFormState;
+  warehouses: SummaryResponse["warehouses"];
+  saving: boolean;
+  error: string;
+  onChange: (patch: Partial<ManualProductFormState>) => void;
+  onClose: () => void;
+  onCreate: () => void;
+}) {
+  const canCreate =
+    form.productName.trim() &&
+    form.materialType.trim() &&
+    Number(form.widthCm) > 0 &&
+    Number(form.heightCm) > 0 &&
+    Number(form.purchaseTotalCost) > 0 &&
+    Number(form.quantity || 1) > 0;
+
+  const fieldClass = "rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-blue-400/50";
+  const labelClass = "mb-1 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500";
+
+  return (
+    <div className="fixed inset-0 z-[260] bg-black/65 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="absolute bottom-0 left-0 right-0 flex max-h-[94dvh] flex-col rounded-t-[30px] border border-white/10 bg-[#07111f] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.48)] md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:w-[720px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[30px] md:p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Manuel Giriş</p>
+            <h3 className="mt-1 truncate text-xl font-black tracking-[-0.02em] text-white">+ Ürün Ekle</h3>
+            <p className="mt-1 text-sm text-slate-500">Ürün bilgisiyle birlikte ilk plaka stok kaydı oluşturulur.</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.055] text-slate-300 disabled:opacity-50">×</button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className={labelClass}>Ürün adı</label>
+              <input className={fieldClass} value={form.productName} onChange={(e) => onChange({ productName: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Malzeme tipi</label>
+              <input className={fieldClass} value={form.materialType} onChange={(e) => onChange({ materialType: e.target.value })} placeholder="Porselen, kuvars..." />
+            </div>
+            <div>
+              <label className={labelClass}>En cm</label>
+              <input className={fieldClass} inputMode="decimal" value={form.widthCm} onChange={(e) => onChange({ widthCm: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Boy cm</label>
+              <input className={fieldClass} inputMode="decimal" value={form.heightCm} onChange={(e) => onChange({ heightCm: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Alış toplam maliyeti</label>
+              <input className={fieldClass} inputMode="decimal" value={form.purchaseTotalCost} onChange={(e) => onChange({ purchaseTotalCost: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Para birimi</label>
+                <select className={fieldClass} value={form.currency} onChange={(e) => onChange({ currency: e.target.value })}>
+                  <option value="TRY">TRY</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Adet</label>
+                <input className={fieldClass} inputMode="numeric" value={form.quantity} onChange={(e) => onChange({ quantity: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Ton kodu</label>
+              <input className={fieldClass} value={form.shadeCode} onChange={(e) => onChange({ shadeCode: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Kalınlık mm</label>
+              <input className={fieldClass} inputMode="decimal" value={form.thicknessMm} onChange={(e) => onChange({ thicknessMm: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Depo</label>
+              <select className={fieldClass} value={form.warehouseId} onChange={(e) => onChange({ warehouseId: e.target.value })}>
+                <option value="">Varsayılan depo</option>
+                {warehouses.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Tedarikçi</label>
+              <input className={fieldClass} value={form.supplierName} onChange={(e) => onChange({ supplierName: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Batch/Lot</label>
+              <input className={fieldClass} value={form.batchNo} onChange={(e) => onChange({ batchNo: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Not</label>
+              <input className={fieldClass} value={form.notes} onChange={(e) => onChange({ notes: e.target.value })} />
+            </div>
+          </div>
+
+          {error && (
+            <div className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</div>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2 md:flex md:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-xs font-black text-slate-200 disabled:opacity-50">Vazgeç</button>
+          <button
+            type="button"
+            onClick={onCreate}
+            disabled={saving || !canCreate}
+            className="rounded-2xl border border-blue-400/25 bg-blue-500/18 px-4 py-3 text-xs font-black text-blue-100 disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-slate-600"
+          >
+            {saving ? "Oluşturuluyor..." : "+ Ürün Ekle"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MobileStockView({
   summary,
   plates,
@@ -1604,6 +1822,7 @@ function MobileStockView({
   hasStock,
   openProduct,
   onImportClick,
+  onManualProductClick,
 }: {
   summary: SummaryResponse;
   plates: StockPlate[];
@@ -1639,6 +1858,7 @@ function MobileStockView({
   hasStock: boolean;
   openProduct: (product: StockProduct) => void;
   onImportClick: () => void;
+  onManualProductClick: () => void;
 }) {
   return (
     <div className="mx-auto max-w-lg md:hidden">
@@ -1665,6 +1885,7 @@ function MobileStockView({
           <ActionButton onClick={() => { window.location.href = "/api/stock/import/template"; }}>Şablon İndir</ActionButton>
           <ActionButton onClick={onImportClick}>Excel Yükle</ActionButton>
         </div>
+        <ActionButton onClick={onManualProductClick}>+ Ürün Ekle</ActionButton>
         {activeTab === "overview" ? (
           !hasStock ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
