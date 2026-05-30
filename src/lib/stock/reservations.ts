@@ -38,7 +38,9 @@ async function updatePlateAvailabilityAfterRelease(tx: Db, atolyeId: string, sto
 
 export async function releaseReservation(tx: Db, reservationId: string) {
   const reservation = await tx.stockReservation.findUnique({ where: { id: reservationId } });
-  if (!reservation || reservation.status === "RELEASED") return reservation;
+  if (!reservation || reservation.status === "RELEASED" || reservation.status === "CONSUMED") {
+    return reservation;
+  }
 
   const previousStatus = reservation.status;
   const released = await tx.stockReservation.update({
@@ -191,4 +193,74 @@ export async function activateDraftReservationsForJob(
   }
 
   return drafts.length;
+}
+
+export async function consumeActiveReservationsForJob(
+  tx: Db,
+  input: { atolyeId: string; isId: string },
+) {
+  const reservations = await tx.stockReservation.findMany({
+    where: { atolyeId: input.atolyeId, isId: input.isId, status: "ACTIVE" },
+    orderBy: { createdAt: "asc" },
+  });
+
+  let consumedCount = 0;
+
+  for (const reservation of reservations) {
+    const plate = await tx.stockPlate.findFirst({
+      where: { id: reservation.stockPlateId, atolyeId: reservation.atolyeId },
+      select: {
+        id: true,
+        totalAreaCm2: true,
+        remainingAreaCm2: true,
+        purchaseTotalCost: true,
+        purchaseCurrency: true,
+      },
+    });
+
+    const result = await tx.stockReservation.updateMany({
+      where: { id: reservation.id, status: "ACTIVE" },
+      data: { status: "CONSUMED", consumedAt: new Date() },
+    });
+    if (result.count === 0) continue;
+
+    const quantityAreaCm2 =
+      reservation.reservedAreaCm2 ??
+      plate?.remainingAreaCm2 ??
+      plate?.totalAreaCm2 ??
+      undefined;
+
+    await tx.stockMovement.create({
+      data: {
+        atolyeId: reservation.atolyeId,
+        stockPlateId: reservation.stockPlateId,
+        movementType: "CONSUME",
+        quantityAreaCm2,
+        isId: reservation.isId,
+        reasonCode: "RESERVATION_CONSUMED",
+        note: "Stok rezervasyonu üretimde tüketildi",
+      },
+    });
+
+    await tx.materialConsumption.create({
+      data: {
+        atolyeId: reservation.atolyeId,
+        isId: reservation.isId ?? input.isId,
+        stockPlateId: reservation.stockPlateId,
+        areaCm2: quantityAreaCm2 ?? 0,
+        costAmount: plate?.purchaseTotalCost,
+        currency: plate?.purchaseCurrency ?? "TRY",
+        source: "STOCK_RESERVATION",
+      },
+    });
+
+    await tx.stockPlate.updateMany({
+      where: { id: reservation.stockPlateId, atolyeId: reservation.atolyeId },
+      data: { status: "USED", remainingAreaCm2: 0 },
+    });
+
+    consumedCount += 1;
+  }
+
+  return consumedCount;
 }

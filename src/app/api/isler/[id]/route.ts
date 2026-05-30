@@ -100,7 +100,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     (body.operasyonlar || []).reduce((acc: number, op: any) => acc + (op.toplamDakika || 0), 0)
 
   const iscilikMaliyeti = toplamSureDakika * Number(atolye.dakikaMaliyeti)
-  const toplamMaliyet = malzemeMaliyeti + iscilikMaliyeti
+  const operasyonelFireMaliyeti = Number(mevcutIs.operasyonelFireMaliyeti || 0)
+  const fiyatMaliyetTabani = malzemeMaliyeti + iscilikMaliyeti
+  const toplamMaliyet = fiyatMaliyetTabani + operasyonelFireMaliyeti
 
   let satisFiyati = Number(mevcutIs.satisFiyati)
   let kdvTutari = Number(mevcutIs.kdvTutari)
@@ -108,7 +110,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   let mtulSatisFiyati = normalizeMtulInput(mevcutIs.mtulSatisFiyati)
 
   if (!onaylandi) {
-    satisFiyati = toplamMaliyet * (1 + (body.karYuzdesi || 0) / 100)
+    satisFiyati = fiyatMaliyetTabani * (1 + (body.karYuzdesi || 0) / 100)
     kdvTutari = satisFiyati * (Number(atolye.kdvOrani) / 100)
     kdvDahilFiyat = satisFiyati + kdvTutari
     mtulSatisFiyati = toplamMetraj > 0 ? satisFiyati / toplamMetraj : 0

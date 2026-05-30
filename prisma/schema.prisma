@@ -184,6 +184,7 @@ model Is {
   toplamSureDakika Decimal @default(0)
   iscilikMaliyeti  Decimal @default(0)
   malzemeMaliyeti  Decimal @default(0)
+  operasyonelFireMaliyeti Decimal @default(0)
   toplamMaliyet    Decimal @default(0)
   kdvTutari        Decimal @default(0)
   kdvDahilFiyat    Decimal @default(0)
@@ -510,6 +511,7 @@ model StockReservation {
   reservedAreaCm2 Decimal?
   status          String    @default("DRAFT")
   releasedAt      DateTime?
+  consumedAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

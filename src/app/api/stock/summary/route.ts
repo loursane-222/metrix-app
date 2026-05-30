@@ -8,7 +8,9 @@ function n(value: unknown) {
   return Number.isFinite(num) ? num : 0;
 }
 
-function stockValue(plate: { purchaseTotalCost: unknown; totalAreaCm2: unknown; remainingAreaCm2: unknown }) {
+function stockValue(plate: { purchaseTotalCost: unknown; totalAreaCm2: unknown; remainingAreaCm2: unknown; status?: unknown }) {
+  const status = String(plate.status || "").toUpperCase();
+  if (["USED", "BROKEN", "SCRAPPED"].includes(status)) return 0;
   const total = n(plate.purchaseTotalCost);
   const totalArea = n(plate.totalAreaCm2);
   const remainingArea = n(plate.remainingAreaCm2);

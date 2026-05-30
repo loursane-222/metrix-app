@@ -78,6 +78,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
     job?.stockMaterialSnapshot && typeof job.stockMaterialSnapshot === "object"
       ? job.stockMaterialSnapshot
       : null;
+  const operasyonelFireMaliyeti = Number(job?.operasyonelFireMaliyeti || 0);
 
   const phaseRow = useMemo(
     () => (schedule?.phases || []).find((p: any) => p.id === task?.id || p.phase === phase),
@@ -578,6 +579,28 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
                 </div>
               </div>
             </div>
+
+            {/* Stok ve Fire */}
+            {phase === "IMALAT" && (stockSnapshot || operasyonelFireMaliyeti > 0) && (
+              <div className="mt-4 rounded-3xl border border-amber-500/20 bg-amber-500/5 p-4">
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300/80">Stok ve Fire</div>
+                {stockSnapshot && (
+                  <div className="mt-2 text-sm text-slate-300">
+                    <span className="font-black text-white">{stockSnapshot.plateCode || "Stok plakası"}</span>
+                    {stockSnapshot.productName ? ` · ${stockSnapshot.productName}` : ""}
+                    {stockSnapshot.shadeCode ? ` · Shade ${stockSnapshot.shadeCode}` : ""}
+                  </div>
+                )}
+                <div className="mt-2 text-xs text-slate-500">
+                  İmalat ilk başlatıldığında aktif stok rezervasyonu tüketilmiş kabul edilir.
+                </div>
+                {operasyonelFireMaliyeti > 0 && (
+                  <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-300">
+                    Operasyonel fire maliyeti: ₺{operasyonelFireMaliyeti.toLocaleString("tr-TR")}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Execution Panel — tamamlanmış fazlarda da göster (timeline + fallback) */}
             {task?.id && !editMode && (
