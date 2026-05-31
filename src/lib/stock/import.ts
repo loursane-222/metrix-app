@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { normalizeCurrency, stockCostFields } from "@/lib/stock/currency";
 
 type RawRow = Record<string, unknown>;
 
@@ -15,8 +16,11 @@ export type NormalizedStockImportRow = {
   quantity: number;
   warehouseName: string;
   purchaseCurrency: string;
+  purchaseOriginalCost: number;
+  purchaseFxRate: number;
   purchaseUnitCost: number;
   purchaseTotalCost: number;
+  purchaseTotalCostInput: number | null;
   supplierName: string | null;
   batchNo: string | null;
   notes: string | null;
@@ -61,6 +65,16 @@ const FIELD_ALIASES: Record<string, keyof NormalizedStockImportRow> = {
   "alış maliyeti": "purchaseTotalCost",
   "maliyet": "purchaseTotalCost",
   "cost": "purchaseTotalCost",
+  "tl karsiligi": "purchaseTotalCostInput",
+  "tl karşılığı": "purchaseTotalCostInput",
+  "tl tutar": "purchaseTotalCostInput",
+  "alis kuru": "purchaseFxRate",
+  "alış kuru": "purchaseFxRate",
+  "kur": "purchaseFxRate",
+  "fx rate": "purchaseFxRate",
+  "exchange rate": "purchaseFxRate",
+  "alis para birimi": "purchaseCurrency",
+  "alış para birimi": "purchaseCurrency",
   "para birimi": "purchaseCurrency",
   "currency": "purchaseCurrency",
   "malzeme tipi": "materialType",
@@ -85,6 +99,9 @@ const FIELD_ALIASES: Record<string, keyof NormalizedStockImportRow> = {
   "tedarikçi": "supplierName",
   "supplier": "supplierName",
   "parti no": "batchNo",
+  "parti kodu": "batchNo",
+  "lot": "batchNo",
+  "batch": "batchNo",
   "partino": "batchNo",
   "batch no": "batchNo",
   "not": "notes",
@@ -198,7 +215,11 @@ export function normalizeStockImportRows(rows: RawRow[]): NormalizedStockImportR
     const widthCm = numberValue(row.widthCm);
     const heightCm = numberValue(row.heightCm);
     const quantity = Math.floor(numberValue(row.quantity));
-    const purchaseTotalCost = numberValue(row.purchaseTotalCost);
+    const purchaseOriginalCost = row.purchaseOriginalCost != null ? numberValue(row.purchaseOriginalCost) : numberValue(row.purchaseTotalCost);
+    const purchaseTotalCostInput = numberValue(row.purchaseTotalCostInput);
+    const purchaseCurrency = normalizeCurrency(row.purchaseCurrency);
+    const rawFxRate = numberValue(row.purchaseFxRate);
+    const purchaseFxRate = purchaseCurrency === "TRY" && !Number.isFinite(rawFxRate) ? 1 : rawFxRate;
     const totalAreaCm2 = Number.isFinite(widthCm) && Number.isFinite(heightCm) ? widthCm * heightCm : 0;
     const errors: string[] = [];
     const productName = text(row.productName);
@@ -209,10 +230,23 @@ export function normalizeStockImportRows(rows: RawRow[]): NormalizedStockImportR
     if (!Number.isFinite(heightCm) || heightCm <= 0) errors.push("Yükseklik Cm 0'dan büyük olmalı.");
     if (!Number.isFinite(quantity) || quantity < 1) errors.push("Adet en az 1 olmalı.");
     if (!warehouseName) errors.push("Depo zorunlu.");
-    if (!Number.isFinite(purchaseTotalCost) || purchaseTotalCost < 0) errors.push("Alış Maliyeti geçerli sayı olmalı.");
+    if (!Number.isFinite(purchaseOriginalCost) || purchaseOriginalCost < 0) errors.push("Alış Maliyeti geçerli sayı olmalı.");
+    if (purchaseCurrency !== "TRY" && (!Number.isFinite(purchaseFxRate) || purchaseFxRate <= 0)) errors.push("Dövizli stok için Alış Kuru zorunlu.");
 
     const safeQuantity = Number.isFinite(quantity) && quantity >= 1 ? quantity : 0;
-    const safeCost = Number.isFinite(purchaseTotalCost) && purchaseTotalCost >= 0 ? purchaseTotalCost : 0;
+    const safeOriginalCost = Number.isFinite(purchaseOriginalCost) && purchaseOriginalCost >= 0 ? purchaseOriginalCost : 0;
+    const costs = stockCostFields({
+      currency: purchaseCurrency,
+      originalCost: safeOriginalCost,
+      fxRate: Number.isFinite(purchaseFxRate) ? purchaseFxRate : 0,
+      quantity: safeQuantity,
+      totalAreaCm2,
+    });
+    const safeTotalCostInput = Number.isFinite(purchaseTotalCostInput) && purchaseTotalCostInput >= 0 ? purchaseTotalCostInput : null;
+    const warnings: string[] = [];
+    if (safeTotalCostInput != null && Math.abs(safeTotalCostInput - costs.totalCostTry) > 1) {
+      warnings.push(`TL Karşılığı hesaplanan tutardan farklı. Sistem ${costs.totalCostTry.toFixed(2)} kullanacak.`);
+    }
 
     return {
       rowNumber: Number(row.rowNumber) || 0,
@@ -226,9 +260,12 @@ export function normalizeStockImportRows(rows: RawRow[]): NormalizedStockImportR
       heightCm: Number.isFinite(heightCm) ? heightCm : 0,
       quantity: safeQuantity,
       warehouseName,
-      purchaseCurrency: text(row.purchaseCurrency) || "TRY",
-      purchaseUnitCost: safeQuantity > 0 ? safeCost / safeQuantity : 0,
-      purchaseTotalCost: safeCost,
+      purchaseCurrency,
+      purchaseOriginalCost: safeOriginalCost,
+      purchaseFxRate: costs.fxRate,
+      purchaseUnitCost: costs.purchaseUnitCost,
+      purchaseTotalCost: costs.totalCostTry,
+      purchaseTotalCostInput: safeTotalCostInput,
       supplierName: optionalText(row.supplierName),
       batchNo: optionalText(row.batchNo),
       notes: optionalText(row.notes),
@@ -236,7 +273,7 @@ export function normalizeStockImportRows(rows: RawRow[]): NormalizedStockImportR
       totalAreaCm2,
       remainingAreaCm2: totalAreaCm2,
       errors,
-      warnings: [],
+      warnings,
     };
   });
 }
@@ -341,6 +378,7 @@ export async function commitStockImportRows(atolyeId: string, rows: NormalizedSt
 
     for (const row of validRows) {
       const warehouse = warehouseMap.get(headerKey(row.warehouseName));
+      const originalUnitCost = row.quantity > 0 ? row.purchaseOriginalCost / row.quantity : 0;
       const unitCost = row.quantity > 0 ? row.purchaseTotalCost / row.quantity : 0;
 
       for (let i = 0; i < row.quantity; i++) {
@@ -364,7 +402,9 @@ export async function commitStockImportRows(atolyeId: string, rows: NormalizedSt
             totalAreaCm2: row.totalAreaCm2,
             remainingAreaCm2: row.remainingAreaCm2,
             purchaseCurrency: row.purchaseCurrency,
-            purchaseUnitCost: unitCost,
+            purchaseOriginalCost: originalUnitCost,
+            purchaseFxRate: row.purchaseFxRate,
+            purchaseUnitCost: row.purchaseUnitCost,
             purchaseTotalCost: unitCost,
             status: row.status,
             sourceType: "EXCEL_IMPORT",

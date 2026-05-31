@@ -450,6 +450,7 @@ model StockPurchase {
   currency             String    @default("TRY")
   unitCost             Decimal   @default(0)
   totalCost            Decimal   @default(0)
+  purchaseFxRate       Decimal   @default(1)
   warehouseId          String?
   status               String    @default("PLANNED")
   expectedDate         DateTime?
@@ -485,6 +486,8 @@ model StockPlate {
   purchaseCurrency  String   @default("TRY")
   purchaseUnitCost  Decimal  @default(0)
   purchaseTotalCost Decimal  @default(0)
+  purchaseOriginalCost Decimal?
+  purchaseFxRate    Decimal  @default(1)
   status            String   @default("AVAILABLE")
   sourceType        String?
   sourceJobId       String?

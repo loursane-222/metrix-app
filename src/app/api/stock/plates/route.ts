@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAtolyeAuth } from "@/lib/getAtolyeId";
+import { normalizeCurrency, stockCostFields } from "@/lib/stock/currency";
 
 function n(value: unknown) {
   if (value == null) return 0;
@@ -112,6 +113,8 @@ export async function GET(req: NextRequest) {
           purchaseCurrency: p.purchaseCurrency,
           purchaseUnitCost: n(p.purchaseUnitCost),
           purchaseTotalCost: n(p.purchaseTotalCost),
+          purchaseOriginalCost: p.purchaseOriginalCost != null ? n(p.purchaseOriginalCost) : n(p.purchaseTotalCost),
+          purchaseFxRate: n(p.purchaseFxRate) || 1,
           status: p.status,
           sourceType: p.sourceType,
           sourceJobId: p.sourceJobId,
@@ -140,8 +143,9 @@ export async function POST(req: NextRequest) {
     const materialType = text(body.materialType);
     const widthCm = n(body.widthCm);
     const heightCm = n(body.heightCm);
-    const purchaseTotalCost = n(body.purchaseTotalCost);
-    const currency = text(body.currency) || "TRY";
+    const purchaseOriginalCost = n(body.purchaseOriginalCost ?? body.purchaseTotalCost);
+    const currency = normalizeCurrency(body.currency);
+    const purchaseFxRate = n(body.purchaseFxRate);
     const quantity = Math.max(1, Math.min(100, Math.floor(n(body.quantity) || 1)));
     const shadeCode = text(body.shadeCode);
     const thicknessMm = body.thicknessMm == null || body.thicknessMm === "" ? null : n(body.thicknessMm);
@@ -153,7 +157,8 @@ export async function POST(req: NextRequest) {
     if (!productName) return NextResponse.json({ error: "Ürün adı zorunlu" }, { status: 400 });
     if (!materialType) return NextResponse.json({ error: "Malzeme tipi zorunlu" }, { status: 400 });
     if (widthCm <= 0 || heightCm <= 0) return NextResponse.json({ error: "En ve boy 0'dan büyük olmalı" }, { status: 400 });
-    if (purchaseTotalCost <= 0) return NextResponse.json({ error: "Alış toplam maliyeti 0'dan büyük olmalı" }, { status: 400 });
+    if (purchaseOriginalCost <= 0) return NextResponse.json({ error: "Alış toplam maliyeti 0'dan büyük olmalı" }, { status: 400 });
+    if (currency !== "TRY" && purchaseFxRate <= 0) return NextResponse.json({ error: "Dövizli maliyet için alış kuru zorunlu" }, { status: 400 });
 
     const result = await prisma.$transaction(async (tx) => {
       let warehouse = warehouseId
@@ -191,8 +196,13 @@ export async function POST(req: NextRequest) {
       }
 
       const totalAreaCm2 = widthCm * heightCm;
-      const unitCost = purchaseTotalCost / quantity;
-      const purchaseUnitCost = totalAreaCm2 > 0 ? unitCost / (totalAreaCm2 / 10_000) : 0;
+      const costs = stockCostFields({
+        currency,
+        originalCost: purchaseOriginalCost,
+        fxRate: purchaseFxRate,
+        quantity,
+        totalAreaCm2,
+      });
       const plates = [];
 
       for (let i = 0; i < quantity; i += 1) {
@@ -212,9 +222,11 @@ export async function POST(req: NextRequest) {
             thicknessMm,
             totalAreaCm2,
             remainingAreaCm2: totalAreaCm2,
-            purchaseCurrency: currency,
-            purchaseUnitCost,
-            purchaseTotalCost: unitCost,
+            purchaseCurrency: costs.currency,
+            purchaseOriginalCost: costs.originalUnitCost,
+            purchaseFxRate: costs.fxRate,
+            purchaseUnitCost: costs.purchaseUnitCost,
+            purchaseTotalCost: costs.unitCostTry,
             status: "AVAILABLE",
             sourceType: "MANUAL_CREATE",
             notes,
@@ -249,6 +261,8 @@ export async function POST(req: NextRequest) {
             widthCm: n(plate.widthCm),
             heightCm: n(plate.heightCm),
             purchaseTotalCost: n(plate.purchaseTotalCost),
+            purchaseOriginalCost: plate.purchaseOriginalCost != null ? n(plate.purchaseOriginalCost) : n(plate.purchaseTotalCost),
+            purchaseFxRate: n(plate.purchaseFxRate) || 1,
             status: plate.status,
           })),
         },

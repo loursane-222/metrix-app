@@ -23,6 +23,7 @@ function serializePurchase(purchase: any, jobMap = new Map<string, any>(), wareh
     currency: purchase.currency,
     unitCost: n(purchase.unitCost),
     totalCost: n(purchase.totalCost),
+    purchaseFxRate: n(purchase.purchaseFxRate) || 1,
     warehouseId: purchase.warehouseId,
     warehouseName: warehouse?.name ?? null,
     status: purchase.status,

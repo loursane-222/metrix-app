@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
           remainingAreaCm2: decimal(metrics.areaCm2),
           costPerM2: decimal(metrics.costPerM2),
           totalCost: decimal(metrics.totalCost),
-          currency: parent.purchaseCurrency,
+          currency: "TRY",
           status: "AVAILABLE",
           sourceJobId: parent.sourceJobId,
           notes,

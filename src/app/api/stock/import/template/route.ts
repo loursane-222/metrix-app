@@ -14,10 +14,12 @@ const TEMPLATE_COLUMNS = [
   "Kalınlık Mm",
   "Adet",
   "Depo",
+  "Alış Para Birimi",
   "Alış Maliyeti",
-  "Para Birimi",
+  "Alış Kuru",
+  "TL Karşılığı",
   "Tedarikçi",
-  "Parti No",
+  "Parti Kodu",
   "Not",
 ];
 
@@ -32,10 +34,12 @@ const EXAMPLE_ROW = [
   12,
   4,
   "İzmir Depo",
-  14500,
   "TRY",
+  14500,
+  1,
+  14500,
   "Laminam Türkiye",
-  "LOT-001",
+  "PARTI-001",
   "Aynı shade grubundaki plakalar",
 ];
 
@@ -66,7 +70,9 @@ export async function GET() {
   sheet.getColumn(1).width = 26;
   sheet.getColumn(5).width = 20;
   sheet.getColumn(10).width = 20;
-  sheet.getColumn(15).width = 34;
+  sheet.getColumn(12).width = 16;
+  sheet.getColumn(13).width = 16;
+  sheet.getColumn(17).width = 34;
 
   const buffer = await workbook.xlsx.writeBuffer();
   return new NextResponse(buffer, {

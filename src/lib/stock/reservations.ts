@@ -297,7 +297,7 @@ export async function consumeActiveReservationsForJob(
         stockPlateId: reservation.stockPlateId,
         areaCm2: quantityAreaCm2 ?? 0,
         costAmount: plate?.purchaseTotalCost,
-        currency: plate?.purchaseCurrency ?? "TRY",
+        currency: "TRY",
         source: "STOCK_RESERVATION",
       },
     });

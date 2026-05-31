@@ -17,6 +17,7 @@ function serializePurchase(purchase: any) {
     currency: purchase.currency,
     unitCost: n(purchase.unitCost),
     totalCost: n(purchase.totalCost),
+    purchaseFxRate: n(purchase.purchaseFxRate) || 1,
     warehouseId: purchase.warehouseId,
     status: purchase.status,
     expectedDate: purchase.expectedDate,

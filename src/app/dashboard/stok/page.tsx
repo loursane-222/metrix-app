@@ -30,7 +30,12 @@ type StockPlate = {
   remainingAreaCm2: number;
   remainingAreaM2: number;
   purchaseTotalCost: number;
+  purchaseOriginalCost: number;
+  purchaseFxRate: number;
   purchaseCurrency: string;
+  batchNo: string | null;
+  notes: string | null;
+  thicknessMm: number | null;
   status: string;
   sourceType: string | null;
   createdAt: string;
@@ -103,6 +108,7 @@ type ManualProductFormState = {
   widthCm: string;
   heightCm: string;
   purchaseTotalCost: string;
+  purchaseFxRate: string;
   currency: string;
   quantity: string;
   shadeCode: string;
@@ -130,6 +136,7 @@ type StockPurchaseRow = {
   currency: string;
   unitCost: number;
   totalCost: number;
+  purchaseFxRate: number;
   warehouseId: string | null;
   warehouseName: string | null;
   status: string;
@@ -148,6 +155,7 @@ type PurchaseFormState = {
   supplierName: string;
   expectedDate: string;
   unitCost: string;
+  purchaseFxRate: string;
   currency: string;
   warehouseId: string;
   isId: string;
@@ -175,6 +183,18 @@ type SummaryResponse = {
   recentFireRecords: Array<{ id: string; fireType: string; status: string; reasonCode: string | null; finalCost: number | null; estimatedCost: number | null; currency: string; createdAt: string }>;
 };
 
+type PlateEditFormState = {
+  productName: string;
+  materialType: string;
+  shadeCode: string;
+  thicknessMm: string;
+  purchaseOriginalCost: string;
+  purchaseCurrency: string;
+  purchaseFxRate: string;
+  batchNo: string;
+  notes: string;
+};
+
 type StockImportRow = {
   rowNumber: number;
   productName: string;
@@ -185,7 +205,10 @@ type StockImportRow = {
   quantity: number;
   warehouseName: string;
   purchaseCurrency: string;
+  purchaseOriginalCost: number;
+  purchaseFxRate: number;
   purchaseTotalCost: number;
+  purchaseTotalCostInput: number | null;
   supplierName: string | null;
   batchNo: string | null;
   errors: string[];
@@ -256,6 +279,7 @@ const EMPTY_PURCHASE_FORM: PurchaseFormState = {
   supplierName: "",
   expectedDate: "",
   unitCost: "",
+  purchaseFxRate: "1",
   currency: "TRY",
   warehouseId: "",
   isId: "",
@@ -274,6 +298,7 @@ const EMPTY_MANUAL_PRODUCT_FORM: ManualProductFormState = {
   widthCm: "",
   heightCm: "",
   purchaseTotalCost: "",
+  purchaseFxRate: "1",
   currency: "TRY",
   quantity: "1",
   shadeCode: "",
@@ -318,6 +343,22 @@ const PURCHASE_META: Record<string, { label: string; className: string }> = {
 function fmtMoney(v: number, currency = "TRY") {
   const prefix = currency === "TRY" ? "₺" : `${currency} `;
   return prefix + Number(v || 0).toLocaleString("tr-TR", { maximumFractionDigits: 0 });
+}
+
+function fmtTry(v: number) {
+  return fmtMoney(v, "TRY");
+}
+
+function hasMissingFxRate(currency: string | null | undefined, fxRate: number | null | undefined) {
+  return String(currency || "TRY").toUpperCase() !== "TRY" && Number(fxRate || 0) <= 1;
+}
+
+function costCaption(plate: Pick<StockPlate, "purchaseCurrency" | "purchaseOriginalCost" | "purchaseFxRate" | "purchaseTotalCost">) {
+  if (plate.purchaseCurrency === "TRY") return fmtTry(plate.purchaseTotalCost);
+  if (hasMissingFxRate(plate.purchaseCurrency, plate.purchaseFxRate)) {
+    return `${fmtMoney(plate.purchaseOriginalCost, plate.purchaseCurrency)} · Kur girilmedi`;
+  }
+  return `${fmtMoney(plate.purchaseOriginalCost, plate.purchaseCurrency)} · Kur ${Number(plate.purchaseFxRate).toLocaleString("tr-TR", { maximumFractionDigits: 4 })} · ${fmtTry(plate.purchaseTotalCost)}`;
 }
 
 function fmtArea(cm2: number) {
@@ -387,7 +428,7 @@ export default function StokPage() {
   const [offcuts, setOffcuts] = useState<StockOffcutRow[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<StockProduct | null>(null);
   const [selectedProductPlates, setSelectedProductPlates] = useState<StockPlate[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "products" | "plates" | "offcuts" | "purchases" | "movements">("overview");
+  const [activeTab, setActiveTab] = useState<"products" | "plates" | "offcuts" | "purchases" | "movements">("products");
   const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>(EMPTY_PURCHASE_FORM);
   const [purchaseError, setPurchaseError] = useState("");
   const [manualProductOpen, setManualProductOpen] = useState(false);
@@ -395,6 +436,10 @@ export default function StokPage() {
   const [manualProductSaving, setManualProductSaving] = useState(false);
   const [manualProductError, setManualProductError] = useState("");
   const [manualProductSuccess, setManualProductSuccess] = useState("");
+  const [editingPlate, setEditingPlate] = useState<StockPlate | null>(null);
+  const [plateEditForm, setPlateEditForm] = useState<PlateEditFormState | null>(null);
+  const [plateEditSaving, setPlateEditSaving] = useState(false);
+  const [plateEditError, setPlateEditError] = useState("");
   const [offcutForm, setOffcutForm] = useState<OffcutFormState>(EMPTY_OFFCUT_FORM);
   const [offcutError, setOffcutError] = useState("");
   const [importOpen, setImportOpen] = useState(false);
@@ -558,6 +603,7 @@ export default function StokPage() {
           widthCm: Number(manualProductForm.widthCm),
           heightCm: Number(manualProductForm.heightCm),
           purchaseTotalCost: Number(manualProductForm.purchaseTotalCost),
+          purchaseFxRate: manualProductForm.currency === "TRY" ? 1 : Number(manualProductForm.purchaseFxRate),
           currency: manualProductForm.currency || "TRY",
           quantity: Number(manualProductForm.quantity || 1),
           shadeCode: manualProductForm.shadeCode || null,
@@ -599,6 +645,7 @@ export default function StokPage() {
           quantity,
           unitCost,
           totalCost: unitCost * quantity,
+          purchaseFxRate: purchaseForm.currency === "TRY" ? 1 : Number(purchaseForm.purchaseFxRate || 1),
           warehouseId: purchaseForm.warehouseId || null,
           isId: purchaseForm.isId || null,
           materialType: purchaseForm.materialType || null,
@@ -659,6 +706,55 @@ export default function StokPage() {
     setSelectedProduct(product);
     setSelectedProductPlates([]);
     await loadPlates({ productName: product.productName });
+  }
+
+  function openPlateEdit(plate: StockPlate) {
+    setEditingPlate(plate);
+    setPlateEditError("");
+    setPlateEditForm({
+      productName: plate.productName,
+      materialType: plate.materialType || "",
+      shadeCode: plate.shadeCode || "",
+      thicknessMm: plate.thicknessMm != null ? String(plate.thicknessMm) : "",
+      purchaseOriginalCost: String(plate.purchaseOriginalCost ?? plate.purchaseTotalCost),
+      purchaseCurrency: plate.purchaseCurrency || "TRY",
+      purchaseFxRate: String(plate.purchaseFxRate || 1),
+      batchNo: plate.batchNo || "",
+      notes: plate.notes || "",
+    });
+  }
+
+  async function savePlateEdit() {
+    if (!editingPlate || !plateEditForm) return;
+    setPlateEditSaving(true);
+    setPlateEditError("");
+    try {
+      const res = await fetch(`/api/stock/plates/${editingPlate.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...plateEditForm,
+          purchaseOriginalCost: Number(plateEditForm.purchaseOriginalCost),
+          purchaseFxRate: plateEditForm.purchaseCurrency === "TRY" ? 1 : Number(plateEditForm.purchaseFxRate),
+          thicknessMm: plateEditForm.thicknessMm ? Number(plateEditForm.thicknessMm) : null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Plaka güncellenemedi.");
+      await Promise.all([
+        loadSummary(),
+        loadPlates(),
+        selectedProduct ? loadPlates({ productName: selectedProduct.productName }) : Promise.resolve(),
+        loadMovements(""),
+      ]);
+      setEditingPlate(null);
+      setPlateEditForm(null);
+    } catch (error) {
+      setPlateEditError(error instanceof Error ? error.message : "Plaka güncellenemedi.");
+    } finally {
+      setPlateEditSaving(false);
+    }
   }
 
   function openImportPicker() {
@@ -732,12 +828,11 @@ export default function StokPage() {
 
   const hasStock = summary.totals.totalPlateCount > 0 || summary.totals.offcutCount > 0;
   const tabs = [
-    ["overview", "Genel Bakış"],
     ["products", "Ürünler"],
     ["plates", "Plakalar"],
-    ["offcuts", "Offcut"],
-    ["purchases", "Satın Alma"],
+    ["offcuts", "Offcutlar"],
     ["movements", "Hareketler"],
+    ["purchases", "Satın Alma"],
   ] as const;
 
   return (
@@ -772,7 +867,7 @@ export default function StokPage() {
           <KpiCard label="Fire / Kırık" value={String(summary.totals.openFireRecordCount || summary.totals.brokenPlateCount)} sub="takipte" tone={summary.totals.openFireRecordCount || summary.totals.brokenPlateCount ? "text-red-300" : "text-emerald-300"} />
         </section>
 
-        <nav className="grid shrink-0 grid-cols-6 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] p-1 shadow-[0_14px_45px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+        <nav className="grid shrink-0 grid-cols-5 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.045] p-1 shadow-[0_14px_45px_rgba(0,0,0,0.16)] backdrop-blur-xl">
           {tabs.map(([id, label]) => (
             <button
               key={id}
@@ -787,7 +882,7 @@ export default function StokPage() {
 
         <section className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px] gap-3 overflow-hidden">
           <div className="min-h-0 overflow-hidden rounded-[30px] border border-white/10 bg-slate-950/48 p-5 shadow-[0_26px_90px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-            {(activeTab === "overview" || activeTab === "products") && (
+            {activeTab === "products" && (
               <div className="flex h-full min-h-0 flex-col">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
@@ -977,7 +1072,21 @@ export default function StokPage() {
           product={selectedProduct}
           plates={selectedProductPlates}
           loading={platesLoading}
+          onEditPlate={openPlateEdit}
           onClose={() => setSelectedProduct(null)}
+        />
+      )}
+      {editingPlate && plateEditForm && (
+        <PlateEditSheet
+          form={plateEditForm}
+          saving={plateEditSaving}
+          error={plateEditError}
+          onChange={(patch) => setPlateEditForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+          onClose={() => {
+            setEditingPlate(null);
+            setPlateEditForm(null);
+          }}
+          onSave={savePlateEdit}
         />
       )}
       {importOpen && (
@@ -1045,7 +1154,10 @@ function PlateList({ plates, loading }: { plates: StockPlate[]; loading: boolean
             <p className="text-sm font-black tabular-nums text-blue-200">{fmtArea(plate.remainingAreaCm2)}</p>
             <div className="text-left md:text-right">
               <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-black ${statusClass(plate.status)}`}>{statusLabel(plate.status)}</span>
-              <p className="mt-1 text-xs font-bold text-emerald-300">{fmtMoney(plate.purchaseTotalCost, plate.purchaseCurrency)}</p>
+              <p className="mt-1 text-xs font-bold text-emerald-300">{fmtTry(plate.purchaseTotalCost)}</p>
+              {plate.purchaseCurrency !== "TRY" && (
+                <p className={`mt-0.5 text-[10px] font-bold ${hasMissingFxRate(plate.purchaseCurrency, plate.purchaseFxRate) ? "text-amber-300" : "text-slate-400"}`}>{costCaption(plate)}</p>
+              )}
             </div>
           </div>
         ))}
@@ -1324,6 +1436,7 @@ function PurchaseList({
     form.productName.trim() &&
     Number(form.widthCm) > 0 &&
     Number(form.heightCm) > 0 &&
+    (form.currency === "TRY" || Number(form.purchaseFxRate) > 0) &&
     Number(form.quantity || 1) > 0;
 
   return (
@@ -1349,8 +1462,14 @@ function PurchaseList({
           <input value={form.quantity} onChange={(e) => onFormChange({ quantity: e.target.value })} placeholder="Adet" inputMode="numeric" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
           <input value={form.unitCost} onChange={(e) => onFormChange({ unitCost: e.target.value })} placeholder="Birim maliyet" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
         </div>
-        <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_160px_160px_minmax(0,1fr)_120px]">
+        <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_130px_110px_160px_minmax(0,1fr)_120px]">
           <input value={form.materialType} onChange={(e) => onFormChange({ materialType: e.target.value })} placeholder="Malzeme tipi" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
+          <select value={form.currency} onChange={(e) => onFormChange({ currency: e.target.value, purchaseFxRate: e.target.value === "TRY" ? "1" : form.purchaseFxRate })} className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none">
+            <option value="TRY">TRY</option>
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+          </select>
+          <input value={form.currency === "TRY" ? "1" : form.purchaseFxRate} disabled={form.currency === "TRY"} onChange={(e) => onFormChange({ purchaseFxRate: e.target.value })} placeholder="Alış kuru" inputMode="decimal" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50 disabled:text-slate-500" />
           <input value={form.supplierName} onChange={(e) => onFormChange({ supplierName: e.target.value })} placeholder="Tedarikçi" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
           <input value={form.expectedDate} onChange={(e) => onFormChange({ expectedDate: e.target.value })} type="date" className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-blue-400/50" />
           <select value={form.warehouseId} onChange={(e) => onFormChange({ warehouseId: e.target.value })} className="h-10 rounded-2xl border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none">
@@ -1460,7 +1579,7 @@ function PlaceholderPanel({ tab, purchases, fireRecords }: { tab: string; purcha
   );
 }
 
-function ProductDrawer({ product, plates, loading, onClose }: { product: StockProduct; plates: StockPlate[]; loading: boolean; onClose: () => void }) {
+function ProductDrawer({ product, plates, loading, onEditPlate, onClose }: { product: StockProduct; plates: StockPlate[]; loading: boolean; onEditPlate: (plate: StockPlate) => void; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[220] bg-black/55 backdrop-blur-sm" onClick={onClose}>
       <div className="absolute bottom-0 right-0 top-auto flex max-h-[88dvh] w-full flex-col rounded-t-[30px] border border-white/10 bg-slate-950 p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.45)] md:bottom-4 md:right-4 md:top-4 md:max-h-none md:w-[560px] md:rounded-[30px]" onClick={(e) => e.stopPropagation()}>
@@ -1504,13 +1623,120 @@ function ProductDrawer({ product, plates, loading, onClose }: { product: StockPr
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <KpiMini label="Kalan" value={fmtArea(plate.remainingAreaCm2)} />
-                    <KpiMini label="Maliyet" value={fmtMoney(plate.purchaseTotalCost, plate.purchaseCurrency)} />
+                    <KpiMini label="Maliyet" value={fmtTry(plate.purchaseTotalCost)} />
                     <KpiMini label="Kaynak" value={plate.sourceType || "Manuel"} />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className={`min-w-0 truncate text-[11px] font-bold ${hasMissingFxRate(plate.purchaseCurrency, plate.purchaseFxRate) ? "text-amber-300" : "text-slate-400"}`}>
+                      {costCaption(plate)}
+                    </p>
+                    <button type="button" onClick={() => onEditPlate(plate)} className="shrink-0 rounded-xl border border-blue-400/20 bg-blue-500/12 px-3 py-2 text-[11px] font-black text-blue-100">
+                      Düzenle
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlateEditSheet({
+  form,
+  saving,
+  error,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  form: PlateEditFormState;
+  saving: boolean;
+  error: string;
+  onChange: (patch: Partial<PlateEditFormState>) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const canSave =
+    form.productName.trim() &&
+    form.materialType.trim() &&
+    Number(form.purchaseOriginalCost) > 0 &&
+    (form.purchaseCurrency === "TRY" || Number(form.purchaseFxRate) > 0);
+  const fieldClass = "rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-blue-400/50 disabled:text-slate-500";
+  const labelClass = "mb-1 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500";
+
+  return (
+    <div className="fixed inset-0 z-[280] bg-black/65 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="absolute bottom-0 left-0 right-0 flex max-h-[94dvh] flex-col rounded-t-[30px] border border-white/10 bg-[#07111f] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.48)] md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:w-[680px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[30px] md:p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-300">Plaka Düzenle</p>
+            <h3 className="mt-1 text-xl font-black text-white">Ürün ve maliyet bilgisi</h3>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.055] text-slate-300 disabled:opacity-50">×</button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className={labelClass}>Ürün adı</label>
+              <input className={fieldClass} value={form.productName} onChange={(e) => onChange({ productName: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Malzeme tipi</label>
+              <input className={fieldClass} value={form.materialType} onChange={(e) => onChange({ materialType: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Ton kodu</label>
+              <input className={fieldClass} value={form.shadeCode} onChange={(e) => onChange({ shadeCode: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Kalınlık mm</label>
+              <input className={fieldClass} inputMode="decimal" value={form.thicknessMm} onChange={(e) => onChange({ thicknessMm: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Alış maliyeti</label>
+              <input className={fieldClass} inputMode="decimal" value={form.purchaseOriginalCost} onChange={(e) => onChange({ purchaseOriginalCost: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Para birimi</label>
+                <select className={fieldClass} value={form.purchaseCurrency} onChange={(e) => onChange({ purchaseCurrency: e.target.value, purchaseFxRate: e.target.value === "TRY" ? "1" : form.purchaseFxRate })}>
+                  <option value="TRY">TRY</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Alış kuru</label>
+                <input className={fieldClass} disabled={form.purchaseCurrency === "TRY"} inputMode="decimal" value={form.purchaseCurrency === "TRY" ? "1" : form.purchaseFxRate} onChange={(e) => onChange({ purchaseFxRate: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Parti Kodu</label>
+              <input className={fieldClass} value={form.batchNo} onChange={(e) => onChange({ batchNo: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Not</label>
+              <input className={fieldClass} value={form.notes} onChange={(e) => onChange({ notes: e.target.value })} />
+            </div>
+          </div>
+          {form.purchaseCurrency !== "TRY" && Number(form.purchaseOriginalCost) > 0 && Number(form.purchaseFxRate) > 0 && (
+            <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm font-black text-emerald-100">
+              {fmtMoney(Number(form.purchaseOriginalCost), form.purchaseCurrency)} · Kur {Number(form.purchaseFxRate).toLocaleString("tr-TR")} · {fmtTry(Number(form.purchaseOriginalCost) * Number(form.purchaseFxRate))}
+            </div>
+          )}
+          {error && <div className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</div>}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 md:flex md:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 text-xs font-black text-slate-200 disabled:opacity-50">Vazgeç</button>
+          <button type="button" onClick={onSave} disabled={saving || !canSave} className="rounded-2xl border border-blue-400/25 bg-blue-500/18 px-4 py-3 text-xs font-black text-blue-100 disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-slate-600">
+            {saving ? "Kaydediliyor..." : "Kaydet"}
+          </button>
         </div>
       </div>
     </div>
@@ -1629,8 +1855,11 @@ function ImportModal({
                           <p className="truncate text-xs text-slate-500">{row.warehouseName} · {row.materialType || "Malzeme tipi yok"}{row.shadeCode ? ` · Shade ${row.shadeCode}` : ""} · {row.widthCm} x {row.heightCm} cm</p>
                         </div>
                         <p className="text-xs font-black text-blue-200">{row.quantity} plaka</p>
-                        <p className="text-xs font-bold text-slate-400">{row.purchaseCurrency}</p>
-                        <p className="text-sm font-black text-emerald-300 md:text-right">{fmtMoney(row.purchaseTotalCost, row.purchaseCurrency)}</p>
+                        <p className="text-xs font-bold text-slate-400">{row.purchaseCurrency === "TRY" ? "TRY" : `Kur ${row.purchaseFxRate || "?"}`}</p>
+                        <div className="md:text-right">
+                          <p className="text-sm font-black text-emerald-300">{fmtTry(row.purchaseTotalCost)}</p>
+                          {row.purchaseCurrency !== "TRY" && <p className="text-[11px] font-bold text-slate-400">{fmtMoney(row.purchaseOriginalCost, row.purchaseCurrency)}</p>}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1679,6 +1908,7 @@ function ManualProductSheet({
     Number(form.widthCm) > 0 &&
     Number(form.heightCm) > 0 &&
     Number(form.purchaseTotalCost) > 0 &&
+    (form.currency === "TRY" || Number(form.purchaseFxRate) > 0) &&
     Number(form.quantity || 1) > 0;
 
   const fieldClass = "rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-blue-400/50";
@@ -1721,7 +1951,7 @@ function ManualProductSheet({
               <label className={labelClass}>Alış toplam maliyeti</label>
               <input className={fieldClass} inputMode="decimal" value={form.purchaseTotalCost} onChange={(e) => onChange({ purchaseTotalCost: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className={labelClass}>Para birimi</label>
                 <select className={fieldClass} value={form.currency} onChange={(e) => onChange({ currency: e.target.value })}>
@@ -1729,6 +1959,10 @@ function ManualProductSheet({
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
                 </select>
+              </div>
+              <div>
+                <label className={labelClass}>Alış kuru</label>
+                <input className={fieldClass} disabled={form.currency === "TRY"} inputMode="decimal" value={form.currency === "TRY" ? "1" : form.purchaseFxRate} onChange={(e) => onChange({ purchaseFxRate: e.target.value })} />
               </div>
               <div>
                 <label className={labelClass}>Adet</label>
@@ -1757,7 +1991,7 @@ function ManualProductSheet({
               <input className={fieldClass} value={form.supplierName} onChange={(e) => onChange({ supplierName: e.target.value })} />
             </div>
             <div>
-              <label className={labelClass}>Batch/Lot</label>
+              <label className={labelClass}>Parti Kodu</label>
               <input className={fieldClass} value={form.batchNo} onChange={(e) => onChange({ batchNo: e.target.value })} />
             </div>
             <div>
@@ -1768,6 +2002,11 @@ function ManualProductSheet({
 
           {error && (
             <div className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</div>
+          )}
+          {form.currency !== "TRY" && Number(form.purchaseTotalCost) > 0 && Number(form.purchaseFxRate) > 0 && (
+            <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm font-black text-emerald-100">
+              {fmtMoney(Number(form.purchaseTotalCost), form.currency)} · Kur {Number(form.purchaseFxRate).toLocaleString("tr-TR")} · {fmtTry(Number(form.purchaseTotalCost) * Number(form.purchaseFxRate))}
+            </div>
           )}
         </div>
 
@@ -1886,21 +2125,7 @@ function MobileStockView({
           <ActionButton onClick={onImportClick}>Excel Yükle</ActionButton>
         </div>
         <ActionButton onClick={onManualProductClick}>+ Ürün Ekle</ActionButton>
-        {activeTab === "overview" ? (
-          !hasStock ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
-              <p className="text-[12px] font-bold text-white">Stok modülü hazır.</p>
-              <p className="mt-1 text-[11px] leading-5 text-slate-500">Genel özet, ilk Excel yüklemesinden sonra stok değeri, plaka sayısı ve fire durumunu gösterecek.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              <KpiMini label="Ürün" value={String(summary.totals.productCount)} />
-              <KpiMini label="Depo" value={String(summary.totals.warehouseCount)} />
-              <KpiMini label="Rezerve" value={String(summary.totals.reservedPlateCount)} />
-              <KpiMini label="Fire / Kırık" value={String(summary.totals.openFireRecordCount || summary.totals.brokenPlateCount)} />
-            </div>
-          )
-        ) : activeTab === "products" ? (
+        {activeTab === "products" ? (
           !hasStock ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-center">
               <p className="text-[12px] font-bold text-white">Henüz ürün yok.</p>

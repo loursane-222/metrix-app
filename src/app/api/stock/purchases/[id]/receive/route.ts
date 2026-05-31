@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAtolyeAuth } from "@/lib/getAtolyeId";
 import { ensureDraftReservationForJob } from "@/lib/stock/reservations";
 import { jsonPlateIds, n, plateCodeForPurchase } from "@/lib/stock/purchases";
+import { stockCostFields } from "@/lib/stock/currency";
 
 function serializePlate(plate: any) {
   return {
@@ -16,6 +17,8 @@ function serializePlate(plate: any) {
     totalAreaCm2: n(plate.totalAreaCm2),
     remainingAreaCm2: n(plate.remainingAreaCm2),
     purchaseCurrency: plate.purchaseCurrency,
+    purchaseOriginalCost: plate.purchaseOriginalCost != null ? n(plate.purchaseOriginalCost) : n(plate.purchaseTotalCost),
+    purchaseFxRate: n(plate.purchaseFxRate) || 1,
     purchaseUnitCost: n(plate.purchaseUnitCost),
     purchaseTotalCost: n(plate.purchaseTotalCost),
     status: plate.status,
@@ -80,7 +83,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         const widthCm = n(purchase.widthCm);
         const heightCm = n(purchase.heightCm);
         const totalAreaCm2 = widthCm * heightCm;
-        const unitCost = n(purchase.unitCost) > 0 ? n(purchase.unitCost) : n(purchase.totalCost) / quantity;
+        const originalUnitCost = n(purchase.unitCost) > 0 ? n(purchase.unitCost) : n(purchase.totalCost) / quantity;
+        const costs = stockCostFields({
+          currency: purchase.currency,
+          originalCost: originalUnitCost,
+          fxRate: n(purchase.purchaseFxRate) || 1,
+          quantity: 1,
+          totalAreaCm2,
+        });
         const createdPlates = [];
 
         for (let i = 0; i < quantity; i++) {
@@ -96,9 +106,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
               heightCm: purchase.heightCm,
               totalAreaCm2,
               remainingAreaCm2: totalAreaCm2,
-              purchaseCurrency: purchase.currency,
-              purchaseUnitCost: unitCost,
-              purchaseTotalCost: unitCost,
+              purchaseCurrency: costs.currency,
+              purchaseOriginalCost: originalUnitCost,
+              purchaseFxRate: costs.fxRate,
+              purchaseUnitCost: costs.purchaseUnitCost,
+              purchaseTotalCost: costs.totalCostTry,
               status: "AVAILABLE",
               sourceType: "PURCHASE",
               sourceJobId: purchase.isId,
@@ -169,6 +181,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
                         heightCm: n(firstPlate.heightCm),
                         remainingAreaCm2: n(firstPlate.remainingAreaCm2),
                         purchaseTotalCost: n(firstPlate.purchaseTotalCost),
+                        purchaseOriginalCost: firstPlate.purchaseOriginalCost != null ? n(firstPlate.purchaseOriginalCost) : n(firstPlate.purchaseTotalCost),
+                        purchaseFxRate: n(firstPlate.purchaseFxRate) || 1,
                         purchaseCurrency: firstPlate.purchaseCurrency,
                         shadeCode: firstPlate.shadeCode,
                       },
