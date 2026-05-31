@@ -61,13 +61,14 @@ model Atolye {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  makineler       Makine[]
-  araclar         Arac[]
-  isler           Is[]
-  personeller     Personel[]
-  musteriler      Musteri[]
-  aylikGiderler   AylikGider[]
-  odemeSablonlari OdemeSablonu[]
+  makineler               Makine[]
+  araclar                 Arac[]
+  isler                   Is[]
+  personeller             Personel[]
+  musteriler              Musteri[]
+  aylikGiderler           AylikGider[]
+  odemeSablonlari         OdemeSablonu[]
+  notificationPreferences NotificationPreference[]
 }
 
 model Makine {
@@ -397,10 +398,28 @@ model Personel {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  fazAtamalar     FazAtama[]
-  phaseExecutions PhaseExecution[]
+  fazAtamalar             FazAtama[]
+  phaseExecutions         PhaseExecution[]
+  notificationPreferences NotificationPreference[]
 
   @@map("personel")
+}
+
+model NotificationPreference {
+  id         String   @id @default(cuid())
+  atolyeId   String
+  atolye     Atolye   @relation(fields: [atolyeId], references: [id], onDelete: Cascade)
+  personelId String
+  personel   Personel @relation(fields: [personelId], references: [id], onDelete: Cascade)
+  category   String
+  inApp      Boolean  @default(true)
+  push       Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([personelId, category])
+  @@index([atolyeId])
+  @@index([category])
 }
 
 model FazAtama {

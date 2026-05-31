@@ -2,7 +2,70 @@ import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import {
+  getDefaultNotificationPreferencesForRole,
+  notificationPreferenceCategories,
+  type NotificationPreferenceInput,
+} from '@/lib/notificationPreferenceDefaults'
 
+const allowedNotificationCategories = new Set(notificationPreferenceCategories.map((item) => item.category))
+
+async function canManageNotificationPreferences(auth: NonNullable<Awaited<ReturnType<typeof getAtolyeAuth>>>) {
+  if (auth.role === 'admin') return true
+  if (!auth.personelId) return false
+
+  const personel = await prisma.personel.findFirst({
+    where: {
+      id: auth.personelId,
+      atolyeId: auth.atolyeId,
+      aktif: true,
+      isPatron: true,
+    },
+    select: { id: true },
+  })
+
+  return !!personel
+}
+
+function normalizeNotificationPreferences(input: unknown): NotificationPreferenceInput[] | null {
+  if (!Array.isArray(input)) return null
+
+  return input
+    .map((item: any) => ({
+      category: String(item?.category || ''),
+      inApp: Boolean(item?.inApp),
+      push: Boolean(item?.push),
+    }))
+    .filter((item) => allowedNotificationCategories.has(item.category as any)) as NotificationPreferenceInput[]
+}
+
+async function replaceNotificationPreferences(params: {
+  atolyeId: string
+  personelId: string
+  preferences: NotificationPreferenceInput[]
+}) {
+  await prisma.$transaction(async (tx) => {
+    await tx.notificationPreference.deleteMany({
+      where: {
+        atolyeId: params.atolyeId,
+        personelId: params.personelId,
+      },
+    })
+
+    if (params.preferences.length > 0) {
+      await tx.notificationPreference.createMany({
+        data: params.preferences.map((preference) => ({
+          atolyeId: params.atolyeId,
+          personelId: params.personelId,
+          category: preference.category,
+          inApp: preference.inApp,
+          push: preference.push,
+        })),
+        skipDuplicates: true,
+      })
+    }
+  })
+}
 
 export async function GET() {
   try {
@@ -16,6 +79,10 @@ export async function GET() {
       include: {
         bagliOldugu: {
           select: { id: true, ad: true, soyad: true },
+        },
+        notificationPreferences: {
+          orderBy: { category: 'asc' },
+          select: { category: true, inApp: true, push: true },
         },
         fazAtamalar: {
           include: {
@@ -103,11 +170,18 @@ export async function POST(req: NextRequest) {
     }
 
     const veri = await req.json()
+    const wantsToManagePreferences = veri.notificationPreferences !== undefined
+    const canManagePreferences = isOwner || (wantsToManagePreferences ? await canManageNotificationPreferences(auth) : false)
+
     if (veri.isPatron !== undefined && !isOwner) {
       return NextResponse.json({ hata: 'Patron bildirimi yetkisini sadece yönetici değiştirebilir.' }, { status: 403 })
     }
+    if (wantsToManagePreferences && !canManagePreferences) {
+      return NextResponse.json({ hata: 'Bildirim tercihlerini sadece yönetici değiştirebilir.' }, { status: 403 })
+    }
 
     const hashedPassword = veri.password ? await bcrypt.hash(veri.password, 10) : ''
+    const isPatron = isOwner ? Boolean(veri.isPatron) : false
 
     const personel = await prisma.personel.create({
       data: {
@@ -121,7 +195,7 @@ export async function POST(req: NextRequest) {
         email: veri.email || '',
         password: hashedPassword,
         aktif: true,
-        isPatron: isOwner ? Boolean(veri.isPatron) : false,
+        isPatron,
         rolGrubu: veri.rolGrubu || 'DIGER',
         brutMaas: parseFloat(veri.brutMaas) || 0,
         sgkOrani: parseFloat(veri.sgkOrani) || 20.5,
@@ -129,6 +203,14 @@ export async function POST(req: NextRequest) {
         gunlukCalismaGun: parseInt(veri.gunlukCalismaGun) || 5,
         userId: veri.userId || null,
       },
+    })
+    const preferences = normalizeNotificationPreferences(veri.notificationPreferences)
+      ?? getDefaultNotificationPreferencesForRole(personel.rolGrubu, personel.isPatron)
+
+    await replaceNotificationPreferences({
+      atolyeId,
+      personelId: personel.id,
+      preferences,
     })
 
     return NextResponse.json({
@@ -156,8 +238,14 @@ export async function PUT(req: NextRequest) {
     const isOwner = auth.role === 'admin'
 
     const veri = await req.json()
+    const wantsToManagePreferences = veri.notificationPreferences !== undefined
+    const canManagePreferences = isOwner || (wantsToManagePreferences ? await canManageNotificationPreferences(auth) : false)
+
     if (veri.isPatron !== undefined && !isOwner) {
       return NextResponse.json({ hata: 'Patron bildirimi yetkisini sadece yönetici değiştirebilir.' }, { status: 403 })
+    }
+    if (wantsToManagePreferences && !canManagePreferences) {
+      return NextResponse.json({ hata: 'Bildirim tercihlerini sadece yönetici değiştirebilir.' }, { status: 403 })
     }
 
     const mevcut = await prisma.personel.findFirst({
@@ -203,6 +291,14 @@ export async function PUT(req: NextRequest) {
         ...(veri.userId !== undefined && { userId: veri.userId || null }),
       },
     })
+    const preferences = normalizeNotificationPreferences(veri.notificationPreferences)
+    if (preferences) {
+      await replaceNotificationPreferences({
+        atolyeId,
+        personelId: personel.id,
+        preferences,
+      })
+    }
 
     return NextResponse.json({
       personel: {

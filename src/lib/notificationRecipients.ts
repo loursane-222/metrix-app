@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { isCriticalNotificationEvent } from "@/lib/notificationCatalog";
+import { getNotificationCategory, isCriticalNotificationEvent } from "@/lib/notificationCatalog";
 
 export type NotificationRecipient =
   | {
@@ -10,6 +10,12 @@ export type NotificationRecipient =
     }
   | {
       recipientType: "PATRON";
+      userId?: string | null;
+      personelId: string;
+      name: string;
+    }
+  | {
+      recipientType: "PERSONNEL";
       userId?: string | null;
       personelId: string;
       name: string;
@@ -82,4 +88,48 @@ export async function resolvePatronRecipients(atolyeId: string) {
 export async function resolvePatronRecipientsForEvent(atolyeId: string, eventType: string) {
   if (!isCriticalNotificationEvent(eventType)) return [];
   return resolvePatronRecipients(atolyeId);
+}
+
+export async function resolvePersonnelRecipientsByPreference(atolyeId: string, eventType: string) {
+  const category = getNotificationCategory(eventType);
+  const [personeller, patronRecipients] = await Promise.all([
+    prisma.personel.findMany({
+      where: {
+        atolyeId,
+        aktif: true,
+        notificationPreferences: {
+          some: {
+            category,
+            OR: [{ inApp: true }, { push: true }],
+          },
+        },
+      },
+      select: {
+        id: true,
+        ad: true,
+        soyad: true,
+        userId: true,
+      },
+      orderBy: [{ ad: "asc" }, { soyad: "asc" }],
+    }),
+    resolvePatronRecipientsForEvent(atolyeId, eventType),
+  ]);
+
+  const recipients: NotificationRecipient[] = [
+    ...patronRecipients,
+    ...personeller.map((personel) => ({
+      recipientType: "PERSONNEL" as const,
+      userId: personel.userId,
+      personelId: personel.id,
+      name: `${personel.ad}${personel.soyad ? " " + personel.soyad : ""}`.trim(),
+    })),
+  ];
+
+  const seen = new Set<string>();
+  return recipients.filter((recipient) => {
+    const key = recipientKey(recipient);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

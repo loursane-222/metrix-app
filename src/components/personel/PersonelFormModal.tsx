@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react"
 import { GOREVLER, ROL_OPTIONS } from "./types"
 import type { Personel } from "./types"
+import {
+  getDefaultNotificationPreferencesForRole,
+  notificationPreferenceCategories,
+} from "@/lib/notificationPreferenceDefaults"
+
+type NotificationPreferenceState = Record<string, boolean>
 
 interface FormState {
   ad: string
@@ -15,6 +21,7 @@ interface FormState {
   email: string
   password: string
   isPatron: boolean
+  notificationPreferences: NotificationPreferenceState
   brutMaas: string
   sgkOrani: string
   iseBaslamaTarihi: string
@@ -32,6 +39,12 @@ const BOS_FORM: FormState = {
   email: "",
   password: "",
   isPatron: false,
+  notificationPreferences: Object.fromEntries(
+    getDefaultNotificationPreferencesForRole("DIGER").map((preference) => [
+      preference.category,
+      preference.inApp && preference.push,
+    ])
+  ),
   brutMaas: "",
   sgkOrani: "20.5",
   iseBaslamaTarihi: "",
@@ -77,6 +90,16 @@ export function PersonelFormModal({
   useEffect(() => {
     if (!open) return
     if (editingPersonel) {
+      const existingPreferences = editingPersonel.notificationPreferences || []
+      const defaults = getDefaultNotificationPreferencesForRole(editingPersonel.rolGrubu, Boolean(editingPersonel.isPatron))
+      const preferenceState = Object.fromEntries(
+        defaults.map((preference) => [preference.category, preference.inApp && preference.push])
+      ) as NotificationPreferenceState
+
+      for (const preference of existingPreferences) {
+        preferenceState[preference.category] = Boolean(preference.inApp && preference.push)
+      }
+
       setForm({
         ad: editingPersonel.ad || "",
         soyad: editingPersonel.soyad || "",
@@ -88,6 +111,7 @@ export function PersonelFormModal({
         email: editingPersonel.email || "",
         password: "",
         isPatron: Boolean(editingPersonel.isPatron),
+        notificationPreferences: preferenceState,
         brutMaas: editingPersonel.brutMaas ? String(editingPersonel.brutMaas) : "",
         sgkOrani: String(editingPersonel.sgkOrani ?? 20.5),
         iseBaslamaTarihi: editingPersonel.iseBaslamaTarihi
@@ -96,12 +120,60 @@ export function PersonelFormModal({
         gunlukCalismaGun: String(editingPersonel.gunlukCalismaGun ?? 5),
       })
     } else {
-      setForm(BOS_FORM)
+      setForm({
+        ...BOS_FORM,
+        notificationPreferences: Object.fromEntries(
+          getDefaultNotificationPreferencesForRole(BOS_FORM.rolGrubu, BOS_FORM.isPatron).map((preference) => [
+            preference.category,
+            preference.inApp && preference.push,
+          ])
+        ),
+      })
     }
   }, [open, editingPersonel?.id])
 
   function set(key: keyof FormState, val: string | boolean) {
     setForm((prev) => ({ ...prev, [key]: val }))
+  }
+
+  function setRolGrubu(value: string) {
+    setForm((prev) => ({
+      ...prev,
+      rolGrubu: value,
+      notificationPreferences: editingPersonel
+        ? prev.notificationPreferences
+        : Object.fromEntries(
+            getDefaultNotificationPreferencesForRole(value, prev.isPatron).map((preference) => [
+              preference.category,
+              preference.inApp && preference.push,
+            ])
+          ),
+    }))
+  }
+
+  function setPatron(value: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      isPatron: value,
+      notificationPreferences: editingPersonel
+        ? prev.notificationPreferences
+        : Object.fromEntries(
+            getDefaultNotificationPreferencesForRole(prev.rolGrubu, value).map((preference) => [
+              preference.category,
+              preference.inApp && preference.push,
+            ])
+          ),
+    }))
+  }
+
+  function setNotificationPreference(category: string, enabled: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      notificationPreferences: {
+        ...prev.notificationPreferences,
+        [category]: enabled,
+      },
+    }))
   }
 
   async function kaydet() {
@@ -121,6 +193,11 @@ export function PersonelFormModal({
         email: form.email.trim(),
         ...(form.password ? { password: form.password } : {}),
         isPatron: form.isPatron,
+        notificationPreferences: notificationPreferenceCategories.map(({ category }) => ({
+          category,
+          inApp: !!form.notificationPreferences[category],
+          push: !!form.notificationPreferences[category],
+        })),
         brutMaas: parseFloat(form.brutMaas) || 0,
         sgkOrani: parseFloat(form.sgkOrani) || 20.5,
         iseBaslamaTarihi: form.iseBaslamaTarihi || null,
@@ -197,7 +274,7 @@ export function PersonelFormModal({
           </Field>
 
           <Field label="Rol Grubu" target="personel-role-group">
-            <select value={form.rolGrubu} onChange={(e) => set("rolGrubu", e.target.value)} className={iCls}>
+            <select value={form.rolGrubu} onChange={(e) => setRolGrubu(e.target.value)} className={iCls}>
               {ROL_OPTIONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
@@ -208,11 +285,28 @@ export function PersonelFormModal({
             <input
               type="checkbox"
               checked={form.isPatron}
-              onChange={(e) => set("isPatron", e.target.checked)}
+              onChange={(e) => setPatron(e.target.checked)}
               className="h-4 w-4 accent-emerald-500"
             />
             <span className="text-sm text-slate-200">Patron / yönetici bildirimi alsın</span>
           </label>
+
+          <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-[#111827] p-3">
+            <p className="text-xs font-semibold text-slate-300">Bildirim Kategorileri</p>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {notificationPreferenceCategories.map(({ category, label }) => (
+                <label key={category} className="flex min-h-[34px] items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={!!form.notificationPreferences[category]}
+                    onChange={(e) => setNotificationPreference(category, e.target.checked)}
+                    className="h-4 w-4 accent-blue-500"
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
 
           <Field label="Bağlı Olduğu" target="personel-manager">
             <select

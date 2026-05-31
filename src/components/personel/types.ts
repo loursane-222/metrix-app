@@ -8,6 +8,7 @@ export type Personel = {
   email: string
   aktif: boolean
   isPatron?: boolean
+  notificationPreferences?: Array<{ category: string; inApp: boolean; push: boolean }>
   bagliOldugu?: { id: string; ad: string; soyad: string } | null
   performansNotu: number | null
   toplamGorev: number
