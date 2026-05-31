@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { createNotificationSafe } from "@/lib/notifications";
+import { notifyProposalApproved } from "@/lib/proposalNotifications";
 
 export async function POST(
   req: NextRequest,
@@ -13,10 +13,21 @@ export async function POST(
 
     const is = await prisma.is.findFirst({
       where: { teklifNo },
-      select: { id: true, musteriId: true, kdvDahilFiyat: true, satisFiyati: true, musteriTipi: true },
+      select: {
+        id: true,
+        atolyeId: true,
+        musteriId: true,
+        musteriAdi: true,
+        teklifNo: true,
+        durum: true,
+        kdvDahilFiyat: true,
+        satisFiyati: true,
+        musteriTipi: true,
+      },
     });
 
     if (!is) return NextResponse.json({ redirect: `/teklif/${teklifNo}?hata=bulunamadi` });
+    const shouldNotifyApproval = is.durum !== "onaylandi";
 
     await prisma.is.update({
       where: { id: is.id },
@@ -30,12 +41,12 @@ export async function POST(
       await _varsayilanPlanOlustur(is, sablonId);
     }
 
-    await createNotificationSafe({
-      type: "ACTION",
-      title: "Müşteri teklifi onayladı",
-      description: "Onaylanan teklif için ölçü ve taş stok sürecini kontrol edin.",
-      actionUrl: "/isler",
-    });
+    if (shouldNotifyApproval) {
+      await notifyProposalApproved({
+        job: is,
+        source: "public-proposal",
+      });
+    }
 
     return NextResponse.json({ redirect: `/teklif/${teklifNo}/tesekkur` });
   } catch (e) {

@@ -2,6 +2,7 @@ import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import { isStockReservationReleaseBlocked, releaseOpenReservationsForJob } from "@/lib/stock/reservations";
+import { notifyProposalApproved } from "@/lib/proposalNotifications";
 
 
 export async function POST(req: NextRequest) {
@@ -44,6 +45,23 @@ export async function POST(req: NextRequest) {
 
       return job
     })
+
+    if (durum === 'onaylandi' && mevcutIs.durum !== 'onaylandi') {
+      await notifyProposalApproved({
+        job: {
+          id: is.id,
+          atolyeId,
+          teklifNo: is.teklifNo,
+          musteriId: is.musteriId,
+          musteriAdi: is.musteriAdi,
+          satisFiyati: is.satisFiyati,
+          kdvDahilFiyat: is.kdvDahilFiyat,
+        },
+        source: 'job-status',
+        userId: auth.userId,
+        personelId: auth.personelId || null,
+      })
+    }
 
     return NextResponse.json({ is })
   } catch (error: any) {

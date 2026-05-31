@@ -9,6 +9,7 @@ import {
   releaseOpenReservationsForJob,
   syncJobStockDraftReservation,
 } from "@/lib/stock/reservations";
+import { notifyProposalApproved } from "@/lib/proposalNotifications";
 
 
 
@@ -258,6 +259,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (!id || !durum) return NextResponse.json({ error: 'id ve durum gerekli' }, { status: 400 })
 
+    const previous = await prisma.is.findUnique({ where: { id } })
+    if (!previous) return NextResponse.json({ error: 'İş bulunamadı' }, { status: 404 })
+
     const data: any = { durum }
 
     if (durum === 'onaylandi') {
@@ -284,6 +288,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
       return job
     })
+
+    if (durum === 'onaylandi' && previous.durum !== 'onaylandi') {
+      await notifyProposalApproved({
+        job: {
+          id: updated.id,
+          atolyeId: updated.atolyeId,
+          teklifNo: updated.teklifNo,
+          musteriId: updated.musteriId,
+          musteriAdi: updated.musteriAdi || updated.musteri?.firmaAdi,
+          satisFiyati: updated.satisFiyati,
+          kdvDahilFiyat: updated.kdvDahilFiyat,
+        },
+        source: 'admin-proposal',
+      })
+    }
 
     // Onaylandığında otomatik ödeme planı oluştur
     if (durum === 'onaylandi' && updated.musteriId && updated.musteri) {

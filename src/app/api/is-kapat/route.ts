@@ -2,6 +2,7 @@ import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import { notifyProposalApproved } from "@/lib/proposalNotifications";
 
 
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
     if (!id) return Response.json({ error: 'ID gerekli' }, { status: 400 })
 
     const onayTarihi = new Date()
+    const previous = await prisma.is.findUnique({ where: { id } })
 
     const updated = await prisma.is.update({
       where: { id },
@@ -49,6 +51,21 @@ export async function POST(req: Request) {
       },
       include: { musteri: true }
     })
+
+    if (previous?.durum !== 'onaylandi') {
+      await notifyProposalApproved({
+        job: {
+          id: updated.id,
+          atolyeId: updated.atolyeId,
+          teklifNo: updated.teklifNo,
+          musteriId: updated.musteriId,
+          musteriAdi: updated.musteriAdi || updated.musteri?.firmaAdi,
+          satisFiyati: updated.satisFiyati,
+          kdvDahilFiyat: updated.kdvDahilFiyat,
+        },
+        source: 'admin-proposal',
+      })
+    }
 
     // Müşteri varsa ve fiyat > 0 ise otomatik ödeme planı oluştur
     if (updated.musteriId && updated.musteri && Number(fiyat || 0) > 0) {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
 import { NextResponse } from "next/server";
 import { isStockReservationReleaseBlocked, releaseOpenReservationsForJob } from "@/lib/stock/reservations";
+import { notifyProposalApproved } from "@/lib/proposalNotifications";
 
 
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
@@ -36,6 +37,9 @@ export async function POST(req: Request) {
     const { id, durum, fiyat, tasDurumu, sablonId } = await req.json();
     if (!id) return Response.json({ error: "ID gerekli" }, { status: 400 });
 
+    const mevcutIs = await prisma.is.findFirst({ where: { id, atolyeId } });
+    if (!mevcutIs) return Response.json({ error: "İş bulunamadı" }, { status: 404 });
+
     const data: any = { durum };
     if (fiyat !== undefined) data.satisFiyati = String(fiyat || 0);
     if (tasDurumu !== undefined) data.tasDurumu = tasDurumu || null;
@@ -56,7 +60,22 @@ export async function POST(req: Request) {
       const musteriAdi = updated.musteriAdi || updated.musteri?.firmaAdi || "Musteri";
       const teklifNo = updated.teklifNo || "";
       if (durum === "onaylandi") {
-        await logActivity({ atolyeId, type: "teklif_onaylandi", message: musteriAdi + " – " + teklifNo + " teklifi onaylandi. Tutar: " + tutar.toLocaleString("tr-TR") + " TL", refId: id, userId: auth.userId, personelId: auth.personelId || undefined });
+        if (mevcutIs.durum !== "onaylandi") {
+          await notifyProposalApproved({
+            job: {
+              id: updated.id,
+              atolyeId,
+              teklifNo: updated.teklifNo,
+              musteriId: updated.musteriId,
+              musteriAdi,
+              satisFiyati: tutar,
+              kdvDahilFiyat: updated.kdvDahilFiyat,
+            },
+            source: "admin-proposal",
+            userId: auth.userId,
+            personelId: auth.personelId || null,
+          });
+        }
       } else if (durum === "kaybedildi") {
         await logActivity({ atolyeId, type: "teklif_kaybedildi", message: musteriAdi + " – " + teklifNo + " teklifi kaybedildi.", refId: id, userId: auth.userId, personelId: auth.personelId || undefined });
       } else if (durum === "teklif_verildi") {
