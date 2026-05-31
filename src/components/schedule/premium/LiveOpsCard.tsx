@@ -5,6 +5,19 @@ function meta(phase: string) {
   return PHASE_META[phase] || PHASE_META.OLCU;
 }
 
+function productionOperationLabel(operationType: string, status: string): string | null {
+  if (operationType === "KESIM") {
+    if (status === "COMPLETED") return "✓ Kesim Tamamlandı";
+    if (status === "STARTED") return "● Kesim Devam Ediyor";
+  }
+  if (operationType === "TOPLAMA") {
+    if (status === "READY") return "○ Toplama Hazır";
+    if (status === "STARTED") return "● Toplama Devam Ediyor";
+    if (status === "COMPLETED") return "✓ Toplama Tamamlandı";
+  }
+  return null;
+}
+
 export function LiveOpsCard({ ex }: { ex: LiveOpsExecution }) {
   const m = meta(ex.phaseType ?? "IMALAT");
   const isStarted = ex.status === "STARTED";
@@ -17,6 +30,9 @@ export function LiveOpsCard({ ex }: { ex: LiveOpsExecution }) {
     return h > 0 ? `${h}s ${r}dk` : `${r}dk`;
   };
   const showRisk = riskState && riskState !== "NORMAL" && riskState !== "NO_PLAN";
+  const productionOperationLabels = (ex.productionOperations ?? [])
+    .map((operation) => productionOperationLabel(operation.operationType, operation.status))
+    .filter(Boolean);
 
   return (
     <div className={["rounded-2xl overflow-hidden border border-white/[0.08] bg-white/[0.04] border-l-4 p-3", isStarted ? "border-l-green-500" : "border-l-yellow-400"].join(" ")}>
@@ -36,6 +52,13 @@ export function LiveOpsCard({ ex }: { ex: LiveOpsExecution }) {
           <div className="mt-1.5 text-sm font-semibold text-white">{ex.musteriAdi}</div>
           {ex.urunAdi && <div className="text-[11px] text-slate-400">{ex.urunAdi}</div>}
           <div className="mt-0.5 text-[11px] text-slate-500">{ex.personelAd}</div>
+          {productionOperationLabels.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] font-semibold text-slate-400">
+              {productionOperationLabels.map((label) => (
+                <span key={label}>{label}</span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="shrink-0 text-right">
           <div className="text-lg font-black text-white">{fmtMins(ex.elapsedMinutes ?? 0)}</div>

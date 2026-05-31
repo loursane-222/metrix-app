@@ -13,6 +13,13 @@ import ReportsTab from "@/components/dashboard/ReportsTab";
 // ─── Live Ops types ───────────────────────────────────────────────────────────
 type RiskState = "NO_PLAN" | "NORMAL" | "OVERRUN" | "CRITICAL" | "STALE";
 
+type ProductionOperationItem = {
+  operationType: string;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
 type AktifEkipItem = {
   execId: string;
   phaseId: string;
@@ -28,6 +35,7 @@ type AktifEkipItem = {
   progressRatio: number | null;
   riskState: RiskState;
   cannotStartReason: string | null;
+  productionOperations?: ProductionOperationItem[];
 };
 
 type BlockedItem = {
@@ -39,6 +47,7 @@ type BlockedItem = {
   cannotStartReason: string | null;
   materialLossCost: string | null;
   elapsedBlockedMinutes: number;
+  productionOperations?: ProductionOperationItem[];
 };
 
 type RiskSignal = {
@@ -69,6 +78,25 @@ const CANNOT_START_REASON_LABELS: Record<string, string> = {
   STONE_BROKEN_IN_CUTTING: "Kesimde taş kırıldı",
   OTHER:                   "Diğer",
 };
+
+function productionOperationLabel(operation: ProductionOperationItem): string | null {
+  if (operation.operationType === "KESIM") {
+    if (operation.status === "COMPLETED") return "✓ Kesim Tamamlandı";
+    if (operation.status === "STARTED") return "● Kesim Devam Ediyor";
+  }
+  if (operation.operationType === "TOPLAMA") {
+    if (operation.status === "READY") return "○ Toplama Hazır";
+    if (operation.status === "STARTED") return "● Toplama Devam Ediyor";
+    if (operation.status === "COMPLETED") return "✓ Toplama Tamamlandı";
+  }
+  return null;
+}
+
+function productionOperationSummary(operations?: ProductionOperationItem[]) {
+  return (operations ?? [])
+    .map(productionOperationLabel)
+    .filter((label): label is string => Boolean(label));
+}
 
 const RISK_SIGNAL_LABELS: Record<string, string> = {
   MATERIAL_LOSS: "Malzeme kaybı",
@@ -931,21 +959,29 @@ export default function DashboardPage() {
               <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                 {aktifEkip.length === 0 ? (
                   <p className="rounded-2xl border border-white/8 bg-slate-950/30 p-4 text-sm font-semibold text-slate-500">Şu an çalışan operasyon yok.</p>
-                ) : aktifEkip.map((e) => (
-                  <button key={e.execId} onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
-                    className="mb-2 w-full rounded-2xl border border-blue-400/15 bg-slate-950/58 px-4 py-3 text-left text-white last:mb-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-black">{e.musteriAdi}</p>
-                        <p className="mt-0.5 truncate text-xs text-slate-500">{e.personelAd} · {e.phaseType}</p>
+                ) : aktifEkip.map((e) => {
+                  const operationLabels = productionOperationSummary(e.productionOperations);
+                  return (
+                    <button key={e.execId} onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
+                      className="mb-2 w-full rounded-2xl border border-blue-400/15 bg-slate-950/58 px-4 py-3 text-left text-white last:mb-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black">{e.musteriAdi}</p>
+                          <p className="mt-0.5 truncate text-xs text-slate-500">{e.personelAd} · {e.phaseType}</p>
+                          {operationLabels.length > 0 && (
+                            <p className="mt-1 truncate text-[10px] font-semibold text-slate-400">
+                              {operationLabels.join(" · ")}
+                            </p>
+                          )}
+                        </div>
+                        <p className="shrink-0 text-xl font-black tabular-nums text-blue-200">{e.elapsedMinutes}<span className="text-[10px] text-slate-500"> dk</span></p>
                       </div>
-                      <p className="shrink-0 text-xl font-black tabular-nums text-blue-200">{e.elapsedMinutes}<span className="text-[10px] text-slate-500"> dk</span></p>
-                    </div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full rounded-full bg-blue-400" style={{ width: `${Math.min(Math.round((e.progressRatio ?? 0.42) * 100), 100)}%` }} />
-                    </div>
-                  </button>
-                ))}
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-blue-400" style={{ width: `${Math.min(Math.round((e.progressRatio ?? 0.42) * 100), 100)}%` }} />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1151,17 +1187,25 @@ export default function DashboardPage() {
                 <p className="rounded-2xl border border-white/8 bg-slate-950/30 p-3 text-xs font-semibold text-slate-500">Şu an çalışan operasyon yok.</p>
               ) : (
                 <div className="flex gap-2 overflow-x-auto pb-1">
-                  {aktifEkip.slice(0, 5).map((e) => (
-                    <button key={e.execId} onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
-                      className="min-w-[142px] rounded-2xl border border-blue-400/15 bg-slate-950/72 px-3 py-3 text-left text-white shadow-[0_12px_35px_rgba(0,0,0,0.20)]">
-                      <p className="truncate text-[11px] font-black">{e.musteriAdi}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-slate-400">{e.personelAd}</p>
-                      <p className="mt-2 text-2xl font-black tabular-nums text-blue-200">{e.elapsedMinutes}<span className="text-[10px] text-slate-500"> dk</span></p>
-                      <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-                        <div className="h-full rounded-full bg-blue-400" style={{ width: `${Math.min(Math.round((e.progressRatio ?? 0.42) * 100), 100)}%` }} />
-                      </div>
-                    </button>
-                  ))}
+                  {aktifEkip.slice(0, 5).map((e) => {
+                    const operationLabels = productionOperationSummary(e.productionOperations);
+                    return (
+                      <button key={e.execId} onClick={() => setLiveTask({ id: e.phaseId, phase: e.phaseType, title: e.musteriAdi, subtitle: e.urunAdi, completed: false, schedule: {} })}
+                        className="min-w-[142px] rounded-2xl border border-blue-400/15 bg-slate-950/72 px-3 py-3 text-left text-white shadow-[0_12px_35px_rgba(0,0,0,0.20)]">
+                        <p className="truncate text-[11px] font-black">{e.musteriAdi}</p>
+                        <p className="mt-0.5 truncate text-[10px] text-slate-400">{e.personelAd}</p>
+                        {operationLabels.length > 0 && (
+                          <p className="mt-1 truncate text-[9px] font-semibold text-slate-500">
+                            {operationLabels.join(" · ")}
+                          </p>
+                        )}
+                        <p className="mt-2 text-2xl font-black tabular-nums text-blue-200">{e.elapsedMinutes}<span className="text-[10px] text-slate-500"> dk</span></p>
+                        <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-blue-400" style={{ width: `${Math.min(Math.round((e.progressRatio ?? 0.42) * 100), 100)}%` }} />
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

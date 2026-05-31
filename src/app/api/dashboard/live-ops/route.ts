@@ -8,6 +8,31 @@ import {
   computeProgressRatio,
 } from "@/lib/execution/service"
 
+function serializeProductionOperations(
+  phaseType: string | null | undefined,
+  operations:
+    | Array<{
+        operationType: string
+        status: string
+        startedAt: Date | null
+        completedAt: Date | null
+      }>
+    | null
+    | undefined,
+) {
+  if (phaseType !== "IMALAT") return []
+
+  const order: Record<string, number> = { KESIM: 0, TOPLAMA: 1 }
+  return [...(operations ?? [])]
+    .sort((a, b) => (order[a.operationType] ?? 99) - (order[b.operationType] ?? 99))
+    .map((operation) => ({
+      operationType: operation.operationType,
+      status: operation.status,
+      startedAt: operation.startedAt?.toISOString() ?? null,
+      completedAt: operation.completedAt?.toISOString() ?? null,
+    }))
+}
+
 // GET /api/dashboard/live-ops
 // Şu an STARTED veya PAUSED durumundaki tüm execution'ları döner.
 // Polling-ready: her 10s'de bir çağrılabilir.
@@ -36,6 +61,14 @@ export async function GET() {
           schedulePhase: {
             select: {
               phase: true,
+              operations: {
+                select: {
+                  operationType: true,
+                  status: true,
+                  startedAt: true,
+                  completedAt: true,
+                },
+              },
               workSchedule: {
                 select: { is: { select: { musteriAdi: true, urunAdi: true } } },
               },
@@ -55,6 +88,14 @@ export async function GET() {
           schedulePhase: {
             select: {
               phase: true,
+              operations: {
+                select: {
+                  operationType: true,
+                  status: true,
+                  startedAt: true,
+                  completedAt: true,
+                },
+              },
               workSchedule: {
                 select: { is: { select: { musteriAdi: true, urunAdi: true } } },
               },
@@ -92,6 +133,10 @@ export async function GET() {
         progressRatio,
         riskState,
         cannotStartReason: ex.cannotStartReason,
+        productionOperations: serializeProductionOperations(
+          ex.schedulePhase?.phase,
+          ex.schedulePhase?.operations,
+        ),
       }
     })
 
@@ -104,6 +149,10 @@ export async function GET() {
       cannotStartReason: ex.cannotStartReason,
       materialLossCost: ex.materialLossCost != null ? String(ex.materialLossCost) : null,
       elapsedBlockedMinutes: Math.round((Date.now() - ex.updatedAt.getTime()) / 60_000),
+      productionOperations: serializeProductionOperations(
+        ex.schedulePhase?.phase,
+        ex.schedulePhase?.operations,
+      ),
     }))
 
     return NextResponse.json({

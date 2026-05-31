@@ -7,7 +7,10 @@ export type ScheduleRiskType =
   | "MULTIPLE_FIRE_ON_JOB"
   | "CRITICAL_PROFITABILITY"
   | "UNCONSUMED_ACTIVE_RESERVATION"
-  | "CONSUMED_JOB_NOT_COMPLETED";
+  | "CONSUMED_JOB_NOT_COMPLETED"
+  | "PRODUCTION_OPERATION_BLOCKED"
+  | "PRODUCTION_OPERATION_READY_STALE"
+  | "PRODUCTION_OPERATION_DELAYED";
 
 export type ScheduleRisk = {
   id: string;
@@ -46,6 +49,26 @@ function daysAgo(days: number) {
   const d = new Date();
   d.setDate(d.getDate() - days);
   return d;
+}
+
+function operationLabel(operationType: string) {
+  if (operationType === "KESIM") return "Kesim";
+  if (operationType === "TOPLAMA") return "Toplama";
+  return operationType;
+}
+
+function cannotStartReasonLabel(reasonCode?: string | null) {
+  const labels: Record<string, string> = {
+    CUSTOMER_NOT_READY: "Müşteri hazır değil",
+    MATERIAL_MISSING: "Malzeme eksik",
+    MEASUREMENT_MISSING: "Ölçü eksik",
+    MACHINE_BUSY: "Makine meşgul",
+    PERSONNEL_UNAVAILABLE: "Personel yok",
+    SITE_NOT_READY: "Saha hazır değil",
+    STONE_BROKEN_IN_CUTTING: "Kesimde taş kırıldı",
+    OTHER: "Diğer",
+  };
+  return reasonCode ? labels[reasonCode] ?? reasonCode : null;
 }
 
 function isJobCompleted(job: { durum?: string | null; workSchedule?: { phases?: Array<{ phase: string; isCompleted: boolean }> } | null }) {
@@ -93,6 +116,7 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
     profitabilityJobs,
     activeReservations,
     consumedReservations,
+    imalatPhases,
   ] = await Promise.all([
     prisma.fireRecord.findMany({
       where: { atolyeId, fireType: "STONE_BROKEN_IN_CUTTING" },
@@ -131,6 +155,64 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
       where: { atolyeId, status: "CONSUMED", consumedAt: { lt: consumedCutoff } },
       orderBy: { consumedAt: "asc" },
       take: 80,
+    }),
+    prisma.schedulePhase.findMany({
+      where: {
+        phase: "IMALAT",
+        isCompleted: false,
+        workSchedule: {
+          is: {
+            atolyeId,
+            durum: { not: "kaybedildi" },
+          },
+        },
+        operations: {
+          some: {
+            status: { in: ["READY", "STARTED", "PAUSED", "CANNOT_START"] },
+          },
+        },
+      },
+      orderBy: { updatedAt: "asc" },
+      take: 120,
+      select: {
+        id: true,
+        workScheduleId: true,
+        workSchedule: {
+          select: {
+            isId: true,
+            is: {
+              select: {
+                musteriAdi: true,
+                urunAdi: true,
+              },
+            },
+          },
+        },
+        operations: {
+          where: {
+            status: { in: ["READY", "STARTED", "PAUSED", "CANNOT_START"] },
+          },
+          select: {
+            id: true,
+            operationType: true,
+            status: true,
+            readyAt: true,
+            startedAt: true,
+            updatedAt: true,
+            executions: {
+              select: {
+                status: true,
+                cannotStartReason: true,
+                failureDescription: true,
+                materialLossCost: true,
+                updatedAt: true,
+              },
+              orderBy: { updatedAt: "desc" },
+              take: 3,
+            },
+          },
+        },
+      },
     }),
   ]);
 
@@ -190,6 +272,11 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
   const stockPlateMap = new Map(stockPlates.map((plate) => [plate.id, plate]));
 
   const risks: ScheduleRisk[] = [];
+  const stoneBrokenOperationIds = new Set(
+    stoneBrokenRecords
+      .map((record) => record.phaseOperationId)
+      .filter(Boolean),
+  );
 
   for (const record of stoneBrokenRecords) {
     const job = record.isId ? jobMap.get(record.isId) : null;
@@ -206,6 +293,8 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
       url: jobUrl(record.isId),
       evidence: {
         fireRecordId: record.id,
+        phaseOperationId: record.phaseOperationId ?? null,
+        operationType: record.phaseOperationId ? "KESIM" : null,
         fireType: record.fireType,
         reasonCode: record.reasonCode,
         status: record.status,
@@ -213,6 +302,115 @@ export async function buildScheduleRisks(input: BuildScheduleRisksInput): Promis
       },
       createdAt: iso(record.createdAt),
     });
+  }
+
+  for (const phase of imalatPhases) {
+    const job = phase.workSchedule.is;
+    const jobId = phase.workSchedule.isId;
+
+    for (const operation of phase.operations) {
+      const label = operationLabel(operation.operationType);
+      const latestExecution = operation.executions[0] ?? null;
+      const reasonLabel = cannotStartReasonLabel(latestExecution?.cannotStartReason);
+      const referenceDate = operation.readyAt ?? operation.startedAt ?? operation.updatedAt;
+      const ageDays = Math.floor((Date.now() - referenceDate.getTime()) / 86_400_000);
+
+      if (operation.status === "CANNOT_START") {
+        if (
+          operation.operationType === "KESIM" &&
+          latestExecution?.cannotStartReason === "STONE_BROKEN_IN_CUTTING" &&
+          stoneBrokenOperationIds.has(operation.id)
+        ) {
+          continue;
+        }
+
+        const isStoneBroken =
+          operation.operationType === "KESIM" &&
+          latestExecution?.cannotStartReason === "STONE_BROKEN_IN_CUTTING";
+
+        risks.push({
+          id: `production_operation_blocked_${operation.id}`,
+          type: "PRODUCTION_OPERATION_BLOCKED",
+          severity: isStoneBroken ? "critical" : "high",
+          title: isStoneBroken ? "Kesimde taş kırıldı" : `${label} durdu`,
+          message: reasonLabel
+            ? `${job.musteriAdi || "Müşteri"} işinde ${label.toLocaleLowerCase("tr-TR")} operasyonu durdu: ${reasonLabel}.`
+            : `${job.musteriAdi || "Müşteri"} işinde ${label.toLocaleLowerCase("tr-TR")} operasyonu durdu.`,
+          jobId,
+          customerName: job.musteriAdi || null,
+          costAmount: latestExecution?.materialLossCost != null ? n(latestExecution.materialLossCost) : null,
+          url: jobUrl(jobId),
+          evidence: {
+            schedulePhaseId: phase.id,
+            workScheduleId: phase.workScheduleId,
+            phaseOperationId: operation.id,
+            operationType: operation.operationType,
+            operationStatus: operation.status,
+            reasonCode: latestExecution?.cannotStartReason ?? null,
+            failureDescription: latestExecution?.failureDescription ?? null,
+            productName: job.urunAdi ?? null,
+          },
+          createdAt: iso(latestExecution?.updatedAt ?? operation.updatedAt),
+        });
+        continue;
+      }
+
+      if (operation.status === "READY") {
+        if (referenceDate >= activeCutoff) continue;
+
+        risks.push({
+          id: `production_operation_ready_stale_${operation.id}`,
+          type: "PRODUCTION_OPERATION_READY_STALE",
+          severity: "medium",
+          title: `${label} hazır ama başlanmadı`,
+          message: `${job.musteriAdi || "Müşteri"} işinde ${label.toLocaleLowerCase("tr-TR")} ${ageDays} gündür hazır bekliyor.`,
+          jobId,
+          customerName: job.musteriAdi || null,
+          costAmount: null,
+          url: jobUrl(jobId),
+          evidence: {
+            schedulePhaseId: phase.id,
+            workScheduleId: phase.workScheduleId,
+            phaseOperationId: operation.id,
+            operationType: operation.operationType,
+            operationStatus: operation.status,
+            readyAt: iso(operation.readyAt),
+            readyAgeDays: ageDays,
+            productName: job.urunAdi ?? null,
+          },
+          createdAt: iso(referenceDate),
+        });
+        continue;
+      }
+
+      if (operation.status === "STARTED" || operation.status === "PAUSED") {
+        const startedAt = operation.startedAt ?? operation.updatedAt;
+        if (startedAt >= activeCutoff) continue;
+
+        risks.push({
+          id: `production_operation_delayed_${operation.id}`,
+          type: "PRODUCTION_OPERATION_DELAYED",
+          severity: operation.status === "PAUSED" ? "high" : "medium",
+          title: `${label} gecikiyor`,
+          message: `${job.musteriAdi || "Müşteri"} işinde ${label.toLocaleLowerCase("tr-TR")} ${ageDays} gündür ${operation.status === "PAUSED" ? "duraklatılmış" : "devam ediyor"}.`,
+          jobId,
+          customerName: job.musteriAdi || null,
+          costAmount: null,
+          url: jobUrl(jobId),
+          evidence: {
+            schedulePhaseId: phase.id,
+            workScheduleId: phase.workScheduleId,
+            phaseOperationId: operation.id,
+            operationType: operation.operationType,
+            operationStatus: operation.status,
+            startedAt: iso(operation.startedAt),
+            activeAgeDays: ageDays,
+            productName: job.urunAdi ?? null,
+          },
+          createdAt: iso(startedAt),
+        });
+      }
+    }
   }
 
   const fireByJob = new Map<string, typeof fireRecords>();

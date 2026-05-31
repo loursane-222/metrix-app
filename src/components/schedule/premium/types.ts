@@ -1,6 +1,13 @@
 export type ViewMode = "day" | "week" | "month";
 export type MobileSeg = "live" | "today" | "calendar" | "team" | "risks";
 
+export type LiveOpsProductionOperation = {
+  operationType: string;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
 export type LiveOpsExecution = {
   execId: string;
   phaseId: string;
@@ -16,6 +23,7 @@ export type LiveOpsExecution = {
   progressRatio: number | null;
   riskState?: "NORMAL" | "NO_PLAN" | "OVERRUN" | "CRITICAL" | "STALE" | string;
   cannotStartReason?: string | null;
+  productionOperations?: LiveOpsProductionOperation[];
 };
 
 export type BlockedLiveOpsItem = {
@@ -27,6 +35,7 @@ export type BlockedLiveOpsItem = {
   cannotStartReason?: string | null;
   materialLossCost?: string | null;
   elapsedBlockedMinutes: number;
+  productionOperations?: LiveOpsProductionOperation[];
 };
 
 export type LiveOpsData = {

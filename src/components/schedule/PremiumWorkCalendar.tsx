@@ -14,9 +14,43 @@ import { MobileRisksTab } from "./premium/MobileRisksTab";
 import { MobileTeamTab } from "./premium/MobileTeamTab";
 import { MobileTodayTab } from "./premium/MobileTodayTab";
 import { OperationsCockpitShell } from "./premium/OperationsCockpitShell";
-import type { LiveOpsData, MobileSeg, ViewMode } from "./premium/types";
+import type { LiveOpsData, LiveOpsProductionOperation, MobileSeg, ViewMode } from "./premium/types";
 
 dayjs.locale("tr");
+
+function productionOperationLabel(operation: LiveOpsProductionOperation): string | null {
+  if (operation.operationType === "KESIM") {
+    if (operation.status === "READY") return "○ Kesim Hazır";
+    if (operation.status === "STARTED") return "● Kesim Devam Ediyor";
+    if (operation.status === "COMPLETED") return "✓ Kesim Tamamlandı";
+  }
+  if (operation.operationType === "TOPLAMA") {
+    if (operation.status === "READY") return "○ Toplama Hazır";
+    if (operation.status === "STARTED") return "● Toplama Devam Ediyor";
+    if (operation.status === "COMPLETED") return "✓ Toplama Tamamlandı";
+  }
+  return null;
+}
+
+function productionOperationSummary(operations?: LiveOpsProductionOperation[]) {
+  return (operations ?? [])
+    .map(productionOperationLabel)
+    .filter((label): label is string => Boolean(label));
+}
+
+function serializeProductionOperations(phase: any): LiveOpsProductionOperation[] {
+  if (phase?.phase !== "IMALAT") return [];
+
+  const order: Record<string, number> = { KESIM: 0, TOPLAMA: 1 };
+  return [...(phase.operations ?? [])]
+    .sort((a: any, b: any) => (order[a.operationType] ?? 99) - (order[b.operationType] ?? 99))
+    .map((operation: any) => ({
+      operationType: String(operation.operationType),
+      status: String(operation.status),
+      startedAt: operation.startedAt ?? null,
+      completedAt: operation.completedAt ?? null,
+    }));
+}
 
 type PremiumWorkCalendarProps = {
   initialSchedules?: any[];
@@ -157,6 +191,7 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
           toplamSureDakika: phase.workSchedule?.is?.toplamSureDakika || 0,
           fazAtamalari: phase.fazAtamalar || [],
           executionStatus,
+          productionOperations: serializeProductionOperations(phase),
         });
       });
 
@@ -394,6 +429,7 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
     const m = meta(task.phase);
     const delayed = !task.completed && dayjs(task.date).isBefore(dayjs(), "day");
     const isVirtual = !!task.virtual;
+    const operationLabels = productionOperationSummary(task.productionOperations);
 
     if (isVirtual) {
       return (
@@ -456,6 +492,11 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
             <div className={`text-xs font-bold ${m.text}`}>{formatTaskTime(task.date)}</div>
             <div className="mt-0.5 line-clamp-2 text-sm font-semibold text-white">{task.title}</div>
             <div className="mt-0.5 line-clamp-1 text-xs text-slate-400">{task.personelText}</div>
+            {operationLabels.length > 0 && (
+              <div className="mt-1 truncate text-[10px] font-semibold text-slate-400">
+                {operationLabels.join(" · ")}
+              </div>
+            )}
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${m.bg} ${m.text}`}>
                 {m.label.toUpperCase()}
