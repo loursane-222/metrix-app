@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import { notifyPaymentPlanCreated } from '@/lib/financeNotifications'
 
 
 // Müşteri tipine göre ödeme planı taksit yapısı
@@ -122,6 +123,19 @@ export async function POST(req: NextRequest) {
       }
     },
     include: { taksitler: { orderBy: { taksitNo: 'asc' } } }
+  })
+
+  await notifyPaymentPlanCreated({
+    atolyeId,
+    userId: auth.role === 'admin' ? auth.userId : undefined,
+    personelId: auth.personelId,
+    paymentPlanId: plan.id,
+    customerId: is.musteriId,
+    customerName: is.musteri.firmaAdi || [is.musteri.ad, is.musteri.soyad].filter(Boolean).join(' ') || null,
+    jobId: is.id,
+    jobName: is.urunAdi || is.teklifNo,
+    amount: toplamTutar,
+    installmentCount: plan.taksitler.length,
   })
 
   return NextResponse.json({ plan })

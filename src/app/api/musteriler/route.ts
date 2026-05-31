@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
+import { notifyCustomerCreated, notifyCustomerUpdated } from '@/lib/personnelCustomerNotifications'
 
 const MUSTERI_TIPLERI = ['bayi', 'mimar', 'son_kullanici', 'muteahhit']
+
+function sameNumber(a: unknown, b: unknown) {
+  return Number(a || 0) === Number(b || 0)
+}
 
 
 
@@ -72,18 +77,16 @@ export async function POST(req: NextRequest) {
     data: { atolyeId: atolyeId, firmaAdi, ad, soyad, telefon, email, acilisBakiyesi, bakiyeTipi, musteriTipi }
   })
 
-  try {
-    const { logActivity } = await import('@/lib/activityLogger')
-    const musteriAdi = musteri.firmaAdi || (musteri.ad + ' ' + musteri.soyad).trim() || 'Musteri'
-    await logActivity({
-      atolyeId: atolyeId,
-      type: 'musteri_eklendi',
-      message: musteriAdi + ' adli yeni musteri kaydi olusturuldu.',
-      refId: musteri.id,
-      userId: auth.userId,
-      personelId: auth.personelId || undefined,
-    })
-  } catch {}
+  await notifyCustomerCreated({
+    atolyeId,
+    userId: auth.role === 'admin' ? auth.userId : undefined,
+    personelId: auth.personelId,
+    customerId: musteri.id,
+    firmaAdi: musteri.firmaAdi,
+    ad: musteri.ad,
+    soyad: musteri.soyad,
+    musteriTipi: musteri.musteriTipi,
+  })
   return NextResponse.json({ musteri })
 }
 
@@ -123,6 +126,40 @@ export async function PUT(req: NextRequest) {
     data: { firmaAdi, ad, soyad, telefon, email, acilisBakiyesi, bakiyeTipi, musteriTipi }
   })
 
+  const changed =
+    mevcutMusteri.firmaAdi !== firmaAdi ||
+    mevcutMusteri.ad !== ad ||
+    mevcutMusteri.soyad !== soyad ||
+    mevcutMusteri.telefon !== telefon ||
+    mevcutMusteri.email !== email ||
+    !sameNumber(mevcutMusteri.acilisBakiyesi, acilisBakiyesi) ||
+    mevcutMusteri.bakiyeTipi !== bakiyeTipi ||
+    mevcutMusteri.musteriTipi !== musteriTipi
+
+  if (changed) {
+    await notifyCustomerUpdated({
+      atolyeId,
+      userId: auth.role === 'admin' ? auth.userId : undefined,
+      personelId: auth.personelId,
+      customerId: musteri.id,
+      firmaAdi: musteri.firmaAdi,
+      ad: musteri.ad,
+      soyad: musteri.soyad,
+      action: 'updated',
+      oldValue: {
+        firmaAdi: mevcutMusteri.firmaAdi,
+        ad: mevcutMusteri.ad,
+        soyad: mevcutMusteri.soyad,
+        email: mevcutMusteri.email,
+        telefon: mevcutMusteri.telefon,
+        acilisBakiyesi: mevcutMusteri.acilisBakiyesi,
+        bakiyeTipi: mevcutMusteri.bakiyeTipi,
+        musteriTipi: mevcutMusteri.musteriTipi,
+      },
+      newValue: { firmaAdi, ad, soyad, email, telefon, acilisBakiyesi, bakiyeTipi, musteriTipi },
+    })
+  }
+
   return NextResponse.json({ musteri })
 }
 
@@ -135,5 +172,15 @@ export async function DELETE(req: NextRequest) {
   const musteri = await prisma.musteri.findFirst({ where: { id, atolyeId } })
   if (!musteri) return NextResponse.json({ hata: 'Müşteri bulunamadı.' }, { status: 404 })
   await prisma.musteri.delete({ where: { id } })
+  await notifyCustomerUpdated({
+    atolyeId,
+    userId: auth.role === 'admin' ? auth.userId : undefined,
+    personelId: auth.personelId,
+    customerId: musteri.id,
+    firmaAdi: musteri.firmaAdi,
+    ad: musteri.ad,
+    soyad: musteri.soyad,
+    action: 'deleted',
+  })
   return NextResponse.json({ ok: true })
 }

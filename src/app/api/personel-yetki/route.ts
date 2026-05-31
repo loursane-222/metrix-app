@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import { notifyPersonnelPermissionChanged } from '@/lib/personnelCustomerNotifications'
 
 
 
@@ -82,6 +83,12 @@ export async function POST(req: NextRequest) {
     atolyeAyarGorebilir: !!body.atolyeAyarGorebilir,
   }
 
+  const oncekiRows: any[] = await prisma.$queryRawUnsafe(
+    `SELECT * FROM "personel_yetkileri" WHERE "personelId" = $1 LIMIT 1`,
+    personelId
+  )
+  const onceki = oncekiRows[0] || null
+
   await prisma.$executeRawUnsafe(
     `
     INSERT INTO "personel_yetkileri"
@@ -111,6 +118,21 @@ export async function POST(req: NextRequest) {
     `SELECT * FROM "personel_yetkileri" WHERE "personelId" = $1 LIMIT 1`,
     personelId
   )
+
+  const changed = !onceki || Object.entries(b).some(([key, value]) => Boolean(onceki[key]) !== value)
+  if (changed) {
+    await notifyPersonnelPermissionChanged({
+      atolyeId,
+      userId: auth.role === 'admin' ? auth.userId : undefined,
+      personelId: auth.personelId,
+      targetPersonelId: personel.id,
+      ad: personel.ad,
+      soyad: personel.soyad,
+      action: 'permissions_changed',
+      oldValue: onceki,
+      newValue: rows[0] || null,
+    })
+  }
 
   return NextResponse.json({ yetki: rows[0] || null })
 }

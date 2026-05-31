@@ -7,8 +7,18 @@ import {
   notificationPreferenceCategories,
   type NotificationPreferenceInput,
 } from '@/lib/notificationPreferenceDefaults'
+import { notifyPersonnelCreated, notifyPersonnelPermissionChanged } from '@/lib/personnelCustomerNotifications'
 
 const allowedNotificationCategories = new Set(notificationPreferenceCategories.map((item) => item.category))
+
+function sameNumber(a: unknown, b: unknown) {
+  return Number(a || 0) === Number(b || 0)
+}
+
+function sameDateValue(a: Date | null | undefined, b: unknown) {
+  const bDate = b ? new Date(String(b)) : null
+  return (a?.getTime() ?? null) === (bDate?.getTime() ?? null)
+}
 
 async function canManageNotificationPreferences(auth: NonNullable<Awaited<ReturnType<typeof getAtolyeAuth>>>) {
   if (auth.role === 'admin') return true
@@ -213,6 +223,17 @@ export async function POST(req: NextRequest) {
       preferences,
     })
 
+    await notifyPersonnelCreated({
+      atolyeId,
+      userId: auth.role === 'admin' ? auth.userId : undefined,
+      personelId: auth.personelId,
+      targetPersonelId: personel.id,
+      ad: personel.ad,
+      soyad: personel.soyad,
+      rolGrubu: personel.rolGrubu,
+      isPatron: personel.isPatron,
+    })
+
     return NextResponse.json({
       personel: {
         ...personel,
@@ -300,6 +321,47 @@ export async function PUT(req: NextRequest) {
       })
     }
 
+    const patronChanged = isOwner && veri.isPatron !== undefined && Boolean(veri.isPatron) !== mevcut.isPatron
+    const roleChanged = veri.rolGrubu !== undefined && veri.rolGrubu !== mevcut.rolGrubu
+    const profileChanged =
+      mevcut.ad !== veri.ad ||
+      mevcut.soyad !== veri.soyad ||
+      mevcut.gorevi !== veri.gorevi ||
+      (mevcut.bagliOlduguId || null) !== (veri.bagliOlduguId || null) ||
+      mevcut.calismaYili !== (parseInt(veri.calismaYili) || 0) ||
+      mevcut.telefon !== (veri.telefon || '') ||
+      mevcut.email !== (veri.email || '') ||
+      mevcut.aktif !== (veri.aktif ?? true) ||
+      !sameNumber(mevcut.brutMaas, veri.brutMaas) ||
+      !sameNumber(mevcut.sgkOrani, veri.sgkOrani) ||
+      !sameDateValue(mevcut.iseBaslamaTarihi, veri.iseBaslamaTarihi) ||
+      mevcut.gunlukCalismaGun !== (parseInt(veri.gunlukCalismaGun) || 5) ||
+      (mevcut.userId || null) !== (veri.userId || null) ||
+      Boolean(veri.password)
+
+    if (patronChanged || roleChanged || profileChanged || Boolean(preferences)) {
+      await notifyPersonnelPermissionChanged({
+        atolyeId,
+        userId: auth.role === 'admin' ? auth.userId : undefined,
+        personelId: auth.personelId,
+        targetPersonelId: personel.id,
+        ad: personel.ad,
+        soyad: personel.soyad,
+        action: patronChanged ? 'patron_changed' : preferences ? 'preferences_changed' : roleChanged ? 'permissions_changed' : 'updated',
+        oldValue: {
+          rolGrubu: mevcut.rolGrubu,
+          isPatron: mevcut.isPatron,
+          aktif: mevcut.aktif,
+        },
+        newValue: {
+          rolGrubu: personel.rolGrubu,
+          isPatron: personel.isPatron,
+          aktif: personel.aktif,
+          preferencesChanged: Boolean(preferences),
+        },
+      })
+    }
+
     return NextResponse.json({
       personel: {
         ...personel,
@@ -326,5 +388,14 @@ export async function DELETE(req: NextRequest) {
   const personel = await prisma.personel.findFirst({ where: { id, atolyeId } })
   if (!personel) return NextResponse.json({ hata: 'Personel bulunamadı.' }, { status: 404 })
   await prisma.personel.delete({ where: { id } })
+  await notifyPersonnelPermissionChanged({
+    atolyeId,
+    userId: auth.role === 'admin' ? auth.userId : undefined,
+    personelId: auth.personelId,
+    targetPersonelId: personel.id,
+    ad: personel.ad,
+    soyad: personel.soyad,
+    action: 'deleted',
+  })
   return NextResponse.json({ ok: true })
 }

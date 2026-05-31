@@ -1,7 +1,7 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
-import { logActivity } from "@/lib/activityLogger";
 import { NextRequest, NextResponse } from "next/server";
+import { notifyCollectionCreated } from "@/lib/financeNotifications";
 
 export async function POST(req: NextRequest) {
   const auth = await getAtolyeAuth();
@@ -24,16 +24,20 @@ export async function POST(req: NextRequest) {
       tarih: body.tarih ? new Date(body.tarih) : new Date(),
       tutar: Number(body.tutar || 0),
     },
+    include: { is: { select: { id: true, teklifNo: true, urunAdi: true } } },
   });
 
   const musteriAdi = musteri.firmaAdi || (musteri.ad + " " + musteri.soyad).trim() || "Musteri";
-  await logActivity({
+  await notifyCollectionCreated({
     atolyeId,
-    type: "tahsilat_yapildi",
-    message: musteriAdi + " – " + Number(body.tutar || 0).toLocaleString("tr-TR") + " TL tahsilat yapildi.",
-    refId: tahsilat.id,
     userId: auth.userId,
     personelId: auth.personelId || undefined,
+    collectionId: tahsilat.id,
+    customerId: musteri.id,
+    customerName: musteriAdi,
+    jobId: tahsilat.is?.id ?? null,
+    jobName: tahsilat.is?.urunAdi || tahsilat.is?.teklifNo || null,
+    amount: Number(body.tutar || 0),
   });
 
   return NextResponse.json({ tahsilat });

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
-import { logActivity } from '@/lib/activityLogger'
+import { notifyCollectionCreated } from '@/lib/financeNotifications'
 
 
 export async function GET(req: NextRequest) {
@@ -51,14 +51,18 @@ export async function POST(req: NextRequest) {
     include: { is: { select: { id: true, teklifNo: true, urunAdi: true, satisFiyati: true } } }
   })
 
-  // Canlı akış ve bildirim
   const musteriAdi = musteri.firmaAdi?.trim() || [musteri.ad, musteri.soyad].filter(Boolean).join(' ') || 'Müşteri'
   const isAdi = tahsilat.is?.urunAdi || tahsilat.is?.teklifNo || ''
-  await logActivity({
+  await notifyCollectionCreated({
     atolyeId,
-    type: 'tahsilat',
-    message: `💰 ${musteriAdi} — ${tutar.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺ tahsilat alındı${isAdi ? ` (${isAdi})` : ''}`,
-    refId: tahsilat.id,
+    userId: auth.role === 'admin' ? auth.userId : undefined,
+    personelId: auth.personelId,
+    collectionId: tahsilat.id,
+    customerId: musteri.id,
+    customerName: musteriAdi,
+    jobId: tahsilat.is?.id ?? null,
+    jobName: isAdi,
+    amount: tutar,
   })
 
   return NextResponse.json({ tahsilat })
