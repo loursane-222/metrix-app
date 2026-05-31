@@ -306,26 +306,24 @@ export async function upsertWorkSchedule(data: {
 
   if (existingSchedule && data.phases?.length) {
     const previousByPhase = new Map(existingSchedule.phases.map((phase) => [phase.phase, phase]));
-    await Promise.all(
-      data.phases.map(async (phaseData) => {
-        const previous = previousByPhase.get(phaseData.phase);
-        const current = schedule.phases.find((phase: { phase: PhaseType }) => phase.phase === phaseData.phase);
-        if (!previous || !current) return;
+    for (const phaseData of data.phases) {
+      const previous = previousByPhase.get(phaseData.phase);
+      const current = schedule.phases.find((phase: { phase: PhaseType }) => phase.phase === phaseData.phase);
+      if (!previous || !current) continue;
 
-        await notifySchedulePhaseDateChanged({
-          atolyeId,
-          source: "upsertWorkSchedule",
-          phaseId: current.id,
-          phaseType: current.phase,
-          workScheduleId: current.workScheduleId,
-          jobName: is.musteriAdi || is.urunAdi || "İş",
-          oldPlannedStart: previous.plannedStart,
-          newPlannedStart: current.plannedStart,
-          oldPlannedEnd: previous.plannedEnd,
-          newPlannedEnd: current.plannedEnd,
-        });
-      })
-    );
+      await notifySchedulePhaseDateChanged({
+        atolyeId,
+        source: "upsertWorkSchedule",
+        phaseId: current.id,
+        phaseType: current.phase,
+        workScheduleId: current.workScheduleId,
+        jobName: is.musteriAdi || is.urunAdi || "İş",
+        oldPlannedStart: previous.plannedStart,
+        newPlannedStart: current.plannedStart,
+        oldPlannedEnd: previous.plannedEnd,
+        newPlannedEnd: current.plannedEnd,
+      });
+    }
   }
 
   return schedule;

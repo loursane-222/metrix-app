@@ -145,6 +145,11 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (nextDate) {
+      const updatedPhaseForNotification = await prisma.schedulePhase.findUnique({
+        where: { id: phaseId },
+        select: { plannedStart: true, plannedEnd: true },
+      });
+
       await notifySchedulePhaseDateChanged({
         atolyeId: auth.atolyeId,
         userId: auth.userId,
@@ -155,9 +160,9 @@ export async function PATCH(req: NextRequest) {
         workScheduleId: phase.workScheduleId,
         jobName: musteriAdi,
         oldPlannedStart: phase.plannedStart,
-        newPlannedStart: nextDate,
+        newPlannedStart: updatedPhaseForNotification?.plannedStart ?? nextDate,
         oldPlannedEnd: phase.plannedEnd,
-        newPlannedEnd: nextDate,
+        newPlannedEnd: updatedPhaseForNotification?.plannedEnd ?? nextDate,
       });
     }
 

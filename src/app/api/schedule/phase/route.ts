@@ -85,9 +85,9 @@ export async function PATCH(req: NextRequest) {
       workScheduleId: phase.workScheduleId,
       jobName: isAdi,
       oldPlannedStart: phase.plannedStart,
-      newPlannedStart: nextDate,
+      newPlannedStart: updated.plannedStart,
       oldPlannedEnd: phase.plannedEnd,
-      newPlannedEnd: shouldMoveEnd ? nextDate : phase.plannedEnd,
+      newPlannedEnd: updated.plannedEnd,
     })
 
     return NextResponse.json({ ok: true, phase: updated });

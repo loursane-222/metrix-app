@@ -18,8 +18,15 @@ function toIso(value?: Date | string | null) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function toTime(value?: Date | string | null) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
 function sameDateTime(a?: Date | string | null, b?: Date | string | null) {
-  return toIso(a) === toIso(b);
+  return toTime(a) === toTime(b);
 }
 
 export function hasSchedulePhaseDateChanged(params: {
@@ -48,14 +55,14 @@ export async function notifySchedulePhaseDateChanged(params: {
   oldPlannedEnd?: Date | string | null;
   newPlannedEnd?: Date | string | null;
 }) {
-  if (
-    !hasSchedulePhaseDateChanged({
-      oldPlannedStart: params.oldPlannedStart,
-      newPlannedStart: params.newPlannedStart,
-      oldPlannedEnd: params.oldPlannedEnd,
-      newPlannedEnd: params.newPlannedEnd,
-    })
-  ) {
+  const changeDetected = hasSchedulePhaseDateChanged({
+    oldPlannedStart: params.oldPlannedStart,
+    newPlannedStart: params.newPlannedStart,
+    oldPlannedEnd: params.oldPlannedEnd,
+    newPlannedEnd: params.newPlannedEnd,
+  });
+
+  if (!changeDetected) {
     return;
   }
 
@@ -90,7 +97,8 @@ export async function notifySchedulePhaseDateChanged(params: {
       newPlannedStart: toIso(params.newPlannedStart),
       oldPlannedEnd: toIso(params.oldPlannedEnd),
       newPlannedEnd: toIso(params.newPlannedEnd),
-      notificationPipelineVersion: "N1",
+      changeDetected,
+      notificationPipelineVersion: "N1B",
       pushAwaited: shouldAwaitPushForEvent(eventType),
     },
     awaitPush: shouldAwaitPushForEvent(eventType),
