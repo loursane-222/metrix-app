@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activityLogger";
 import { emitMetrixEvent } from "@/lib/events/emitMetrixEvent";
 import { appendExecutionTimelineEvent } from "@/lib/execution/events";
+import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
 import { NextRequest, NextResponse } from "next/server";
 
 const phaseLabel: Record<string, string> = { OLCU: "Olcu", IMALAT: "Imalat", MONTAJ: "Montaj", TAS_ALINACAK: "Tas Alinacak" };
@@ -144,9 +145,20 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (nextDate) {
-      const tarihStr = nextDate.toLocaleDateString("tr-TR");
-      const deepLink = `/dashboard/is-programi?phaseId=${phaseId}`;
-      await logActivity({ atolyeId: auth.atolyeId, type: "program_tarih_degisti", message: musteriAdi + " – " + fazAdi + " fazinin tarihi " + tarihStr + " olarak guncellendi.", refId: phaseId, url: deepLink, userId: auth.userId, personelId: auth.personelId || undefined });
+      await notifySchedulePhaseDateChanged({
+        atolyeId: auth.atolyeId,
+        userId: auth.userId,
+        personelId: auth.personelId || null,
+        source: "phase-full",
+        phaseId,
+        phaseType: phase.phase,
+        workScheduleId: phase.workScheduleId,
+        jobName: musteriAdi,
+        oldPlannedStart: phase.plannedStart,
+        newPlannedStart: nextDate,
+        oldPlannedEnd: phase.plannedEnd,
+        newPlannedEnd: nextDate,
+      });
     }
 
     if (personelIds !== null) {

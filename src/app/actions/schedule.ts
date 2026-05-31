@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { PhaseType, PHASE_ORDER, canCompletePhase } from "@/lib/types/schedule";
 import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
+import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
 
 async function authBilgisiAl(): Promise<{
   userId: string | null;
@@ -203,7 +204,18 @@ export async function upsertWorkSchedule(data: {
 
   const existingSchedule = await prisma.workSchedule.findUnique({
     where: { isId: data.isId },
-    select: { id: true },
+    select: {
+      id: true,
+      phases: {
+        select: {
+          id: true,
+          phase: true,
+          plannedStart: true,
+          plannedEnd: true,
+          workScheduleId: true,
+        },
+      },
+    },
   });
 
   let schedule;
@@ -291,6 +303,31 @@ export async function upsertWorkSchedule(data: {
   }
 
   revalidatePath("/dashboard/is-programi");
+
+  if (existingSchedule && data.phases?.length) {
+    const previousByPhase = new Map(existingSchedule.phases.map((phase) => [phase.phase, phase]));
+    await Promise.all(
+      data.phases.map(async (phaseData) => {
+        const previous = previousByPhase.get(phaseData.phase);
+        const current = schedule.phases.find((phase: { phase: PhaseType }) => phase.phase === phaseData.phase);
+        if (!previous || !current) return;
+
+        await notifySchedulePhaseDateChanged({
+          atolyeId,
+          source: "upsertWorkSchedule",
+          phaseId: current.id,
+          phaseType: current.phase,
+          workScheduleId: current.workScheduleId,
+          jobName: is.musteriAdi || is.urunAdi || "İş",
+          oldPlannedStart: previous.plannedStart,
+          newPlannedStart: current.plannedStart,
+          oldPlannedEnd: previous.plannedEnd,
+          newPlannedEnd: current.plannedEnd,
+        });
+      })
+    );
+  }
+
   return schedule;
 }
 
@@ -480,8 +517,8 @@ export async function movePhase(data: {
   newStart: Date;
   newEnd: Date;
 }) {
-  const atolyeId = await atolyeIdAl();
-  if (!atolyeId) throw new Error("Yetkisiz");
+  const auth = await authBilgisiAl();
+  if (!auth.atolyeId) throw new Error("Yetkisiz");
 
   const phase = await prisma.schedulePhase.findUnique({
     where: { id: data.schedulePhaseId },
@@ -489,7 +526,7 @@ export async function movePhase(data: {
   });
 
   if (!phase) throw new Error("Aşama bulunamadı");
-  if (phase.workSchedule.is.atolyeId !== atolyeId) throw new Error("Yetkisiz");
+  if (phase.workSchedule.is.atolyeId !== auth.atolyeId) throw new Error("Yetkisiz");
 
   const updated = await prisma.schedulePhase.update({
     where: { id: data.schedulePhaseId },
@@ -497,6 +534,21 @@ export async function movePhase(data: {
       plannedStart: data.newStart,
       plannedEnd: data.newEnd,
     },
+  });
+
+  await notifySchedulePhaseDateChanged({
+    atolyeId: auth.atolyeId,
+    userId: auth.userId,
+    personelId: auth.personelId,
+    source: "movePhase",
+    phaseId: phase.id,
+    phaseType: phase.phase,
+    workScheduleId: phase.workScheduleId,
+    jobName: phase.workSchedule.is.musteriAdi || phase.workSchedule.is.urunAdi || "İş",
+    oldPlannedStart: phase.plannedStart,
+    newPlannedStart: data.newStart,
+    oldPlannedEnd: phase.plannedEnd,
+    newPlannedEnd: data.newEnd,
   });
 
   revalidatePath("/dashboard/is-programi");

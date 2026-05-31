@@ -56,7 +56,7 @@ async function createNotification(params: LogParams) {
       type: params.type,
       title: "Metrix",
       description: params.message,
-      actionUrl: "/dashboard",
+      actionUrl: params.url ?? "/dashboard",
       isRead: false,
     },
   });

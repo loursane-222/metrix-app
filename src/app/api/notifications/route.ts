@@ -33,6 +33,7 @@ export async function GET() {
     }
 
     const notifications = await prisma.notification.findMany({
+      where: { atolyeId },
       orderBy: { createdAt: "desc" },
       take: 20,
     });
@@ -55,9 +56,18 @@ export async function PATCH(req: Request) {
     }
     const { id } = await req.json();
     if (!id) {
-      await prisma.notification.updateMany({ data: { isRead: true } });
+      await prisma.notification.updateMany({
+        where: { atolyeId },
+        data: { isRead: true },
+      });
     } else {
-      await prisma.notification.update({ where: { id }, data: { isRead: true } });
+      const result = await prisma.notification.updateMany({
+        where: { id, atolyeId },
+        data: { isRead: true },
+      });
+      if (result.count === 0) {
+        return NextResponse.json({ error: "Bildirim bulunamadı" }, { status: 404 });
+      }
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

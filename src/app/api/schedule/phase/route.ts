@@ -1,6 +1,6 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
-import { logActivity } from "@/lib/activityLogger";
+import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
 import { NextRequest, NextResponse } from "next/server";
 
 
@@ -74,15 +74,20 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
-    // Faz adı
-    const fazAdlari: Record<string, string> = { OLCU: 'Ölçü', IMALAT: 'İmalat', MONTAJ: 'Montaj' }
-    const fazAdi = fazAdlari[phase.phase] || phase.phase
     const isAdi = phase.workSchedule.is.musteriAdi || phase.workSchedule.is.urunAdi || 'İş'
-    await logActivity({
+    await notifySchedulePhaseDateChanged({
       atolyeId: auth.atolyeId,
-      type: 'takvim_guncellendi',
-      message: `${isAdi} – ${fazAdi} aşaması ${plannedDate} tarihine taşındı`,
-      refId: phase.workScheduleId,
+      userId: auth.userId,
+      personelId: auth.personelId || null,
+      source: "phase-route",
+      phaseId,
+      phaseType: phase.phase,
+      workScheduleId: phase.workScheduleId,
+      jobName: isAdi,
+      oldPlannedStart: phase.plannedStart,
+      newPlannedStart: nextDate,
+      oldPlannedEnd: phase.plannedEnd,
+      newPlannedEnd: shouldMoveEnd ? nextDate : phase.plannedEnd,
     })
 
     return NextResponse.json({ ok: true, phase: updated });
