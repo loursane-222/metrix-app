@@ -5,6 +5,7 @@ import { getAtolyeAuth } from "@/lib/getAtolyeId";
 import { ensureDraftReservationForJob } from "@/lib/stock/reservations";
 import { jsonPlateIds, n, plateCodeForPurchase } from "@/lib/stock/purchases";
 import { stockCostFields } from "@/lib/stock/currency";
+import { notifyStockEntryCreated } from "@/lib/stockNotifications";
 
 function serializePlate(plate: any) {
   return {
@@ -92,6 +93,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
           totalAreaCm2,
         });
         const createdPlates = [];
+        const createdMovements = [];
 
         for (let i = 0; i < quantity; i++) {
           const plate = await tx.stockPlate.create({
@@ -119,7 +121,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             },
           });
 
-          await tx.stockMovement.create({
+          const movement = await tx.stockMovement.create({
             data: {
               atolyeId: auth.atolyeId,
               stockPlateId: plate.id,
@@ -133,6 +135,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
           });
 
           createdPlates.push(plate);
+          createdMovements.push(movement);
         }
 
         const plateIds = createdPlates.map((plate) => plate.id);
@@ -213,13 +216,45 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
             },
             plates: createdPlates.map(serializePlate),
             idempotent: false,
+            notification: {
+              productName: purchase.productName,
+              purchaseId: purchase.id,
+              purchaseCode: purchase.purchaseCode,
+              stockPlateIds: plateIds,
+              stockMovementIds: createdMovements.map((movement) => movement.id),
+              quantity,
+              amount: n(purchase.totalCost),
+              currency: purchase.currency,
+              jobId: purchase.isId,
+            },
           },
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
 
-    return NextResponse.json(result.body, { status: result.status });
+    if (result.status === 200 && !result.body.idempotent && result.body.notification) {
+      await notifyStockEntryCreated({
+        atolyeId: auth.atolyeId,
+        userId: auth.role === "admin" ? auth.userId : undefined,
+        personelId: auth.personelId,
+        refId: result.body.notification.purchaseId,
+        productName: result.body.notification.productName,
+        purchaseId: result.body.notification.purchaseId,
+        purchaseCode: result.body.notification.purchaseCode,
+        stockPlateIds: result.body.notification.stockPlateIds,
+        stockMovementIds: result.body.notification.stockMovementIds,
+        quantity: result.body.notification.quantity,
+        amount: result.body.notification.amount,
+        currency: result.body.notification.currency,
+        jobId: result.body.notification.jobId,
+        action: "purchase_received",
+        message: `Stok girişi yapıldı: ${result.body.notification.productName}, ${result.body.notification.quantity} plaka, ${result.body.notification.amount.toLocaleString("tr-TR")} ${result.body.notification.currency}.`,
+      });
+    }
+
+    const { notification: _notification, ...responseBody } = result.body;
+    return NextResponse.json(responseBody, { status: result.status });
   } catch (error) {
     console.error("[stock/purchases/[id]/receive]", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAtolyeAuth } from "@/lib/getAtolyeId";
 import { normalizeCurrency, stockCostFields } from "@/lib/stock/currency";
+import { notifyStockProductCreated } from "@/lib/stockNotifications";
 
 function n(value: unknown) {
   if (value == null) return 0;
@@ -204,6 +205,7 @@ export async function POST(req: NextRequest) {
         totalAreaCm2,
       });
       const plates = [];
+      const movements = [];
 
       for (let i = 0; i < quantity; i += 1) {
         const plateCode = await nextManualPlateCode(tx, auth.atolyeId, productName, i);
@@ -233,7 +235,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        await tx.stockMovement.create({
+        const movement = await tx.stockMovement.create({
           data: {
             atolyeId: auth.atolyeId,
             stockPlateId: plate.id,
@@ -246,6 +248,7 @@ export async function POST(req: NextRequest) {
         });
 
         plates.push(plate);
+        movements.push(movement);
       }
 
       return {
@@ -265,11 +268,38 @@ export async function POST(req: NextRequest) {
             purchaseFxRate: n(plate.purchaseFxRate) || 1,
             status: plate.status,
           })),
+          notification: {
+            stockPlateIds: plates.map((plate) => plate.id),
+            stockMovementIds: movements.map((movement) => movement.id),
+            productName,
+            quantity: plates.length,
+            amount: costs.totalCostTry,
+            currency: costs.currency,
+          },
         },
       };
     });
 
-    return NextResponse.json(result.body, { status: result.status });
+    if (result.status === 201 && result.body.notification) {
+      await notifyStockProductCreated({
+        atolyeId: auth.atolyeId,
+        userId: auth.role === "admin" ? auth.userId : undefined,
+        personelId: auth.personelId,
+        refId: result.body.notification.stockPlateIds[0],
+        productName: result.body.notification.productName,
+        plateCount: result.body.notification.quantity,
+        stockPlateIds: result.body.notification.stockPlateIds,
+        stockMovementIds: result.body.notification.stockMovementIds,
+        amount: result.body.notification.amount,
+        currency: result.body.notification.currency,
+        metadata: {
+          action: "manual_plate_created",
+        },
+      });
+    }
+
+    const { notification: _notification, ...responseBody } = result.body;
+    return NextResponse.json(responseBody, { status: result.status });
   } catch (error) {
     console.error("[stock/plates][POST]", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

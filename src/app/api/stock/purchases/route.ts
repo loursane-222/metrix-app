@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAtolyeAuth } from "@/lib/getAtolyeId";
 import { n, normalizeStatus, parsePurchaseInput, purchaseCode } from "@/lib/stock/purchases";
+import { notifyStockEntryCreated } from "@/lib/stockNotifications";
 
 function serializePurchase(purchase: any, jobMap = new Map<string, any>(), warehouseMap = new Map<string, any>()) {
   const job = purchase.isId ? jobMap.get(purchase.isId) : null;
@@ -118,6 +119,22 @@ export async function POST(req: NextRequest) {
         ...parsed.data,
         status: "PLANNED",
       },
+    });
+
+    await notifyStockEntryCreated({
+      atolyeId: auth.atolyeId,
+      userId: auth.role === "admin" ? auth.userId : undefined,
+      personelId: auth.personelId,
+      refId: purchase.id,
+      productName: purchase.productName,
+      purchaseId: purchase.id,
+      purchaseCode: purchase.purchaseCode,
+      quantity: purchase.quantity,
+      amount: n(purchase.totalCost),
+      currency: purchase.currency,
+      action: "purchase_created",
+      jobId: purchase.isId,
+      message: `Satın alma kaydı oluşturuldu: ${purchase.productName}, ${purchase.quantity} plaka, ${n(purchase.totalCost).toLocaleString("tr-TR")} ${purchase.currency}.`,
     });
 
     return NextResponse.json({ purchase: serializePurchase(purchase) }, { status: 201 });

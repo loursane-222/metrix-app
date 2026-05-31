@@ -200,6 +200,8 @@ export async function activateDraftReservationsForJob(
     orderBy: { createdAt: "asc" },
   });
 
+  const activatedReservations = [];
+
   for (const draft of drafts) {
     const conflict = await tx.stockReservation.findFirst({
       where: {
@@ -213,10 +215,11 @@ export async function activateDraftReservationsForJob(
     if (conflict) throw new StockReservationConflictError();
 
     try {
-      await tx.stockReservation.update({
+      const activated = await tx.stockReservation.update({
         where: { id: draft.id },
         data: { status: "ACTIVE", schedulePhaseId: input.schedulePhaseId ?? draft.schedulePhaseId },
       });
+      activatedReservations.push(activated);
     } catch (error) {
       if (isStockReservationConflict(error)) throw new StockReservationConflictError();
       throw error;
@@ -240,7 +243,10 @@ export async function activateDraftReservationsForJob(
     });
   }
 
-  return drafts.length;
+  return {
+    count: activatedReservations.length,
+    reservations: activatedReservations,
+  };
 }
 
 export async function consumeActiveReservationsForJob(
@@ -252,7 +258,7 @@ export async function consumeActiveReservationsForJob(
     orderBy: { createdAt: "asc" },
   });
 
-  let consumedCount = 0;
+  const consumedReservations = [];
 
   for (const reservation of reservations) {
     const plate = await tx.stockPlate.findFirst({
@@ -278,7 +284,7 @@ export async function consumeActiveReservationsForJob(
       plate?.totalAreaCm2 ??
       undefined;
 
-    await tx.stockMovement.create({
+    const movement = await tx.stockMovement.create({
       data: {
         atolyeId: reservation.atolyeId,
         stockPlateId: reservation.stockPlateId,
@@ -307,8 +313,11 @@ export async function consumeActiveReservationsForJob(
       data: { status: "USED", remainingAreaCm2: 0 },
     });
 
-    consumedCount += 1;
+    consumedReservations.push({ reservation, movement, quantityAreaCm2 });
   }
 
-  return consumedCount;
+  return {
+    count: consumedReservations.length,
+    reservations: consumedReservations,
+  };
 }

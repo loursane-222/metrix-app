@@ -7,6 +7,7 @@ import { jwtVerify } from "jose";
 import { PhaseType, PHASE_ORDER, canCompletePhase } from "@/lib/types/schedule";
 import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
 import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
+import { notifyStockReserved } from "@/lib/stockNotifications";
 import {
   notifyJobScheduled,
   notifyPhaseCompleted,
@@ -292,14 +293,16 @@ export async function upsertWorkSchedule(data: {
           });
         }
 
-        await activateDraftReservationsForJob(tx, {
+        const activatedReservations = await activateDraftReservationsForJob(tx, {
           atolyeId,
           isId: data.isId,
           schedulePhaseId: imalatPhase?.id ?? null,
         });
+
+        return { ...saved, phases, activatedReservations };
       }
 
-      return { ...saved, phases };
+      return { ...saved, phases, activatedReservations: { count: 0, reservations: [] } };
     });
   } catch (error) {
     if (isStockReservationConflict(error)) {
@@ -321,6 +324,25 @@ export async function upsertWorkSchedule(data: {
         workScheduleId: schedule.id,
         phaseId: firstPhase.id,
         phaseType: firstPhase.phase,
+      });
+    }
+
+    if (firstPhase && schedule.activatedReservations?.count > 0) {
+      const imalatPhase = schedule.phases.find((phase: { phase: PhaseType }) => phase.phase === "IMALAT");
+      await notifyStockReserved({
+        atolyeId,
+        jobId: data.isId,
+        jobName: is.urunAdi,
+        customerName: is.musteriAdi,
+        workScheduleId: schedule.id,
+        phaseId: imalatPhase?.id ?? firstPhase.id,
+        schedulePhaseId: imalatPhase?.id ?? firstPhase.id,
+        reservationIds: schedule.activatedReservations.reservations.map((reservation: { id: string }) => reservation.id),
+        stockPlateIds: schedule.activatedReservations.reservations.map((reservation: { stockPlateId: string }) => reservation.stockPlateId),
+        quantity: schedule.activatedReservations.count,
+        metadata: {
+          action: "reservation_activated_on_schedule_create",
+        },
       });
     }
   }
@@ -347,7 +369,8 @@ export async function upsertWorkSchedule(data: {
     }
   }
 
-  return schedule;
+  const { activatedReservations: _activatedReservations, ...scheduleForReturn } = schedule;
+  return scheduleForReturn;
 }
 
 export async function togglePhaseCompletion(data: {

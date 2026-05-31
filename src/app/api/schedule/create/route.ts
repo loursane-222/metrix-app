@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
 import { notifyJobScheduled } from "@/lib/scheduleNotifications";
+import { notifyStockReserved } from "@/lib/stockNotifications";
 
 async function ownerAtolyeIdAl() {
   const cookieStore = await cookies();
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
     const imalat = safeDate(plan.IMALAT, defaultImalat);
     const montaj = safeDate(plan.MONTAJ, defaultMontaj);
 
-    const schedule = await prisma.$transaction(async (tx) => {
+    const transactionResult = await prisma.$transaction(async (tx) => {
       const created = await tx.workSchedule.create({
         data: {
           isId,
@@ -153,14 +154,15 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      await activateDraftReservationsForJob(tx, {
+      const activatedReservations = await activateDraftReservationsForJob(tx, {
         atolyeId,
         isId,
         schedulePhaseId: imalatPhase?.id ?? null,
       });
 
-      return created;
+      return { schedule: created, activatedReservations };
     });
+    const schedule = transactionResult.schedule;
 
     // ── AI mod personel ataması ─────────────────────────────────────────────
     // FazAtama hataları WorkSchedule oluşturmayı engellemez; ayrı try-catch'te.
@@ -242,6 +244,25 @@ export async function POST(req: NextRequest) {
         workScheduleId: schedule.id,
         phaseId: firstPhase.id,
         phaseType: firstPhase.phase,
+      });
+    }
+
+    if (transactionResult.activatedReservations.count > 0) {
+      const imalatPhase = schedule.phases.find((phase) => phase.phase === "IMALAT");
+      await notifyStockReserved({
+        atolyeId,
+        jobId: schedule.isId,
+        jobName: schedule.is?.urunAdi,
+        customerName: schedule.is?.musteriAdi,
+        workScheduleId: schedule.id,
+        phaseId: imalatPhase?.id ?? firstPhase?.id ?? null,
+        schedulePhaseId: imalatPhase?.id ?? firstPhase?.id ?? null,
+        reservationIds: transactionResult.activatedReservations.reservations.map((reservation) => reservation.id),
+        stockPlateIds: transactionResult.activatedReservations.reservations.map((reservation) => reservation.stockPlateId),
+        quantity: transactionResult.activatedReservations.count,
+        metadata: {
+          action: "reservation_activated_on_schedule_create",
+        },
       });
     }
 

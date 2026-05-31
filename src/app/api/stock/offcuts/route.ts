@@ -12,6 +12,7 @@ import {
   optionalText,
   serializeOffcut,
 } from "@/lib/stock/offcuts";
+import { notifyOffcutCreated } from "@/lib/stockNotifications";
 
 export async function GET(req: NextRequest) {
   try {
@@ -140,7 +141,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      await tx.stockMovement.create({
+      const movement = await tx.stockMovement.create({
         data: {
           atolyeId: auth.atolyeId,
           stockPlateId: parent.id,
@@ -154,10 +155,42 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return { status: 201 as const, body: { offcut: serializeOffcut(offcut, offcut.parentPlate) } };
+      return {
+        status: 201 as const,
+        body: {
+          offcut: serializeOffcut(offcut, offcut.parentPlate),
+          notification: {
+            offcutId: offcut.id,
+            offcutCode: offcut.offcutCode,
+            stockPlateId: parent.id,
+            stockMovementId: movement.id,
+            jobId: parent.sourceJobId,
+            amount: metrics.totalCost,
+          },
+        },
+      };
     });
 
-    return NextResponse.json(result.body, { status: result.status });
+    if (result.status === 201 && result.body.notification) {
+      await notifyOffcutCreated({
+        atolyeId: auth.atolyeId,
+        userId: auth.role === "admin" ? auth.userId : undefined,
+        personelId: auth.personelId,
+        refId: result.body.notification.offcutId,
+        offcutIds: [result.body.notification.offcutId],
+        offcutCodes: [result.body.notification.offcutCode],
+        stockPlateId: result.body.notification.stockPlateId,
+        stockMovementIds: [result.body.notification.stockMovementId],
+        jobId: result.body.notification.jobId,
+        amount: result.body.notification.amount,
+        metadata: {
+          action: "manual_offcut_created",
+        },
+      });
+    }
+
+    const { notification: _notification, ...responseBody } = result.body;
+    return NextResponse.json(responseBody, { status: result.status });
   } catch (error) {
     console.error("[stock/offcuts][POST]", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

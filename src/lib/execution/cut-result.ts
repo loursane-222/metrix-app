@@ -2,6 +2,7 @@ import { PhaseType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decimal, n, offcutCode } from "@/lib/stock/offcuts";
 import { ExecutionError, computeWorkMinutes } from "@/lib/execution/service";
+import { notifyOffcutCreated, notifyStockConsumed } from "@/lib/stockNotifications";
 
 type Db = Prisma.TransactionClient;
 
@@ -118,7 +119,7 @@ export async function hasStartedImalatWithoutCutResult(
 export async function completeImalatWithCutResult(input: CompleteImalatWithCutResultInput) {
   const now = new Date();
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const execution = await tx.phaseExecution.findUnique({
       where: { id: input.executionId },
       include: {
@@ -412,6 +413,72 @@ export async function completeImalatWithCutResult(input: CompleteImalatWithCutRe
       movements: [consumeMovement, ...offcutMovements, ...(fireMovement ? [fireMovement] : [])],
       offcuts: createdOffcuts,
       fireRecord,
+      notificationContext: {
+        jobId: job.id,
+        jobName: job.urunAdi,
+        customerName: job.musteriAdi,
+        workScheduleId: execution.schedulePhase.workSchedule.id,
+        phaseId: execution.schedulePhaseId,
+        schedulePhaseId: execution.schedulePhaseId,
+        phaseOperationId: execution.phaseOperationId,
+        stockPlateId: plate.id,
+        consumedAreaCm2,
+        consumedCost,
+        consumeMovementId: consumeMovement.id,
+        offcutMovementIds: offcutMovements.map((movement) => movement.id),
+        offcutIds: createdOffcuts.map((offcut) => offcut.id),
+        offcutCodes: createdOffcuts.map((offcut) => offcut.offcutCode),
+        offcutTotalCost,
+      },
     };
   });
+
+  await notifyStockConsumed({
+    atolyeId: input.atolyeId,
+    userId: input.userId,
+    personelId: input.personelId,
+    reservationIds: [result.reservationId],
+    stockPlateIds: [result.notificationContext.stockPlateId],
+    stockMovementIds: [result.notificationContext.consumeMovementId],
+    jobId: result.notificationContext.jobId,
+    jobName: result.notificationContext.jobName,
+    customerName: result.notificationContext.customerName,
+    workScheduleId: result.notificationContext.workScheduleId,
+    phaseId: result.notificationContext.phaseId,
+    schedulePhaseId: result.notificationContext.schedulePhaseId,
+    phaseOperationId: result.notificationContext.phaseOperationId,
+    quantity: 1,
+    amount: result.notificationContext.consumedCost,
+    metadata: {
+      action: "cut_result_consumed",
+      materialConsumptionId: result.materialConsumption.id,
+      consumedAreaCm2: result.notificationContext.consumedAreaCm2,
+    },
+  });
+
+  if (result.notificationContext.offcutIds.length > 0) {
+    await notifyOffcutCreated({
+      atolyeId: input.atolyeId,
+      userId: input.userId,
+      personelId: input.personelId,
+      offcutIds: result.notificationContext.offcutIds,
+      offcutCodes: result.notificationContext.offcutCodes,
+      stockPlateId: result.notificationContext.stockPlateId,
+      stockMovementIds: result.notificationContext.offcutMovementIds,
+      jobId: result.notificationContext.jobId,
+      jobName: result.notificationContext.jobName,
+      customerName: result.notificationContext.customerName,
+      phaseId: result.notificationContext.phaseId,
+      schedulePhaseId: result.notificationContext.schedulePhaseId,
+      phaseOperationId: result.notificationContext.phaseOperationId,
+      quantity: result.notificationContext.offcutIds.length,
+      amount: result.notificationContext.offcutTotalCost,
+      metadata: {
+        action: "cut_result_offcut_created",
+      },
+    });
+  }
+
+  const { notificationContext: _notificationContext, ...response } = result;
+  return response;
 }
