@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
     const auth = await getAtolyeAuth()
     if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
     const atolyeId = auth.atolyeId
+    const isOwner = auth.role === 'admin'
 
     const mevcut = await prisma.personel.count({
       where: { atolyeId, aktif: true },
@@ -102,6 +103,10 @@ export async function POST(req: NextRequest) {
     }
 
     const veri = await req.json()
+    if (veri.isPatron !== undefined && !isOwner) {
+      return NextResponse.json({ hata: 'Patron bildirimi yetkisini sadece yönetici değiştirebilir.' }, { status: 403 })
+    }
+
     const hashedPassword = veri.password ? await bcrypt.hash(veri.password, 10) : ''
 
     const personel = await prisma.personel.create({
@@ -116,6 +121,7 @@ export async function POST(req: NextRequest) {
         email: veri.email || '',
         password: hashedPassword,
         aktif: true,
+        isPatron: isOwner ? Boolean(veri.isPatron) : false,
         rolGrubu: veri.rolGrubu || 'DIGER',
         brutMaas: parseFloat(veri.brutMaas) || 0,
         sgkOrani: parseFloat(veri.sgkOrani) || 20.5,
@@ -147,8 +153,12 @@ export async function PUT(req: NextRequest) {
     const auth = await getAtolyeAuth()
     if (!auth) return NextResponse.json({ hata: 'Yetkisiz.' }, { status: 401 })
     const atolyeId = auth.atolyeId
+    const isOwner = auth.role === 'admin'
 
     const veri = await req.json()
+    if (veri.isPatron !== undefined && !isOwner) {
+      return NextResponse.json({ hata: 'Patron bildirimi yetkisini sadece yönetici değiştirebilir.' }, { status: 403 })
+    }
 
     const mevcut = await prisma.personel.findFirst({
       where: {
@@ -180,6 +190,7 @@ export async function PUT(req: NextRequest) {
         telefon: veri.telefon || '',
         email: veri.email || '',
         aktif: veri.aktif ?? true,
+        ...(isOwner && veri.isPatron !== undefined && { isPatron: Boolean(veri.isPatron) }),
         ...(veri.rolGrubu !== undefined && { rolGrubu: veri.rolGrubu }),
         ...(veri.brutMaas !== undefined && { brutMaas: parseFloat(veri.brutMaas) || 0 }),
         ...(veri.sgkOrani !== undefined && { sgkOrani: parseFloat(veri.sgkOrani) || 20.5 }),

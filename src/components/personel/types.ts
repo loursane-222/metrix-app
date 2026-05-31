@@ -7,6 +7,7 @@ export type Personel = {
   telefon: string
   email: string
   aktif: boolean
+  isPatron?: boolean
   bagliOldugu?: { id: string; ad: string; soyad: string } | null
   performansNotu: number | null
   toplamGorev: number

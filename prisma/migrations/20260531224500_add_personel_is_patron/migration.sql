@@ -1,0 +1,1 @@
+ALTER TABLE "personel" ADD COLUMN "isPatron" BOOLEAN NOT NULL DEFAULT false;

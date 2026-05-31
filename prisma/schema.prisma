@@ -357,8 +357,8 @@ model SchedulePhaseOperation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  executions PhaseExecution[]
-  events     PhaseExecutionEvent[]
+  executions  PhaseExecution[]
+  events      PhaseExecutionEvent[]
   fireRecords FireRecord[]
 
   @@unique([schedulePhaseId, operationType])
@@ -385,6 +385,7 @@ model Personel {
   email       String  @default("")
   password    String  @default("")
   aktif       Boolean @default(true)
+  isPatron    Boolean @default(false)
 
   rolGrubu         PersonelRolGrubu @default(DIGER)
   brutMaas         Decimal          @default(0)
@@ -658,7 +659,7 @@ model MaterialConsumption {
 }
 
 model FireRecord {
-  id               String    @id @default(cuid())
+  id               String                  @id @default(cuid())
   atolyeId         String
   isId             String?
   phaseExecutionId String?
@@ -667,16 +668,16 @@ model FireRecord {
   stockPlateId     String?
   offcutId         String?
   fireType         String
-  status           String    @default("PENDING")
+  status           String                  @default("PENDING")
   reasonCode       String?
   areaCm2          Decimal?
   estimatedCost    Decimal?
   finalCost        Decimal?
-  currency         String    @default("TRY")
+  currency         String                  @default("TRY")
   note             String?
   resolvedAt       DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 
   @@index([atolyeId, isId])
   @@index([atolyeId, status])

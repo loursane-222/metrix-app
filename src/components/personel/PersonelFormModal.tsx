@@ -14,6 +14,7 @@ interface FormState {
   telefon: string
   email: string
   password: string
+  isPatron: boolean
   brutMaas: string
   sgkOrani: string
   iseBaslamaTarihi: string
@@ -30,6 +31,7 @@ const BOS_FORM: FormState = {
   telefon: "",
   email: "",
   password: "",
+  isPatron: false,
   brutMaas: "",
   sgkOrani: "20.5",
   iseBaslamaTarihi: "",
@@ -85,6 +87,7 @@ export function PersonelFormModal({
         telefon: editingPersonel.telefon || "",
         email: editingPersonel.email || "",
         password: "",
+        isPatron: Boolean(editingPersonel.isPatron),
         brutMaas: editingPersonel.brutMaas ? String(editingPersonel.brutMaas) : "",
         sgkOrani: String(editingPersonel.sgkOrani ?? 20.5),
         iseBaslamaTarihi: editingPersonel.iseBaslamaTarihi
@@ -97,7 +100,7 @@ export function PersonelFormModal({
     }
   }, [open, editingPersonel?.id])
 
-  function set(key: keyof FormState, val: string) {
+  function set(key: keyof FormState, val: string | boolean) {
     setForm((prev) => ({ ...prev, [key]: val }))
   }
 
@@ -117,6 +120,7 @@ export function PersonelFormModal({
         telefon: form.telefon.trim(),
         email: form.email.trim(),
         ...(form.password ? { password: form.password } : {}),
+        isPatron: form.isPatron,
         brutMaas: parseFloat(form.brutMaas) || 0,
         sgkOrani: parseFloat(form.sgkOrani) || 20.5,
         iseBaslamaTarihi: form.iseBaslamaTarihi || null,
@@ -199,6 +203,16 @@ export function PersonelFormModal({
               ))}
             </select>
           </Field>
+
+          <label className="flex min-h-[44px] items-center gap-3 rounded-xl border border-slate-800 bg-[#111827] px-3 py-2 md:col-span-2">
+            <input
+              type="checkbox"
+              checked={form.isPatron}
+              onChange={(e) => set("isPatron", e.target.checked)}
+              className="h-4 w-4 accent-emerald-500"
+            />
+            <span className="text-sm text-slate-200">Patron / yönetici bildirimi alsın</span>
+          </label>
 
           <Field label="Bağlı Olduğu" target="personel-manager">
             <select
