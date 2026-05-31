@@ -164,15 +164,21 @@ export default function AtolyePage() {
 
     if (av.atolye) {
       const x = av.atolye
+      const toplamlar = gv.toplamlar || {}
+      const giderDegeri = (kategori: string, fallback: unknown) => {
+        const toplam = Number(toplamlar[kategori])
+        return toplam > 0 ? String(Math.round(toplam)) : String(fallback || '')
+      }
+
       setForm({
         atolyeAdi: String(x.atolyeAdi || ''), sehir: String(x.sehir || ''), ilce: String(x.ilce || ''),
         telefon: String(x.telefon || ''), email: String(x.email || ''), adres: String(x.adres || ''),
         kurulusYili: String(x.kurulusYili || ''),
-        toplamMaas: String(x.toplamMaas || ''), sgkGideri: String(x.sgkGideri || ''),
-        yemekGideri: String(x.yemekGideri || ''), yolGideri: String(x.yolGideri || ''),
-        kira: String(x.kira || ''), elektrik: String(x.elektrik || ''), su: String(x.su || ''),
-        dogalgaz: String(x.dogalgaz || ''), internet: String(x.internet || ''),
-        sarfMalzeme: String(x.sarfMalzeme || ''), digerGider: '0',
+        toplamMaas: giderDegeri('toplamMaas', x.toplamMaas), sgkGideri: giderDegeri('sgkGideri', x.sgkGideri),
+        yemekGideri: giderDegeri('yemekGideri', x.yemekGideri), yolGideri: giderDegeri('yolGideri', x.yolGideri),
+        kira: giderDegeri('kira', x.kira), elektrik: giderDegeri('elektrik', x.elektrik), su: giderDegeri('su', x.su),
+        dogalgaz: giderDegeri('dogalgaz', x.dogalgaz), internet: giderDegeri('internet', x.internet),
+        sarfMalzeme: giderDegeri('sarfMalzeme', x.sarfMalzeme), digerGider: giderDegeri('diger', ''),
         aylikPorselenPlaka: String(x.aylikPorselenPlaka || ''), aylikKuvarsPlaka: String(x.aylikKuvarsPlaka || ''),
         aylikDogaltasPlaka: String(x.aylikDogaltasPlaka || ''), plakaBasinaMtul: (() => { const v = parseFloat(String(x.plakaBasinaMtul || '3.20')); return Number.isFinite(v) ? v.toFixed(2) : '3.20' })(),
         kdvOrani: String(x.kdvOrani || '20'), teklifGecerlilik: String(x.teklifGecerlilik || '15'),
@@ -387,8 +393,10 @@ export default function AtolyePage() {
   }
 
   async function giderSil(id: string) {
-    await fetch('/api/aylik-gider', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
-    setGecmisGiderler(prev => prev.filter(x => x.id !== id))
+    const res = await fetch('/api/aylik-gider', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    if (res.ok) {
+      await yukle()
+    }
   }
 
 // ParaInput moved to top-level
