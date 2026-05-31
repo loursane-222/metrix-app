@@ -251,6 +251,7 @@ model IsOperasyon {
 }
 
 enum PhaseType {
+  TAS_ALINACAK
   OLCU
   IMALAT
   MONTAJ

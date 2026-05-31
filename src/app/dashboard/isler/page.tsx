@@ -27,6 +27,17 @@ function IsChip({ label, value, tone = "text-white" }: { label: string; value: s
   )
 }
 
+function formatTeklifYasi(value: string | Date | null | undefined) {
+  if (!value) return ""
+  const created = new Date(value).getTime()
+  if (!Number.isFinite(created)) return ""
+  const diffHours = Math.max(0, Math.floor((Date.now() - created) / 1000 / 60 / 60))
+  if (diffHours < 1) return "az önce"
+  if (diffHours < 72) return `${diffHours} saat önce`
+  const diffDays = Math.max(1, Math.floor(diffHours / 24))
+  return `${diffDays} gün önce`
+}
+
 export default function IslerPage() {
   const router = useRouter()
   const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
@@ -80,12 +91,13 @@ export default function IslerPage() {
     const created = i.createdAt ? new Date(i.createdAt).getTime() : simdi
     const sonBakis = i.teklifSonGoruntulenmeTarihi ? new Date(i.teklifSonGoruntulenmeTarihi).getTime() : null
     const teklifYasiSaat = (simdi - created) / 1000 / 60 / 60
+    const teklifYasi = formatTeklifYasi(i.createdAt)
     const son24SaatteBakildi = sonBakis ? (simdi - sonBakis) / 1000 / 60 / 60 <= 24 : false
     if (onaylandi) return { seviye: "onay", baslik: "Teklif onaylandı", metin: "Bu iş artık satış sonrası operasyon akışında.", renk: "text-emerald-300", skor: 5, etiket: "", aksiyon: "Operasyona al", barColor: "#10b981" }
     if (goruntulenme === 0) {
-      if (teklifYasiSaat >= 72) return { seviye: "72s", baslik: "72 saattir açılmadı", metin: "Bu teklif soğuyor. Telefonla arama veya güçlü takip mesajı gerekli.", renk: "text-red-300", skor: 0, etiket: "Soğuk", aksiyon: "Ara veya yeniden gönder", barColor: "#ef4444" }
-      if (teklifYasiSaat >= 48) return { seviye: "48s", baslik: "48 saattir açılmadı", metin: "İkinci takip mesajı zamanı.", renk: "text-amber-300", skor: 1, etiket: "Zayıf", aksiyon: "Takip mesajı gönder", barColor: "#f59e0b" }
-      if (teklifYasiSaat >= 24) return { seviye: "24s", baslik: "24 saattir açılmadı", metin: "Nazik hatırlatma mesajı gönderilebilir.", renk: "text-blue-300", skor: 1, etiket: "Beklemede", aksiyon: "Nazik hatırlat", barColor: "#3b82f6" }
+      if (teklifYasiSaat >= 72) return { seviye: "72s", baslik: `${teklifYasi} iletildi`, metin: "Bu teklif soğuyor. Telefonla arama veya güçlü takip mesajı gerekli.", renk: "text-red-300", skor: 0, etiket: "Soğuk", aksiyon: "Ara veya yeniden gönder", barColor: "#ef4444" }
+      if (teklifYasiSaat >= 48) return { seviye: "48s", baslik: `${teklifYasi} iletildi`, metin: "İkinci takip mesajı zamanı.", renk: "text-amber-300", skor: 1, etiket: "Zayıf", aksiyon: "Takip mesajı gönder", barColor: "#f59e0b" }
+      if (teklifYasiSaat >= 24) return { seviye: "24s", baslik: `${teklifYasi} iletildi`, metin: "Nazik hatırlatma mesajı gönderilebilir.", renk: "text-blue-300", skor: 1, etiket: "Beklemede", aksiyon: "Nazik hatırlat", barColor: "#3b82f6" }
       return { seviye: "bekle", baslik: "Teklif beklemede", metin: "Henüz takip için erken.", renk: "text-slate-300", skor: 0, etiket: "Yeni", aksiyon: "Bekle", barColor: "#64748b" }
     }
     let skor = 1
@@ -278,6 +290,27 @@ export default function IslerPage() {
     return { label: (fazEtiket[aktif.phase] || aktif.phase) + ' Programı', date: tarih, done: false }
   }
 
+  function isProgramli(item: any) {
+    return Boolean(item?.hasPlan || scheduleMap[item?.id]?.length)
+  }
+
+  function programBadgeBilgisi(item: any) {
+    const faz = aktifFazBilgisi(item.id)
+    if (faz) return faz
+    if (item?.hasPlan) return { label: 'Programlandı', date: null, done: false, planned: true }
+    return null
+  }
+
+  function listeDurumKisaEtiket(item: any) {
+    if (item?.durum === 'onaylandi' && isProgramli(item)) return 'Programda'
+    return durumKisaEtiket(item?.durum)
+  }
+
+  function listeDurumTone(item: any): BadgeTone {
+    if (item?.durum === 'onaylandi' && isProgramli(item)) return 'blue'
+    return durumTone(item?.durum)
+  }
+
   function durumRenk(durum?: string) {
     if (durum === 'onaylandi') return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
     if (durum === 'montaj_tamamlandi') return 'text-teal-400 border-teal-500/30 bg-teal-500/10'
@@ -450,8 +483,9 @@ export default function IslerPage() {
                 </div>
               )}
               {filtreliIsler.map((is: any) => {
-                const faz = aktifFazBilgisi(is.id)
-                const hasFazSignal = (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) || !!faz
+                const faz = programBadgeBilgisi(is)
+                const programli = isProgramli(is)
+                const hasFazSignal = (is.durum === 'onaylandi' && !programli) || !!faz
                 const takip = teklifTakipDurumu(is)
                 const hasTakipSignal = !(takip.skor === 0 && takip.seviye === "bekle")
                 const showTas = !!is.tasDurumu && !hasFazSignal && !hasTakipSignal
@@ -462,7 +496,7 @@ export default function IslerPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-base font-black">{is.musteriAdi}</p>
-                      {is.durum === 'onaylandi' && !scheduleMap[is.id]?.length ? (
+                      {is.durum === 'onaylandi' && !programli ? (
                         <div onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
                           className="mt-1 flex w-fit items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[11px] font-semibold text-orange-300 cursor-pointer">
                           ⚠ Program Bekliyor
@@ -483,7 +517,7 @@ export default function IslerPage() {
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-200">{paraGoster(Number(is.satisFiyati || 0))}</p>
                         {is.createdAt && (
-                          <p className="text-[11px] text-slate-500">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>
+                          <p className="text-[11px] text-slate-500">{formatTeklifYasi(is.createdAt)}</p>
                         )}
                         {hasTakipSignal && (
                           <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
@@ -493,8 +527,8 @@ export default function IslerPage() {
                         )}
                       </div>
                     </div>
-                    <DarkBadge tone={durumTone(is.durum)} dot shape="soft" size="sm">
-                      {durumKisaEtiket(is.durum)}
+                    <DarkBadge tone={listeDurumTone(is)} dot shape="soft" size="sm">
+                      {listeDurumKisaEtiket(is)}
                     </DarkBadge>
                   </div>
                 </button>
@@ -678,8 +712,9 @@ export default function IslerPage() {
               </div>
             )}
             {filtreliIsler.map((is) => {
-              const faz = aktifFazBilgisi(is.id)
-              const hasFazSignal = (is.durum === 'onaylandi' && !scheduleMap[is.id]?.length) || !!faz
+              const faz = programBadgeBilgisi(is)
+              const programli = isProgramli(is)
+              const hasFazSignal = (is.durum === 'onaylandi' && !programli) || !!faz
               const takip = teklifTakipDurumu(is)
               const hasTakipSignal = !(takip.skor === 0 && takip.seviye === "bekle")
               const showTas = !!is.tasDurumu && !hasFazSignal && !hasTakipSignal
@@ -689,7 +724,7 @@ export default function IslerPage() {
                   <div className="flex justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-slate-100">{is.musteriAdi}</p>
-                      {is.durum === 'onaylandi' && !scheduleMap[is.id]?.length ? (
+                      {is.durum === 'onaylandi' && !programli ? (
                         <button onClick={e => { e.stopPropagation(); setAktifIs(is); setUretimPlaniAcik(true); }}
                           className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/30 px-2 py-0.5 text-[10px] font-semibold text-orange-300">
                           ⚠ Program Bekliyor
@@ -709,15 +744,15 @@ export default function IslerPage() {
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
-                      <DarkBadge tone={durumTone(is.durum)} dot shape="soft" size="sm" className="h-fit">
-                        {durumKisaEtiket(is.durum)}
+                      <DarkBadge tone={listeDurumTone(is)} dot shape="soft" size="sm" className="h-fit">
+                        {listeDurumKisaEtiket(is)}
                       </DarkBadge>
                     </div>
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold text-slate-200">{paraGoster(Number(is.satisFiyati || 0))}</p>
                     <div className="flex items-center gap-2">
-                      {is.createdAt && <p className="text-[11px] text-slate-500">{new Date(is.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</p>}
+                      {is.createdAt && <p className="text-[11px] text-slate-500">{formatTeklifYasi(is.createdAt)}</p>}
                       {hasTakipSignal && (
                         <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
                           style={{ color: takip.barColor, borderColor: takip.barColor + "44", background: takip.barColor + "15" }}>
@@ -867,7 +902,7 @@ export default function IslerPage() {
                     <div className="rounded-xl border border-slate-800 bg-[#0B1120] p-3"><p className="text-[10px] text-slate-400">Taş Durumu</p><p className={`mt-1 text-xs font-semibold ${aktifIs.tasDurumu === 'alinacak' ? 'text-amber-400' : aktifIs.tasDurumu ? 'text-emerald-400' : 'text-slate-400'}`}>{aktifIs.tasDurumu === 'alinacak' ? 'Alınacak' : aktifIs.tasDurumu ? 'Stokta' : '—'}</p></div>
                   </div>
                   {(() => {
-                    const faz = aktifFazBilgisi(aktifIs.id)
+                    const faz = programBadgeBilgisi(aktifIs)
                     return (
                       <div className="mt-2 rounded-xl border border-slate-800 bg-[#0B1120] p-3">
                         <p className="text-[10px] text-slate-400">Üretim Fazı</p>
@@ -878,7 +913,7 @@ export default function IslerPage() {
                             </span>
                             {faz.date && <p className="text-xs text-slate-400">{faz.date}</p>}
                           </div>
-                        ) : aktifIs.durum === 'onaylandi' ? (
+                        ) : aktifIs.durum === 'onaylandi' && !isProgramli(aktifIs) ? (
                           <p className="mt-1 text-xs text-orange-300">Program bekliyor — BottomActionBar'dan Üretim ile planlayın</p>
                         ) : (
                           <p className="mt-1 text-xs text-slate-500">Henüz programa alınmadı</p>

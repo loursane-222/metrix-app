@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { emitMetrixEvent } from "@/lib/events/emitMetrixEvent";
 import { appendExecutionTimelineEvent } from "@/lib/execution/events";
 import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
+import { syncStonePurchasePhaseForOlcu } from "@/lib/scheduleStonePhase";
 import { notifyPhaseAssigned, notifyPhaseNoteAdded } from "@/lib/scheduleNotifications";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -56,6 +57,13 @@ export async function PATCH(req: NextRequest) {
         await tx.schedulePhase.update({ where: { id: phaseId }, data: { plannedStart: nextDate, plannedEnd: nextDate } });
         if (phase.phase === "OLCU") await tx.workSchedule.update({ where: { id: phase.workScheduleId }, data: { startDate: nextDate } });
         if (phase.phase === "MONTAJ") await tx.workSchedule.update({ where: { id: phase.workScheduleId }, data: { endDate: nextDate } });
+        if (phase.phase === "OLCU") {
+          await syncStonePurchasePhaseForOlcu(tx, {
+            workScheduleId: phase.workScheduleId,
+            job: phase.workSchedule.is,
+            olcuPlannedStart: nextDate,
+          });
+        }
       }
       if (notes !== undefined) await tx.workSchedule.update({ where: { id: phase.workScheduleId }, data: { notes } });
       if (photoUrl !== undefined) {

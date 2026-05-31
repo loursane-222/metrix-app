@@ -195,39 +195,6 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
         });
       });
 
-      // Virtual "taş alınacak" hazırlık kartı — DB'ye yazılmaz, computed.
-      if (schedule.is?.tasDurumu === "alinacak") {
-        const olcuPhase = schedule.phases?.find((p: any) => p.phase === "OLCU");
-        if (olcuPhase?.plannedStart) {
-          const olcuDate = new Date(olcuPhase.plannedStart);
-          // 3 iş günü geri git (hafta sonu atla)
-          let d = new Date(olcuDate);
-          let count = 0;
-          while (count < 3) {
-            d.setDate(d.getDate() - 1);
-            const day = d.getDay();
-            if (day !== 0 && day !== 6) count++;
-          }
-          d.setHours(9, 0, 0, 0);
-
-          mapped.push({
-            id: `virtual-tas-${schedule.id}`,
-            scheduleId: schedule.id,
-            schedule,
-            title: schedule.is?.musteriAdi || "İsimsiz İş",
-            subtitle: schedule.is?.urunAdi || schedule.is?.teklifNo || "",
-            phase: "TAS_ALINACAK",
-            date: d.toISOString(),
-            endDate: d.toISOString(),
-            completed: false,
-            personelText: "—",
-            toplamSureDakika: 0,
-            fazAtamalari: [],
-            executionStatus: null,
-            virtual: true,
-          });
-        }
-      }
     });
 
     return mapped.sort((a, b) => +new Date(a.date) - +new Date(b.date));
@@ -428,41 +395,7 @@ export function PremiumWorkCalendar({ initialSchedules = [], initialYear, initia
   function TaskCard({ task, compact = false }: { task: any; compact?: boolean }) {
     const m = meta(task.phase);
     const delayed = !task.completed && dayjs(task.date).isBefore(dayjs(), "day");
-    const isVirtual = !!task.virtual;
     const operationLabels = productionOperationSummary(task.productionOperations);
-
-    if (isVirtual) {
-      return (
-        <div
-          className={[
-            "w-full rounded-2xl border border-dashed border-orange-400/50 bg-gradient-to-br p-3 text-left",
-            m.soft,
-          ].join(" ")}
-          title="Bu görev taş tedarik hatırlatmasıdır. Tıklanamaz."
-        >
-          <div className="flex items-start gap-3">
-            {!compact && (
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${m.bg} text-lg`}>
-                {m.icon}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className={`text-xs font-bold ${m.text}`}>{formatTaskTime(task.date)}</div>
-              <div className="mt-0.5 line-clamp-2 text-sm font-semibold text-white">{task.title}</div>
-              <div className="mt-0.5 line-clamp-1 text-xs text-slate-400">{task.subtitle || "Taş hazırlık"}</div>
-              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${m.bg} ${m.text}`}>
-                  {m.label.toUpperCase()}
-                </span>
-                <span className="rounded-md bg-orange-500/10 px-2 py-0.5 text-[10px] font-semibold text-orange-300">
-                  HATIRLATICI
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
 
     return (
       <button

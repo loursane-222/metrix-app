@@ -6,6 +6,7 @@ import { jwtVerify } from "jose";
 import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
 import { notifyJobScheduled } from "@/lib/scheduleNotifications";
 import { notifyStockReserved } from "@/lib/stockNotifications";
+import { syncStonePurchasePhaseForOlcu } from "@/lib/scheduleStonePhase";
 
 async function ownerAtolyeIdAl() {
   const cookieStore = await cookies();
@@ -154,13 +155,36 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      await syncStonePurchasePhaseForOlcu(tx, {
+        workScheduleId: created.id,
+        job,
+        olcuPlannedStart: olcu,
+      });
+
       const activatedReservations = await activateDraftReservationsForJob(tx, {
         atolyeId,
         isId,
         schedulePhaseId: imalatPhase?.id ?? null,
       });
 
-      return { schedule: created, activatedReservations };
+      const schedule = await tx.workSchedule.findUnique({
+        where: { id: created.id },
+        include: {
+          is: true,
+          phases: {
+            include: {
+              fazAtamalar: {
+                include: { personel: true },
+              },
+              operations: {
+                orderBy: { operationType: "asc" },
+              },
+            },
+          },
+        },
+      });
+
+      return { schedule: schedule ?? created, activatedReservations };
     });
     const schedule = transactionResult.schedule;
 

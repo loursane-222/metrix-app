@@ -9,6 +9,7 @@ const TR_MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","A
 const TR_DAYS = ["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
 
 const PHASE_STYLES = {
+  TAS_ALINACAK: { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", dot: "bg-orange-400", chip: "bg-orange-100 text-orange-700 border-orange-200" },
   OLCU:   { bg: "bg-blue-50",  text: "text-blue-700",  border: "border-blue-200",  dot: "bg-blue-500", chip: "bg-blue-100 text-blue-700 border-blue-200" },
   IMALAT: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500", chip: "bg-amber-100 text-amber-700 border-amber-200" },
   MONTAJ: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500", chip: "bg-emerald-100 text-emerald-700 border-emerald-200" },
@@ -17,7 +18,7 @@ const PHASE_STYLES = {
 interface PhaseEntry {
   phaseId: string;
   scheduleId: string;
-  phase: "OLCU" | "IMALAT" | "MONTAJ";
+  phase: "TAS_ALINACAK" | "OLCU" | "IMALAT" | "MONTAJ";
   isCompleted: boolean;
   musteriAdi: string;
   teklifNo: string;
@@ -278,42 +279,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth, init
   }
 
   function getTasAlinacakForDay(day: number): TasAlinacakEntry[] {
-    const date = new Date(year, month - 1, day);
-    date.setHours(0, 0, 0, 0);
-
-    const entries: TasAlinacakEntry[] = [];
-
-    for (const schedule of schedules) {
-      if (!schedule.is) continue;
-
-      const is = schedule.is as any;
-      const phases = (schedule.phases || []) as any[];
-
-      // Sadece "taş alınacak" seçilmiş işler takvime otomatik düşer
-      if (is.tasDurumu !== "alinacak") continue;
-
-      const olcuPhase = phases.find((p: any) => p.phase === "OLCU");
-      if (!olcuPhase?.plannedStart) continue;
-
-      const tasAdi = is.urunAdi || is.malzemeTipi || "Taş";
-      const olcuTarihi = new Date(olcuPhase.plannedStart);
-
-      // Ölçü tarihinden 3 iş günü önce otomatik taş takip tarihi
-      const tasAlisTarihi = isGunuGeriGit(olcuTarihi, 3);
-      tasAlisTarihi.setHours(0, 0, 0, 0);
-
-      if (tasAlisTarihi.getTime() === date.getTime()) {
-        entries.push({
-          isId: is.id,
-          musteriAdi: is.musteriAdi,
-          tasAdi,
-          olcuTarihi,
-          tasAlindi: is.tasDurumu === "alindi",
-        });
-      }
-    }
-
-    return entries;
+    return [];
   }
 
   function getPhaseEntriesForDay(day: number): PhaseEntry[] {
@@ -336,7 +302,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth, init
           entries.push({
             phaseId: phase.id,
             scheduleId: schedule.id,
-            phase: phase.phase as "OLCU" | "IMALAT" | "MONTAJ",
+            phase: phase.phase as "TAS_ALINACAK" | "OLCU" | "IMALAT" | "MONTAJ",
             isCompleted: phase.isCompleted,
             musteriAdi: schedule.is.musteriAdi,
             teklifNo: schedule.is.teklifNo,
@@ -395,7 +361,7 @@ export function WorkCalendar({ initialSchedules, initialYear, initialMonth, init
 
   const monthlyStats = useMemo(() => {
     const phaseEntries = Array.from({ length: daysInMonth }, (_, idx) => getPhaseEntriesForDay(idx + 1)).flat();
-    const tasEntries = Array.from({ length: daysInMonth }, (_, idx) => getTasAlinacakForDay(idx + 1)).flat();
+    const tasEntries = phaseEntries.filter((entry) => entry.phase === "TAS_ALINACAK");
 
     const tamamlanan = phaseEntries.filter((e) => e.isCompleted).length;
     const aktif = phaseEntries.filter((e) => !e.isCompleted).length;

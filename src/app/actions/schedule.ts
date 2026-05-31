@@ -8,6 +8,7 @@ import { PhaseType, PHASE_ORDER, canCompletePhase } from "@/lib/types/schedule";
 import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
 import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
 import { notifyStockReserved } from "@/lib/stockNotifications";
+import { syncStonePurchasePhaseForOlcu } from "@/lib/scheduleStonePhase";
 import {
   notifyJobScheduled,
   notifyPhaseCompleted,
@@ -277,7 +278,16 @@ export async function upsertWorkSchedule(data: {
         }
       }
 
-      const phases = await tx.schedulePhase.findMany({ where: { workScheduleId: saved.id } });
+      let phases = await tx.schedulePhase.findMany({ where: { workScheduleId: saved.id } });
+
+      const olcuPhaseForStone = phases.find((phase) => phase.phase === "OLCU");
+      await syncStonePurchasePhaseForOlcu(tx, {
+        workScheduleId: saved.id,
+        job: is,
+        olcuPlannedStart: olcuPhaseForStone?.plannedStart ?? data.startDate,
+      });
+
+      phases = await tx.schedulePhase.findMany({ where: { workScheduleId: saved.id } });
       if (!existingSchedule) {
         const imalatPhase = phases.find((phase) => phase.phase === "IMALAT");
         if (imalatPhase) {
@@ -608,12 +618,24 @@ export async function movePhase(data: {
   if (!phase) throw new Error("Aşama bulunamadı");
   if (phase.workSchedule.is.atolyeId !== auth.atolyeId) throw new Error("Yetkisiz");
 
-  const updated = await prisma.schedulePhase.update({
-    where: { id: data.schedulePhaseId },
-    data: {
-      plannedStart: data.newStart,
-      plannedEnd: data.newEnd,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const saved = await tx.schedulePhase.update({
+      where: { id: data.schedulePhaseId },
+      data: {
+        plannedStart: data.newStart,
+        plannedEnd: data.newEnd,
+      },
+    });
+
+    if (phase.phase === "OLCU") {
+      await syncStonePurchasePhaseForOlcu(tx, {
+        workScheduleId: phase.workScheduleId,
+        job: phase.workSchedule.is,
+        olcuPlannedStart: data.newStart,
+      });
+    }
+
+    return saved;
   });
 
   await notifySchedulePhaseDateChanged({

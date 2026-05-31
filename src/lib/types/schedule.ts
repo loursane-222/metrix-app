@@ -1,14 +1,20 @@
-export type PhaseType = "OLCU" | "IMALAT" | "MONTAJ";
+export type PhaseType = "TAS_ALINACAK" | "OLCU" | "IMALAT" | "MONTAJ";
 
 export const PHASE_ORDER: PhaseType[] = ["OLCU", "IMALAT", "MONTAJ"];
 
 export const PHASE_LABELS: Record<PhaseType, string> = {
+  TAS_ALINACAK: "Taş Alınacak",
   OLCU: "Ölçü",
   IMALAT: "İmalat",
   MONTAJ: "Montaj",
 };
 
 export const PHASE_COLORS: Record<PhaseType, { bg: string; text: string; border: string }> = {
+  TAS_ALINACAK: {
+    bg: "bg-orange-50 dark:bg-orange-950",
+    text: "text-orange-700 dark:text-orange-300",
+    border: "border-orange-200 dark:border-orange-800",
+  },
   OLCU: {
     bg: "bg-blue-50 dark:bg-blue-950",
     text: "text-blue-700 dark:text-blue-300",

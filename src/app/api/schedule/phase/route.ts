@@ -1,6 +1,7 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
 import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
+import { syncStonePurchasePhaseForOlcu } from "@/lib/scheduleStonePhase";
 import { NextRequest, NextResponse } from "next/server";
 
 
@@ -66,12 +67,24 @@ export async function PATCH(req: NextRequest) {
       phase.plannedEnd.toISOString().slice(0, 10) ===
         phase.plannedStart.toISOString().slice(0, 10);
 
-    const updated = await prisma.schedulePhase.update({
-      where: { id: phaseId },
-      data: {
-        plannedStart: nextDate,
-        ...(shouldMoveEnd ? { plannedEnd: nextDate } : {}),
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.schedulePhase.update({
+        where: { id: phaseId },
+        data: {
+          plannedStart: nextDate,
+          ...(shouldMoveEnd ? { plannedEnd: nextDate } : {}),
+        },
+      });
+
+      if (phase.phase === "OLCU") {
+        await syncStonePurchasePhaseForOlcu(tx, {
+          workScheduleId: phase.workScheduleId,
+          job: phase.workSchedule.is,
+          olcuPlannedStart: nextDate,
+        });
+      }
+
+      return saved;
     });
 
     const isAdi = phase.workSchedule.is.musteriAdi || phase.workSchedule.is.urunAdi || 'İş'

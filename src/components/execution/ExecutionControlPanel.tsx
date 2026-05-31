@@ -15,7 +15,7 @@ export interface ExecutionControlPanelProps {
   schedulePhaseId: string
   phaseOperationId?: string | null
   operationType?: "KESIM" | "TOPLAMA" | string | null
-  phaseType?: "OLCU" | "IMALAT" | "MONTAJ"
+  phaseType?: "TAS_ALINACAK" | "OLCU" | "IMALAT" | "MONTAJ"
   readOnly?: boolean
   completedAt?: string | Date | null
   onTransitionSuccess?: (execution: ExecutionData) => void
@@ -91,7 +91,7 @@ function getReasonsForPhase({
 }
 
 const PHASE_LABELS: Record<string, string> = {
-  OLCU: "Ölçü", IMALAT: "İmalat", MONTAJ: "Montaj",
+  TAS_ALINACAK: "Taş Alınacak", OLCU: "Ölçü", IMALAT: "İmalat", MONTAJ: "Montaj",
 }
 
 const OPERATION_LABELS: Record<string, string> = {

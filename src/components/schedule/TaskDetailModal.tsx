@@ -10,6 +10,7 @@ import { useExecution } from "@/hooks/useExecution";
 dayjs.locale("tr");
 
 const PHASE_META: Record<string, any> = {
+  TAS_ALINACAK: { label: "Taş Alınacak", icon: "🪨", text: "text-orange-300", bg: "bg-orange-500/10", border: "border-orange-500/25" },
   OLCU: { label: "Ölçü", icon: "📏", text: "text-blue-300", bg: "bg-blue-500/10", border: "border-blue-500/25" },
   IMALAT: { label: "İmalat", icon: "⚙️", text: "text-amber-300", bg: "bg-amber-500/10", border: "border-amber-500/25" },
   MONTAJ: { label: "Montaj", icon: "🔧", text: "text-emerald-300", bg: "bg-emerald-500/10", border: "border-emerald-500/25" },
@@ -38,6 +39,16 @@ function fmtDate(v: any) {
 
 function fmtShortDate(v: any) {
   return v ? dayjs(v).format("DD MMM HH:mm") : "";
+}
+
+function fmtMinutes(value: unknown) {
+  const minutes = Number(value || 0);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  const rounded = Math.round(minutes);
+  if (rounded < 60) return `${rounded} dk`;
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  return rest > 0 ? `${hours} sa ${rest} dk` : `${hours} sa`;
 }
 
 function delayDays(v: any, completed: boolean) {
@@ -106,6 +117,12 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
     () => (schedule?.phases || []).find((p: any) => p.id === task?.id || p.phase === phase),
     [schedule, task?.id, phase]
   );
+  const estimatedPhaseMinutes = useMemo(() => {
+    const total = Number(job?.toplamSureDakika || 0);
+    if (!Number.isFinite(total) || total <= 0) return null;
+    if (phase === "IMALAT") return total;
+    return null;
+  }, [job?.toplamSureDakika, phase]);
   const imalatOperations = useMemo(() => {
     const operations = Array.isArray(phaseRow?.operations) ? phaseRow.operations : [];
     return OPERATION_ORDER.map((operationType) => operations.find((op: any) => op.operationType === operationType)).filter(Boolean);
@@ -522,7 +539,16 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
 
                     <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5">
                       <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Tahmini Süre</div>
-                      <div className="mt-2 text-sm text-amber-200/60">Tahmini süre girilmedi</div>
+                      {estimatedPhaseMinutes ? (
+                        <div className="mt-2 text-2xl font-black text-amber-100">{fmtMinutes(estimatedPhaseMinutes)}</div>
+                      ) : (
+                        <div className="mt-2 text-sm text-amber-200/60">Tahmini süre girilmedi</div>
+                      )}
+                      {estimatedPhaseMinutes && (
+                        <div className="mt-1 text-xs text-amber-200/60">
+                          Teklif üretim süresi üzerinden otomatik alınır.
+                        </div>
+                      )}
                     </div>
 
                     <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
@@ -698,7 +724,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
               <div className="mt-4">
                 <ExecutionControlPanel
                   schedulePhaseId={task.id}
-                  phaseType={phase as "OLCU" | "IMALAT" | "MONTAJ"}
+                  phaseType={phase as "TAS_ALINACAK" | "OLCU" | "IMALAT" | "MONTAJ"}
                   readOnly={phaseRow?.isCompleted ?? task?.completed ?? false}
                   completedAt={phaseRow?.completedAt}
                   controlled={exec}

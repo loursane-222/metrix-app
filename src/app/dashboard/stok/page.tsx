@@ -593,6 +593,9 @@ export default function StokPage() {
     setManualProductSuccess("");
     setManualProductSaving(true);
     try {
+      const quantity = Math.max(1, Number(manualProductForm.quantity || 1));
+      const unitPlateCost = Number(manualProductForm.purchaseTotalCost || 0);
+      const totalOriginalCost = unitPlateCost * quantity;
       const res = await fetch("/api/stock/plates", {
         method: "POST",
         credentials: "include",
@@ -602,10 +605,13 @@ export default function StokPage() {
           materialType: manualProductForm.materialType,
           widthCm: Number(manualProductForm.widthCm),
           heightCm: Number(manualProductForm.heightCm),
-          purchaseTotalCost: Number(manualProductForm.purchaseTotalCost),
+          purchaseOriginalCost: totalOriginalCost,
+          purchaseTotalCost: totalOriginalCost,
+          unitPlateCost,
+          costInputMode: "UNIT_PLATE",
           purchaseFxRate: manualProductForm.currency === "TRY" ? 1 : Number(manualProductForm.purchaseFxRate),
           currency: manualProductForm.currency || "TRY",
-          quantity: Number(manualProductForm.quantity || 1),
+          quantity,
           shadeCode: manualProductForm.shadeCode || null,
           thicknessMm: manualProductForm.thicknessMm ? Number(manualProductForm.thicknessMm) : null,
           warehouseId: manualProductForm.warehouseId || null,
@@ -1948,7 +1954,7 @@ function ManualProductSheet({
               <input className={fieldClass} inputMode="decimal" value={form.heightCm} onChange={(e) => onChange({ heightCm: e.target.value })} />
             </div>
             <div>
-              <label className={labelClass}>Alış toplam maliyeti</label>
+              <label className={labelClass}>1 Plaka Alış Fiyatı</label>
               <input className={fieldClass} inputMode="decimal" value={form.purchaseTotalCost} onChange={(e) => onChange({ purchaseTotalCost: e.target.value })} />
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -2003,9 +2009,14 @@ function ManualProductSheet({
           {error && (
             <div className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</div>
           )}
+          {Number(form.purchaseTotalCost) > 0 && Number(form.quantity || 1) > 1 && (
+            <div className="mt-3 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-3 text-sm font-black text-blue-100">
+              {Number(form.quantity || 1)} plaka x {fmtMoney(Number(form.purchaseTotalCost), form.currency)} = {fmtMoney(Number(form.purchaseTotalCost) * Number(form.quantity || 1), form.currency)}
+            </div>
+          )}
           {form.currency !== "TRY" && Number(form.purchaseTotalCost) > 0 && Number(form.purchaseFxRate) > 0 && (
             <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm font-black text-emerald-100">
-              {fmtMoney(Number(form.purchaseTotalCost), form.currency)} · Kur {Number(form.purchaseFxRate).toLocaleString("tr-TR")} · {fmtTry(Number(form.purchaseTotalCost) * Number(form.purchaseFxRate))}
+              Toplam {fmtMoney(Number(form.purchaseTotalCost) * Number(form.quantity || 1), form.currency)} · Kur {Number(form.purchaseFxRate).toLocaleString("tr-TR")} · {fmtTry(Number(form.purchaseTotalCost) * Number(form.quantity || 1) * Number(form.purchaseFxRate))}
             </div>
           )}
         </div>
