@@ -33,12 +33,14 @@ export async function GET(req: NextRequest) {
     include: {
       operasyonlar: true,
       workSchedule: { select: { id: true } },
+      musteri: { select: { telefon: true } },
     },
   })
 
   const islerWithPlan = isler.map((i: any) => ({
     ...i,
     hasPlan: !!i.workSchedule,
+    musteriTelefonu: i.musteri?.telefon || "",
   }))
 
   return NextResponse.json({ isler: islerWithPlan })

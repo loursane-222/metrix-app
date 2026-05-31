@@ -7,15 +7,14 @@ import { PlakaPlanlayiciV2 } from '@/components/plaka-planlayici/PlakaPlanlayici
 import UretimPlaniModal from '@/components/schedule/UretimPlaniModal'
 import { MobileBottomSheet } from '@/components/ui/mobile/MobileBottomSheet'
 import { DarkBadge, type BadgeTone } from '@/components/ui/DarkBadge'
+import { normalizePhoneForWhatsapp, whatsappUrlForPhone } from '@/lib/whatsappPhone'
 
 function whatsappTeklifGonder(is: any) {
-  if (!is?.musteriTelefonu) { alert("Müşteri telefon numarası yok."); return; }
-  let phone = is.musteriTelefonu.replace(/\D/g, "");
-  if (phone.startsWith("0")) phone = "90" + phone.slice(1);
-  if (!phone.startsWith("90")) phone = "90" + phone;
+  const phone = normalizePhoneForWhatsapp(is?.musteriTelefonu)
+  if (!phone) { alert("Bu müşterinin kayıtlı telefonu yok."); return; }
   const teklifLink = `${window.location.origin}/teklif/${is.teklifNo}`;
   const mesaj = `Merhaba ${is.musteriAdi || ""},\n\nSizin için hazırladığımız teklifi aşağıdaki linkten inceleyebilirsiniz:\n\n${teklifLink}\n\nHerhangi bir sorunuz olursa memnuniyetle yardımcı olurum.`;
-  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}`, "_blank");
+  window.open(whatsappUrlForPhone(phone, mesaj), "_blank");
 }
 
 function IsChip({ label, value, tone = "text-white" }: { label: string; value: string; tone?: string }) {
@@ -65,10 +64,8 @@ export default function IslerPage() {
   }
 
   function aktifWhatsappGonder() {
-    const link = aktifTeklifLinki()
-    if (!link) return
-    const mesaj = encodeURIComponent(`Merhaba, teklifinizi aşağıdaki linkten inceleyip onaylayabilirsiniz:\n\n${link}`)
-    window.open(`https://wa.me/?text=${mesaj}`, "_blank")
+    if (!aktifIs) return
+    whatsappTeklifGonder(aktifIs)
   }
 
   async function aktifLinkKopyala() {

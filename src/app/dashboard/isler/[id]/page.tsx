@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { paraGoster } from '@/lib/format'
 import { teklifPdfIndir } from '@/lib/teklif-pdf'
+import { normalizePhoneForWhatsapp, whatsappUrlForPhone } from '@/lib/whatsappPhone'
 import { PlakaPlanlayiciMini, type PlakaHesapSonucu } from '@/components/plaka-planlayici/PlakaPlanlayiciMini'
 import {
   MobilePageContainer,
@@ -409,10 +410,11 @@ export default function IsDuzenle() {
 
   // Mobile WhatsApp
   function mobilWhatsapp() {
-    const rawPhone = String(isRaw?.musteriTelefonu || '')
-    let phone = rawPhone.replace(/\D/g, '')
-    if (phone.startsWith('0')) phone = '90' + phone.slice(1)
-    if (phone && !phone.startsWith('90')) phone = '90' + phone
+    const phone = normalizePhoneForWhatsapp(isRaw?.musteriTelefonu)
+    if (!phone) {
+      alert('Bu müşterinin kayıtlı telefonu yok.')
+      return
+    }
 
     const teklifNo = isRaw?.teklifNo || sonuc?.teklifNo || ''
     const link = teklifNo ? `${window.location.origin}/teklif/${teklifNo}` : ''
@@ -420,10 +422,7 @@ export default function IsDuzenle() {
       ? `Merhaba ${form.musteriAdi || 'Sayın Müşteri'},\n\nTeklifinizi aşağıdaki linkten inceleyebilirsiniz:\n\n${link}\n\nHerhangi bir sorunuz için yardımcı olmaktan memnuniyet duyarım.`
       : `Merhaba ${form.musteriAdi || 'Sayın Müşteri'}, teklifiniz hakkında bilgi almak için bize ulaşabilirsiniz.`
 
-    const waUrl = phone
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(mesaj)}`
-      : `https://wa.me/?text=${encodeURIComponent(mesaj)}`
-    window.open(waUrl, '_blank')
+    window.open(whatsappUrlForPhone(phone, mesaj), '_blank')
   }
 
   // Sonuç gelince sheet'i aç

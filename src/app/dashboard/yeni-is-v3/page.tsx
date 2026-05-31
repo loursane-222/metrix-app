@@ -1,6 +1,7 @@
 "use client";
 
 import { normalizeMtulDisplay } from "@/lib/normalizeMtul";
+import { whatsappUrlForPhone } from "@/lib/whatsappPhone";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -447,6 +448,20 @@ export default function YeniIsV3Page() {
   const [makineler, setMakineler]   = useState<any[]>([]);
   const [musteriArama, setMusteriArama]     = useState("");
   const [musteriListeAcik, setMusteriListeAcik] = useState(false);
+  const [musteriModalAcik, setMusteriModalAcik] = useState(false);
+  const [musteriKaydediliyor, setMusteriKaydediliyor] = useState(false);
+  const [musteriSecimYedek, setMusteriSecimYedek] = useState<{ id: string; ad: string; telefon?: string } | null>(null);
+  const [seciliMusteriTelefon, setSeciliMusteriTelefon] = useState("");
+  const [yeniMusteriForm, setYeniMusteriForm] = useState({
+    firmaAdi: "",
+    ad: "",
+    soyad: "",
+    telefon: "",
+    email: "",
+    acilisBakiyesi: "",
+    bakiyeTipi: "borc",
+    musteriTipi: "son_kullanici",
+  });
   const [plakaAcik, setPlakaAcik]           = useState(false);
   const [plakaInitialRows, setPlakaInitialRows] = useState<any[]>([]);
   const [stockPickerOpen, setStockPickerOpen] = useState(false);
@@ -576,6 +591,7 @@ export default function YeniIsV3Page() {
             // Ölçüleri parcalar'a dönüştür
             parcalar: yuklenenParcalar,
           }));
+          setSeciliMusteriTelefon(is.musteriTelefonu || is.musteri?.telefon || "");
         }).catch(() => {}).finally(() => setDuzenleYukleniyor(false));
         return;
       }
@@ -620,6 +636,12 @@ export default function YeniIsV3Page() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!form.musteriId || seciliMusteriTelefon) return;
+    const musteri = musteriler.find((m) => m.id === form.musteriId);
+    if (musteri?.telefon) setSeciliMusteriTelefon(musteri.telefon);
+  }, [form.musteriId, musteriler, seciliMusteriTelefon]);
 
   const setAlan = useCallback((key: keyof FormState, val: any) => {
     setForm((p) => ({ ...p, [key]: val }));
@@ -763,7 +785,78 @@ export default function YeniIsV3Page() {
     const tip = m.musteriTipi ? (tipMap[m.musteriTipi] || "Ev sahibi") : "Ev sahibi";
     const carpan = MUSTERI_TIPLERI.find((t) => t.id === tip)?.carpan || "3.0";
     setForm((p) => ({ ...p, musteriId: m.id, musteriAdi: ad, musteriTipi: tip, carpan }));
+    setSeciliMusteriTelefon(m.telefon || "");
     setMusteriArama(""); setMusteriListeAcik(false);
+  }
+
+  function yeniMusteriModalAc(prefill: string) {
+    setYeniMusteriForm({
+      firmaAdi: prefill.trim(),
+      ad: "",
+      soyad: "",
+      telefon: "",
+      email: "",
+      acilisBakiyesi: "",
+      bakiyeTipi: "borc",
+      musteriTipi: "son_kullanici",
+    });
+    setMusteriListeAcik(false);
+    setMusteriModalAcik(true);
+  }
+
+  function yeniMusteriModalKapat() {
+    setMusteriModalAcik(false);
+    if (musteriSecimYedek) {
+      setForm((p) => ({ ...p, musteriId: musteriSecimYedek.id, musteriAdi: musteriSecimYedek.ad }));
+      setSeciliMusteriTelefon(musteriSecimYedek.telefon || "");
+      setMusteriArama("");
+    } else {
+      setForm((p) => ({ ...p, musteriId: "", musteriAdi: "" }));
+      setMusteriArama("");
+      setSeciliMusteriTelefon("");
+    }
+    setMusteriSecimYedek(null);
+  }
+
+  async function yeniMusteriKaydet() {
+    if (musteriKaydediliyor) return;
+    setMusteriKaydediliyor(true);
+    try {
+      const res = await fetch("/api/musteriler", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(yeniMusteriForm),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json?.hata || json?.error || "Müşteri oluşturulamadı.");
+        return;
+      }
+
+      const musteri = json?.musteri;
+      if (!musteri?.id) {
+        alert("Müşteri oluşturuldu ama seçim bilgisi alınamadı.");
+        return;
+      }
+
+      const liteMusteri = {
+        id: musteri.id,
+        ad: [musteri.firmaAdi, musteri.ad, musteri.soyad].filter(Boolean).join(" ").trim() || "İsimsiz müşteri",
+        telefon: musteri.telefon || "",
+        musteriTipi: musteri.musteriTipi || "son_kullanici",
+      };
+
+      setMusteriler((prev) => {
+        const withoutDuplicate = prev.filter((m) => m.id !== liteMusteri.id);
+        return [liteMusteri, ...withoutDuplicate];
+      });
+      musteriSecVeCarpanOner(liteMusteri);
+      setYeniMusteri(true);
+      setMusteriSecimYedek(null);
+      setMusteriModalAcik(false);
+    } finally {
+      setMusteriKaydediliyor(false);
+    }
   }
 
   function mutfakTipiDegistir(tip: MutfakTipi) {
@@ -940,7 +1033,10 @@ export default function YeniIsV3Page() {
   function whatsappGonder() {
     const link = sonTeklifNo ? `${window.location.origin}/teklif/${sonTeklifNo}` : "";
     if (!link) { alert("Önce kaydet."); return; }
-    window.open(`https://wa.me/?text=${encodeURIComponent(`Merhaba, teklifinizi inceleyip onaylayabilirsiniz:\n\n${link}`)}`, "_blank");
+    const mesaj = `Merhaba ${form.musteriAdi || "Sayın Müşteri"},\n\nSizin için hazırladığımız teklifi aşağıdaki linkten inceleyebilirsiniz:\n\n${link}\n\nHerhangi bir sorunuz olursa memnuniyetle yardımcı olurum.`;
+    const whatsappUrl = whatsappUrlForPhone(seciliMusteriTelefon, mesaj);
+    if (!whatsappUrl) { alert("Bu müşterinin kayıtlı telefonu yok."); return; }
+    window.open(whatsappUrl, "_blank");
   }
   function pdfAc() { if (sonIsId) window.open(`/api/isler/${sonIsId}/pdf`, "_blank"); }
   function tahsilatAc() { if (sonIsId) router.push(`/dashboard/tahsilatlar?isId=${sonIsId}`); else router.push('/dashboard/tahsilatlar'); }
@@ -957,7 +1053,9 @@ export default function YeniIsV3Page() {
   const aktifIdx   = adimlar.findIndex((a) => a.id === aktifAdim);
   const onceki     = aktifIdx > 0 ? adimlar[aktifIdx - 1].id : null;
   const sonraki    = aktifIdx < adimlar.length - 1 ? adimlar[aktifIdx + 1].id : null;
+  const musteriAramaMetni = (form.musteriId ? "" : musteriArama).trim();
   const filtreli   = musteriler.filter((m) => String(m.ad || "").toLocaleLowerCase("tr-TR").includes(musteriArama.toLocaleLowerCase("tr-TR")));
+  const musteriBulunamadi = musteriAramaMetni.length > 0 && filtreli.length === 0;
 
   // ─── DÜZENLEME YÜKLENİYOR ────────────────────────────────────────────────
   if (duzenleYukleniyor) {
@@ -1261,12 +1359,19 @@ export default function YeniIsV3Page() {
                 <div style={{ position: "relative" }}>
                   <input data-onboarding-target="yeni-is-musteri-input" className="yi-inp" placeholder="Müşteri ara veya yaz..." value={form.musteriId ? form.musteriAdi : musteriArama}
                     onFocus={() => setMusteriListeAcik(true)}
-                    onChange={(e) => { setMusteriArama(e.target.value); setAlan("musteriId", ""); setAlan("musteriAdi", e.target.value); setMusteriListeAcik(true); }} />
+                    onChange={(e) => {
+                      if (form.musteriId && !musteriSecimYedek) setMusteriSecimYedek({ id: form.musteriId, ad: form.musteriAdi, telefon: seciliMusteriTelefon });
+                      setMusteriArama(e.target.value);
+                      setAlan("musteriId", "");
+                      setAlan("musteriAdi", e.target.value);
+                      setSeciliMusteriTelefon("");
+                      setMusteriListeAcik(true);
+                    }} />
                   {form.musteriId && (
                     <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "10px", padding: "8px 12px" }}>
                       <span style={{ color: "#10b981" }}>✓</span>
                       <span style={{ fontSize: "14px", fontWeight: 600, color: "#6ee7b7", flex: 1 }}>{form.musteriAdi}</span>
-                      <button onClick={() => { setAlan("musteriId", ""); setAlan("musteriAdi", ""); setMusteriArama(""); }} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "18px", lineHeight: 1 }}>×</button>
+                      <button onClick={() => { setAlan("musteriId", ""); setAlan("musteriAdi", ""); setMusteriArama(""); setSeciliMusteriTelefon(""); }} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "18px", lineHeight: 1 }}>×</button>
                     </div>
                   )}
                   {musteriListeAcik && !form.musteriId && (
@@ -1279,10 +1384,19 @@ export default function YeniIsV3Page() {
                           {(m.telefon || m.email) && <div style={{ fontSize: "11px", color: "#6b7280" }}>{m.telefon || m.email}</div>}
                         </button>
                       ))}
-                      {form.musteriAdi.trim() && (
-                        <button onClick={() => setMusteriListeAcik(false)} style={{ width: "100%", padding: "11px 14px", textAlign: "left", background: "transparent", border: "none", cursor: "pointer", color: "#10b981", fontSize: "13px" }}>
-                          + "{form.musteriAdi}" yeni müşteri olarak kullan
-                        </button>
+                      {musteriBulunamadi && (
+                        <div style={{ padding: "13px 14px", borderTop: "1px solid #1f2937", background: "rgba(15,23,42,0.82)" }}>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: "#f8fafc" }}>
+                            "{musteriAramaMetni}" bulunamadı.
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => yeniMusteriModalAc(musteriAramaMetni)}
+                            style={{ marginTop: "9px", width: "100%", padding: "10px 12px", borderRadius: "12px", border: "1px solid rgba(16,185,129,0.35)", background: "rgba(16,185,129,0.12)", cursor: "pointer", color: "#6ee7b7", fontSize: "13px", fontWeight: 800 }}
+                          >
+                            Yeni müşteri oluştur
+                          </button>
+                        </div>
                       )}
                     </div>
                   )}
@@ -2166,6 +2280,78 @@ export default function YeniIsV3Page() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {musteriModalAcik && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 220, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: "14px" }} onClick={yeniMusteriModalKapat}>
+          <div style={{ width: "100%", maxWidth: "560px", maxHeight: "92dvh", overflowY: "auto", borderRadius: "24px", border: "1px solid rgba(255,255,255,0.1)", background: "#0B1120", boxShadow: "0 24px 80px rgba(0,0,0,0.65)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ position: "sticky", top: 0, zIndex: 1, borderBottom: "1px solid rgba(255,255,255,0.08)", background: "rgba(11,17,32,0.96)", padding: "18px" }}>
+              <p style={{ fontSize: "11px", fontWeight: 900, letterSpacing: "0.18em", color: "#64748b", textTransform: "uppercase" }}>Müşteri Kaydı</p>
+              <h2 style={{ marginTop: "4px", fontSize: "20px", fontWeight: 900, color: "#fff" }}>Yeni müşteri oluştur</h2>
+              <p style={{ marginTop: "4px", fontSize: "13px", color: "#94a3b8" }}>Müşteri kaydedilince bu iş formunda otomatik seçilecek.</p>
+            </div>
+
+            <div style={{ display: "grid", gap: "12px", padding: "18px" }}>
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span className="yi-label">Firma Adı</span>
+                <input className="yi-inp" placeholder="Firma adı" value={yeniMusteriForm.firmaAdi} onChange={(e) => setYeniMusteriForm((p) => ({ ...p, firmaAdi: e.target.value }))} />
+              </label>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span className="yi-label">Yetkili Adı</span>
+                  <input className="yi-inp" placeholder="Ad" value={yeniMusteriForm.ad} onChange={(e) => setYeniMusteriForm((p) => ({ ...p, ad: e.target.value }))} />
+                </label>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span className="yi-label">Yetkili Soyadı</span>
+                  <input className="yi-inp" placeholder="Soyad" value={yeniMusteriForm.soyad} onChange={(e) => setYeniMusteriForm((p) => ({ ...p, soyad: e.target.value }))} />
+                </label>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span className="yi-label">Telefon</span>
+                  <input className="yi-inp" placeholder="05..." value={yeniMusteriForm.telefon} onChange={(e) => setYeniMusteriForm((p) => ({ ...p, telefon: e.target.value }))} />
+                </label>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span className="yi-label">E-posta</span>
+                  <input className="yi-inp" placeholder="mail@firma.com" value={yeniMusteriForm.email} onChange={(e) => setYeniMusteriForm((p) => ({ ...p, email: e.target.value }))} />
+                </label>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span className="yi-label">Açılış Bakiyesi</span>
+                  <input className="yi-inp" placeholder="0" value={yeniMusteriForm.acilisBakiyesi} onChange={(e) => setYeniMusteriForm((p) => ({ ...p, acilisBakiyesi: e.target.value }))} />
+                </label>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span className="yi-label">Bakiye Tipi</span>
+                  <select className="yi-inp" value={yeniMusteriForm.bakiyeTipi} onChange={(e) => setYeniMusteriForm((p) => ({ ...p, bakiyeTipi: e.target.value }))}>
+                    <option value="borc">Müşteri borçlu</option>
+                    <option value="alacak">Müşteri alacaklı</option>
+                  </select>
+                </label>
+              </div>
+
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span className="yi-label">Müşteri Tipi</span>
+                <select className="yi-inp" value={yeniMusteriForm.musteriTipi} onChange={(e) => setYeniMusteriForm((p) => ({ ...p, musteriTipi: e.target.value }))}>
+                  <option value="son_kullanici">Son kullanıcı</option>
+                  <option value="bayi">Bayi</option>
+                  <option value="mimar">Mimar</option>
+                  <option value="muteahhit">Müteahhit</option>
+                </select>
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", borderTop: "1px solid rgba(255,255,255,0.08)", padding: "14px 18px 18px" }}>
+              <button type="button" disabled={musteriKaydediliyor} onClick={yeniMusteriModalKapat} style={{ padding: "12px 16px", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "#cbd5e1", fontWeight: 800, cursor: "pointer" }}>Vazgeç</button>
+              <button type="button" disabled={musteriKaydediliyor} onClick={yeniMusteriKaydet} style={{ padding: "12px 18px", borderRadius: "14px", border: "none", background: "#10b981", color: "#fff", fontWeight: 900, cursor: "pointer" }}>
+                {musteriKaydediliyor ? "Kaydediliyor..." : "Kaydet ve Seç"}
+              </button>
             </div>
           </div>
         </div>

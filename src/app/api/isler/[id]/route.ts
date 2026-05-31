@@ -27,10 +27,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const is = await prisma.is.findFirst({
     where: { id, atolyeId: atolyeId },
-    include: { operasyonlar: true }
+    include: { operasyonlar: true, musteri: { select: { telefon: true } } }
   })
   if (!is) return NextResponse.json({ hata: 'İş bulunamadı' }, { status: 404 })
-  return NextResponse.json({ is })
+  return NextResponse.json({ is: { ...is, musteriTelefonu: is.musteri?.telefon || "" } })
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
