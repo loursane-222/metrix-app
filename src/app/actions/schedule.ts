@@ -174,6 +174,44 @@ export async function getSchedulesForMonth(year: number, month: number) {
           stoneSource: true,
           selectedStockPlateId: true,
           stockMaterialSnapshot: true,
+          materialRequirements: {
+            include: {
+              allocations: {
+                include: {
+                  stockPlate: {
+                    select: {
+                      id: true,
+                      plateCode: true,
+                      productName: true,
+                      materialType: true,
+                      shadeCode: true,
+                      batchNo: true,
+                      widthCm: true,
+                      heightCm: true,
+                      remainingAreaCm2: true,
+                      purchaseTotalCost: true,
+                      status: true,
+                    },
+                  },
+                  offcut: {
+                    select: {
+                      id: true,
+                      offcutCode: true,
+                      productName: true,
+                      materialType: true,
+                      widthCm: true,
+                      heightCm: true,
+                      remainingAreaCm2: true,
+                      totalCost: true,
+                      status: true,
+                    },
+                  },
+                },
+                orderBy: { createdAt: "asc" },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
           plakaFiyatiEuro: true,
           kullanilanKur: true,
           kullanilanPlakaSayisi: true,

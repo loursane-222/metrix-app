@@ -27,7 +27,48 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const is = await prisma.is.findFirst({
     where: { id, atolyeId: atolyeId },
-    include: { operasyonlar: true, musteri: { select: { telefon: true } } }
+    include: {
+      operasyonlar: true,
+      musteri: { select: { telefon: true } },
+      materialRequirements: {
+        include: {
+          allocations: {
+            include: {
+              stockPlate: {
+                select: {
+                  id: true,
+                  plateCode: true,
+                  productName: true,
+                  materialType: true,
+                  shadeCode: true,
+                  batchNo: true,
+                  widthCm: true,
+                  heightCm: true,
+                  remainingAreaCm2: true,
+                  purchaseTotalCost: true,
+                  status: true,
+                },
+              },
+              offcut: {
+                select: {
+                  id: true,
+                  offcutCode: true,
+                  productName: true,
+                  materialType: true,
+                  widthCm: true,
+                  heightCm: true,
+                  remainingAreaCm2: true,
+                  totalCost: true,
+                  status: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    }
   })
   if (!is) return NextResponse.json({ hata: 'İş bulunamadı' }, { status: 404 })
   return NextResponse.json({ is: { ...is, musteriTelefonu: is.musteri?.telefon || "" } })

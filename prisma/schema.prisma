@@ -227,10 +227,12 @@ model Is {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  odemePlani   OdemePlani?
-  tahsilatlar  Tahsilat[]
-  operasyonlar IsOperasyon[]
-  workSchedule WorkSchedule?
+  odemePlani           OdemePlani?
+  tahsilatlar          Tahsilat[]
+  operasyonlar         IsOperasyon[]
+  workSchedule         WorkSchedule?
+  materialRequirements JobMaterialRequirement[]
+  materialAllocations  JobMaterialAllocation[]
 }
 
 model IsOperasyon {
@@ -564,8 +566,9 @@ model StockPlate {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  offcuts   StockOffcut[]   @relation("PlateOffcuts")
-  movements StockMovement[] @relation("PlateMovements")
+  offcuts             StockOffcut[]           @relation("PlateOffcuts")
+  movements           StockMovement[]         @relation("PlateMovements")
+  materialAllocations JobMaterialAllocation[] @relation("PlateMaterialAllocations")
 
   @@unique([atolyeId, plateCode])
   @@index([atolyeId, productName])
@@ -577,25 +580,85 @@ model StockPlate {
 }
 
 model StockReservation {
-  id              String    @id @default(cuid())
-  atolyeId        String
-  stockPlateId    String
-  isId            String?
-  schedulePhaseId String?
-  reservedAreaCm2 Decimal?
-  status          String    @default("DRAFT")
-  releasedAt      DateTime?
-  consumedAt      DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                   String                 @id @default(cuid())
+  atolyeId             String
+  stockPlateId         String
+  isId                 String?
+  schedulePhaseId      String?
+  materialAllocationId String?
+  materialAllocation   JobMaterialAllocation? @relation(fields: [materialAllocationId], references: [id], onDelete: SetNull)
+  reservedAreaCm2      Decimal?
+  status               String                 @default("DRAFT")
+  releasedAt           DateTime?
+  consumedAt           DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   @@index([atolyeId])
   @@index([atolyeId, stockPlateId])
   @@index([atolyeId, isId])
   @@index([atolyeId, isId, stockPlateId, status])
   @@index([atolyeId, schedulePhaseId])
+  @@index([atolyeId, materialAllocationId])
   @@index([atolyeId, status])
   @@map("stock_reservations")
+}
+
+model JobMaterialRequirement {
+  id                 String   @id @default(cuid())
+  atolyeId           String
+  jobId              String
+  job                Is       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  productName        String
+  materialType       String?
+  requiredQuantity   Int?
+  requiredAreaCm2    Decimal?
+  shadePolicy        String   @default("MIX_ALLOWED")
+  preferredShadeCode String?
+  preferredLotNo     String?
+  status             String   @default("PLANNED")
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  allocations JobMaterialAllocation[]
+
+  @@index([atolyeId])
+  @@index([atolyeId, jobId])
+  @@index([atolyeId, status])
+  @@index([atolyeId, productName])
+  @@index([atolyeId, shadePolicy])
+  @@map("job_material_requirements")
+}
+
+model JobMaterialAllocation {
+  id               String                 @id @default(cuid())
+  atolyeId         String
+  requirementId    String
+  requirement      JobMaterialRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  jobId            String
+  job              Is                     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  stockPlateId     String?
+  stockPlate       StockPlate?            @relation("PlateMaterialAllocations", fields: [stockPlateId], references: [id], onDelete: SetNull)
+  offcutId         String?
+  offcut           StockOffcut?           @relation("OffcutMaterialAllocations", fields: [offcutId], references: [id], onDelete: SetNull)
+  allocatedAreaCm2 Decimal?
+  allocatedPieces  Int?
+  status           String                 @default("DRAFT")
+  source           String                 @default("STOCK_PLATE")
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  reservations StockReservation[]
+
+  @@index([atolyeId])
+  @@index([atolyeId, requirementId])
+  @@index([atolyeId, jobId])
+  @@index([atolyeId, stockPlateId])
+  @@index([atolyeId, offcutId])
+  @@index([atolyeId, status])
+  @@index([atolyeId, source])
+  @@map("job_material_allocations")
 }
 
 model StockMovement {
@@ -646,10 +709,11 @@ model StockOffcut {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  parentPlate  StockPlate      @relation("PlateOffcuts", fields: [parentPlateId], references: [id], onDelete: Restrict)
-  parentOffcut StockOffcut?    @relation("OffcutChildren", fields: [parentOffcutId], references: [id], onDelete: SetNull)
-  childOffcuts StockOffcut[]   @relation("OffcutChildren")
-  movements    StockMovement[] @relation("OffcutMovements")
+  parentPlate         StockPlate              @relation("PlateOffcuts", fields: [parentPlateId], references: [id], onDelete: Restrict)
+  parentOffcut        StockOffcut?            @relation("OffcutChildren", fields: [parentOffcutId], references: [id], onDelete: SetNull)
+  childOffcuts        StockOffcut[]           @relation("OffcutChildren")
+  movements           StockMovement[]         @relation("OffcutMovements")
+  materialAllocations JobMaterialAllocation[] @relation("OffcutMaterialAllocations")
 
   @@unique([atolyeId, offcutCode])
   @@index([atolyeId, parentPlateId])
