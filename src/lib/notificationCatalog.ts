@@ -41,6 +41,7 @@ export const NotificationEventType = {
   SALES: {
     PROPOSAL_SENT: "PROPOSAL_SENT",
     PROPOSAL_VIEWED: "PROPOSAL_VIEWED",
+    PROPOSAL_UPDATED: "PROPOSAL_UPDATED",
     PROPOSAL_APPROVED: "PROPOSAL_APPROVED",
     PROPOSAL_REJECTED: "PROPOSAL_REJECTED",
   },
@@ -53,6 +54,7 @@ export const NotificationEventType = {
   SCHEDULE: {
     PHASE_DATE_CHANGED: "PHASE_DATE_CHANGED",
     PHASE_ASSIGNED: "PHASE_ASSIGNED",
+    PHASE_NOTE_ADDED: "PHASE_NOTE_ADDED",
     PHASE_COMPLETED: "PHASE_COMPLETED",
     PHASE_REOPENED: "PHASE_REOPENED",
   },
@@ -146,6 +148,15 @@ export const NotificationEventCatalog: Record<NotificationEventType, Notificatio
     requiresPushAwait: false,
     defaultActionUrl: "/dashboard/isler",
   },
+  [NotificationEventType.SALES.PROPOSAL_UPDATED]: {
+    category: NotificationCategory.SALES,
+    severity: NotificationSeverity.INFO,
+    critical: false,
+    defaultTitle: "Teklif güncellendi",
+    defaultAudienceHint: owner,
+    requiresPushAwait: false,
+    defaultActionUrl: "/dashboard/isler",
+  },
   [NotificationEventType.SALES.PROPOSAL_APPROVED]: {
     category: NotificationCategory.SALES,
     severity: NotificationSeverity.SUCCESS,
@@ -216,6 +227,15 @@ export const NotificationEventCatalog: Record<NotificationEventType, Notificatio
     defaultTitle: "Faz ataması değişti",
     defaultAudienceHint: assignedPersonnel,
     requiresPushAwait: true,
+    defaultActionUrl: "/dashboard/is-programi",
+  },
+  [NotificationEventType.SCHEDULE.PHASE_NOTE_ADDED]: {
+    category: NotificationCategory.SCHEDULE,
+    severity: NotificationSeverity.INFO,
+    critical: false,
+    defaultTitle: "Faz notu eklendi",
+    defaultAudienceHint: assignedPersonnel,
+    requiresPushAwait: false,
     defaultActionUrl: "/dashboard/is-programi",
   },
   [NotificationEventType.SCHEDULE.PHASE_COMPLETED]: {

@@ -1,9 +1,8 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
-import { logActivity } from "@/lib/activityLogger";
 import { NextResponse } from "next/server";
 import { isStockReservationReleaseBlocked, releaseOpenReservationsForJob } from "@/lib/stock/reservations";
-import { notifyProposalApproved } from "@/lib/proposalNotifications";
+import { notifyProposalApproved, notifyProposalSmallEvent } from "@/lib/proposalNotifications";
 
 
 function odemePlanOlustur(musteriTipi: string, toplamTutar: number, onayTarihi: Date) {
@@ -77,9 +76,43 @@ export async function POST(req: Request) {
           });
         }
       } else if (durum === "kaybedildi") {
-        await logActivity({ atolyeId, type: "teklif_kaybedildi", message: musteriAdi + " – " + teklifNo + " teklifi kaybedildi.", refId: id, userId: auth.userId, personelId: auth.personelId || undefined });
+        if (mevcutIs.durum !== "kaybedildi") {
+          await notifyProposalSmallEvent({
+            job: {
+              id: updated.id,
+              atolyeId,
+              teklifNo: updated.teklifNo,
+              musteriId: updated.musteriId,
+              musteriAdi,
+              satisFiyati: tutar,
+              kdvDahilFiyat: updated.kdvDahilFiyat,
+            },
+            action: "rejected",
+            source: "admin-proposal",
+            userId: auth.userId,
+            personelId: auth.personelId || null,
+            metadata: { previousStatus: mevcutIs.durum, newStatus: durum },
+          });
+        }
       } else if (durum === "teklif_verildi") {
-        await logActivity({ atolyeId, type: "teklif_guncellendi", message: musteriAdi + " – " + teklifNo + " durumu teklif verildi olarak guncellendi.", refId: id, userId: auth.userId, personelId: auth.personelId || undefined });
+        if (mevcutIs.durum !== "teklif_verildi") {
+          await notifyProposalSmallEvent({
+            job: {
+              id: updated.id,
+              atolyeId,
+              teklifNo: updated.teklifNo,
+              musteriId: updated.musteriId,
+              musteriAdi,
+              satisFiyati: tutar,
+              kdvDahilFiyat: updated.kdvDahilFiyat,
+            },
+            action: "updated",
+            source: "admin-proposal",
+            userId: auth.userId,
+            personelId: auth.personelId || null,
+            metadata: { previousStatus: mevcutIs.durum, newStatus: durum },
+          });
+        }
       }
     }
 

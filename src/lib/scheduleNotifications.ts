@@ -193,6 +193,30 @@ export async function notifyPhaseReopened(input: PhaseContext & ActorInput) {
   });
 }
 
+export async function notifyPhaseNoteAdded(input: PhaseContext & ActorInput & {
+  note?: string | null;
+}) {
+  const eventType = NotificationEventType.SCHEDULE.PHASE_NOTE_ADDED;
+  await notify({
+    ...input,
+    eventType,
+    source: "schedule-note",
+    message: `${jobLabel(input)} - ${phaseLabel(input.phaseType)} fazına not eklendi.`,
+    refId: input.phaseId,
+    refType: "SchedulePhase",
+    url: phaseUrl(input.phaseId),
+    metadata: {
+      jobId: input.jobId,
+      workScheduleId: input.workScheduleId,
+      phaseId: input.phaseId,
+      schedulePhaseId: input.phaseId,
+      phaseType: input.phaseType,
+      note: input.note ?? null,
+      notificationPipelineVersion: "N5H",
+    },
+  });
+}
+
 export async function notifyProductionOperationReady(input: OperationContext & ActorInput) {
   const eventType = input.operationType === "KESIM"
     ? NotificationEventType.PRODUCTION.CUTTING_READY

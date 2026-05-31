@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logActivity } from "@/lib/activityLogger";
+import { notifyProposalSmallEvent } from "@/lib/proposalNotifications";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,24 +23,31 @@ export async function POST(req: NextRequest) {
     try {
       const is = await prisma.is.findFirst({
         where: { teklifNo },
-        select: { id: true, musteriAdi: true, atolyeId: true, teklifGoruntulenmeSayisi: true },
+        select: { id: true, musteriId: true, musteriAdi: true, atolyeId: true, teklifNo: true, teklifGoruntulenmeSayisi: true },
       });
 
       if (is?.atolyeId) {
         if (event === "goruntulendi") {
           const sayi = Number(is.teklifGoruntulenmeSayisi || 0) + 1;
-          await logActivity({
-            atolyeId: is.atolyeId,
-            type: "teklif_goruntulendi",
-            message: (is.musteriAdi || "Musteri") + " – " + teklifNo + " teklifini acti. (" + sayi + ". gorunum)",
-            refId: is.id,
+          await notifyProposalSmallEvent({
+            job: is,
+            action: "viewed",
+            source: "public-proposal",
+            viewCount: sayi,
+            metadata: {
+              publicEvent: event,
+              eventMeta: meta ?? null,
+            },
           });
         } else if (event === "pdf_acildi" || event === "pdf_acildi_server") {
-          await logActivity({
-            atolyeId: is.atolyeId,
-            type: "teklif_pdf_acildi",
-            message: (is.musteriAdi || "Musteri") + " – " + teklifNo + " PDF teklifini acti.",
-            refId: is.id,
+          await notifyProposalSmallEvent({
+            job: is,
+            action: "pdf_opened",
+            source: "public-proposal",
+            metadata: {
+              publicEvent: event,
+              eventMeta: meta ?? null,
+            },
           });
         }
       }
