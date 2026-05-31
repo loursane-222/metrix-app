@@ -16,6 +16,7 @@ export type ExecutionStatus =
 
 export interface ExecutionData {
   id: string
+  phaseOperationId?: string | null
   status: ExecutionStatus
   actualStartedAt: string | null
   actualEndedAt: string | null
@@ -62,10 +63,12 @@ export interface UseExecutionReturn {
 
 export function useExecution({
   schedulePhaseId,
+  phaseOperationId,
   onTransitionSuccess,
   skip = false,
 }: {
   schedulePhaseId: string
+  phaseOperationId?: string | null
   onTransitionSuccess?: (execution: ExecutionData) => void
   skip?: boolean
 }): UseExecutionReturn {
@@ -81,8 +84,10 @@ export function useExecution({
     if (skip) return
     setFetching(true)
     try {
+      const params = new URLSearchParams({ schedulePhaseId })
+      if (phaseOperationId) params.set("phaseOperationId", phaseOperationId)
       const res  = await fetch(
-        `/api/schedule/execution?schedulePhaseId=${encodeURIComponent(schedulePhaseId)}`,
+        `/api/schedule/execution?${params.toString()}`,
         { credentials: "include", cache: "no-store" },
       )
       const json = await res.json()
@@ -96,7 +101,7 @@ export function useExecution({
     } finally {
       setFetching(false)
     }
-  }, [schedulePhaseId])
+  }, [schedulePhaseId, phaseOperationId])
 
   useEffect(() => { refetch() }, [refetch])
 
@@ -136,7 +141,7 @@ export function useExecution({
       method:      "POST",
       credentials: "include",
       headers:     { "Content-Type": "application/json" },
-      body:        JSON.stringify({ schedulePhaseId }),
+      body:        JSON.stringify({ schedulePhaseId, ...(phaseOperationId ? { phaseOperationId } : {}) }),
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json.error || "Görev kaydı oluşturulamadı")

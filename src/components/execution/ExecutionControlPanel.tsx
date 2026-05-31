@@ -13,6 +13,8 @@ import type { ExecutionData, UseExecutionReturn } from "@/hooks/useExecution"
 
 export interface ExecutionControlPanelProps {
   schedulePhaseId: string
+  phaseOperationId?: string | null
+  operationType?: "KESIM" | "TOPLAMA" | string | null
   phaseType?: "OLCU" | "IMALAT" | "MONTAJ"
   readOnly?: boolean
   completedAt?: string | Date | null
@@ -58,14 +60,48 @@ const FAILURE_REASONS: FailureReason[] = [
   { value: "OTHER",                   label: "Diğer" },
 ]
 
-function getReasonsForPhase(phaseType?: string): FailureReason[] {
-  return FAILURE_REASONS.filter(
-    (r) => !r.phaseScope || (phaseType && r.phaseScope.includes(phaseType)),
-  )
+function canUseStoneBrokenReason({
+  phaseType,
+  phaseOperationId,
+  operationType,
+}: {
+  phaseType?: string
+  phaseOperationId?: string | null
+  operationType?: string | null
+}) {
+  if (phaseOperationId) return operationType === "KESIM"
+  return phaseType === "IMALAT"
+}
+
+function getReasonsForPhase({
+  phaseType,
+  phaseOperationId,
+  operationType,
+}: {
+  phaseType?: string
+  phaseOperationId?: string | null
+  operationType?: string | null
+}): FailureReason[] {
+  return FAILURE_REASONS.filter((reason) => {
+    if (reason.value === "STONE_BROKEN_IN_CUTTING") {
+      return canUseStoneBrokenReason({ phaseType, phaseOperationId, operationType })
+    }
+    return !reason.phaseScope || (phaseType && reason.phaseScope.includes(phaseType))
+  })
 }
 
 const PHASE_LABELS: Record<string, string> = {
   OLCU: "Ölçü", IMALAT: "İmalat", MONTAJ: "Montaj",
+}
+
+const OPERATION_LABELS: Record<string, string> = {
+  KESIM: "Kesim",
+  TOPLAMA: "Toplama",
+}
+
+const OPERATION_START_LABELS: Record<string, string> = {
+  KESIM: "Kesimi Başlat",
+  TOPLAMA: "Toplamayı Başlat",
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -116,6 +152,8 @@ function ActionBtn({
 
 export default function ExecutionControlPanel({
   schedulePhaseId,
+  phaseOperationId,
+  operationType,
   phaseType,
   readOnly = false,
   completedAt,
@@ -124,7 +162,7 @@ export default function ExecutionControlPanel({
   hideActions = false,
 }: ExecutionControlPanelProps) {
   // ── Execution state: parent-controlled or own hook ─────────────────────────
-  const ownHook = useExecution({ schedulePhaseId, onTransitionSuccess, skip: !!controlled })
+  const ownHook = useExecution({ schedulePhaseId, phaseOperationId, onTransitionSuccess, skip: !!controlled })
   const {
     execution,
     fetching,
@@ -173,10 +211,12 @@ export default function ExecutionControlPanel({
 
   const status     = execution?.status ?? null
   const isTerminal = status !== null && TERMINAL_STATUSES.includes(status)
-  const phaseLabel = phaseType ? PHASE_LABELS[phaseType] ?? phaseType : "Aşama"
+  const operationLabel = operationType ? OPERATION_LABELS[operationType] ?? String(operationType) : null
+  const phaseLabel = operationLabel ?? (phaseType ? PHASE_LABELS[phaseType] ?? phaseType : "Aşama")
+  const startLabel = operationType ? OPERATION_START_LABELS[operationType] ?? `${phaseLabel} Başlat` : "Başla"
 
-  const visibleReasons      = getReasonsForPhase(phaseType)
-  const selectedReasonMeta  = FAILURE_REASONS.find((r) => r.value === cannotReason)
+  const visibleReasons      = getReasonsForPhase({ phaseType, phaseOperationId, operationType })
+  const selectedReasonMeta  = visibleReasons.find((r) => r.value === cannotReason)
   const needsDetail         = selectedReasonMeta?.requiresDetail ?? false
   const detailValid         = !needsDetail || (materialLossCost !== "" && Number(materialLossCost) >= 0)
 
@@ -345,9 +385,9 @@ export default function ExecutionControlPanel({
         <div className="flex flex-col gap-2">
 
           {/* BAŞLA — null / PLANNED / CANNOT_START (footer varsa gizlenir) */}
-          {!hideActions && (status === null || status === "PLANNED" || status === "CANNOT_START") && (
+          {!hideActions && (status === null || status === "PLANNED" || (!phaseOperationId && status === "CANNOT_START")) && (
             <ActionBtn
-              label={status === "CANNOT_START" ? "Yeniden Dene" : "Başla"}
+              label={status === "CANNOT_START" ? "Yeniden Dene" : startLabel}
               variant="emerald"
               loading={loading}
               onClick={handleBasla}

@@ -69,6 +69,11 @@ function safeDate(value: any, fallback: Date) {
   return pushToBusinessDay(d);
 }
 
+const DEFAULT_IMALAT_OPERATIONS = [
+  { operationType: "KESIM", status: "PLANNED" },
+  { operationType: "TOPLAMA", status: "PLANNED" },
+] as const;
+
 export async function POST(req: NextRequest) {
   try {
     const atolyeId = await ownerAtolyeIdAl();
@@ -125,12 +130,28 @@ export async function POST(req: NextRequest) {
               fazAtamalar: {
                 include: { personel: true },
               },
+              operations: {
+                orderBy: { operationType: "asc" },
+              },
             },
           },
         },
       });
 
       const imalatPhase = created.phases.find((phase) => phase.phase === "IMALAT");
+      if (imalatPhase) {
+        await tx.schedulePhaseOperation.createMany({
+          data: DEFAULT_IMALAT_OPERATIONS.map((operation) => ({
+            schedulePhaseId: imalatPhase.id,
+            operationType: operation.operationType,
+            status: operation.status,
+            plannedStart: imalat,
+            plannedEnd: imalat,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       await activateDraftReservationsForJob(tx, {
         atolyeId,
         isId,

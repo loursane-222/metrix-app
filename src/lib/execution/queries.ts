@@ -57,15 +57,23 @@ async function withEvents<T extends { id: string }>(
 // Önce non-terminal (active) execution aranır.
 // Yoksa en son terminal execution döner.
 // Hiç yoksa null.
-export async function getCurrentExecutionForPhase(schedulePhaseId: string, atolyeId: string) {
+export async function getCurrentExecutionForPhase(
+  schedulePhaseId: string,
+  atolyeId: string,
+  phaseOperationId?: string | null,
+) {
+  const scopeWhere = phaseOperationId
+    ? { phaseOperationId }
+    : { phaseOperationId: null }
+
   const active = await prisma.phaseExecution.findFirst({
-    where: { schedulePhaseId, atolyeId, status: { in: ACTIVE_STATUSES } },
+    where: { schedulePhaseId, atolyeId, ...scopeWhere, status: { in: ACTIVE_STATUSES } },
     orderBy: { createdAt: "desc" },
   })
   if (active) return withEvents(active)
 
   const terminal = await prisma.phaseExecution.findFirst({
-    where: { schedulePhaseId, atolyeId, status: { in: TERMINAL_STATUSES } },
+    where: { schedulePhaseId, atolyeId, ...scopeWhere, status: { in: TERMINAL_STATUSES } },
     orderBy: { createdAt: "desc" },
   })
   return withEvents(terminal)

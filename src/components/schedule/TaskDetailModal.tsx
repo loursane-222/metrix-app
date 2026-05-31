@@ -15,8 +15,29 @@ const PHASE_META: Record<string, any> = {
   MONTAJ: { label: "Montaj", icon: "🔧", text: "text-emerald-300", bg: "bg-emerald-500/10", border: "border-emerald-500/25" },
 };
 
+const OPERATION_ORDER = ["KESIM", "TOPLAMA"] as const;
+
+const OPERATION_LABELS: Record<string, string> = {
+  KESIM: "Kesim",
+  TOPLAMA: "Toplama",
+};
+
+const OPERATION_STATUS_META: Record<string, { label: string; tw: string }> = {
+  PLANNED: { label: "Planlandı", tw: "border-slate-600/40 bg-slate-500/10 text-slate-300" },
+  READY: { label: "Hazır", tw: "border-sky-500/40 bg-sky-500/10 text-sky-300" },
+  STARTED: { label: "Çalışıyor", tw: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" },
+  PAUSED: { label: "Durakladı", tw: "border-amber-500/40 bg-amber-500/10 text-amber-300" },
+  CANNOT_START: { label: "Başlanamadı", tw: "border-red-500/40 bg-red-500/10 text-red-300" },
+  COMPLETED: { label: "Tamamlandı", tw: "border-blue-500/40 bg-blue-500/10 text-blue-300" },
+  CANCELLED: { label: "İptal", tw: "border-zinc-600/40 bg-zinc-500/10 text-zinc-300" },
+};
+
 function fmtDate(v: any) {
   return v ? dayjs(v).format("DD MMMM YYYY dddd") : "Tarih yok";
+}
+
+function fmtShortDate(v: any) {
+  return v ? dayjs(v).format("DD MMM HH:mm") : "";
 }
 
 function delayDays(v: any, completed: boolean) {
@@ -85,6 +106,11 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
     () => (schedule?.phases || []).find((p: any) => p.id === task?.id || p.phase === phase),
     [schedule, task?.id, phase]
   );
+  const imalatOperations = useMemo(() => {
+    const operations = Array.isArray(phaseRow?.operations) ? phaseRow.operations : [];
+    return OPERATION_ORDER.map((operationType) => operations.find((op: any) => op.operationType === operationType)).filter(Boolean);
+  }, [phaseRow?.operations]);
+  const hasImalatOperations = phase === "IMALAT" && imalatOperations.length > 0;
 
   const assignments = phaseRow?.fazAtamalar || [];
   const initialIds = assignments.map((a: any) => a.personelId || a?.personel?.id).filter(Boolean);
@@ -105,7 +131,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
   // ── Execution hook — shared with ECP via controlled prop ──────────────────
   const exec = useExecution({
     schedulePhaseId: task?.id ?? "",
-    skip: !task?.id,
+    skip: !task?.id || hasImalatOperations,
     onTransitionSuccess: (updated) => {
       if (updated.status === "COMPLETED" || updated.status === "CANCELLED") onUpdated();
     },
@@ -435,6 +461,65 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
                 {/* İmalat bilgileri */}
                 {phase === "IMALAT" && (
                   <>
+                    {imalatOperations.length > 0 && (
+                      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                        <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">İmalat Operasyonları</div>
+                        <div className="mt-4 divide-y divide-white/10">
+                          {imalatOperations.map((operation: any) => {
+                            const statusMeta = OPERATION_STATUS_META[operation.status] ?? {
+                              label: operation.status || "Durum yok",
+                              tw: "border-white/10 bg-white/[0.04] text-slate-300",
+                            };
+                            const timestamps = [
+                              operation.readyAt ? `Hazır: ${fmtShortDate(operation.readyAt)}` : "",
+                              operation.startedAt ? `Başladı: ${fmtShortDate(operation.startedAt)}` : "",
+                              operation.completedAt ? `Bitti: ${fmtShortDate(operation.completedAt)}` : "",
+                            ].filter(Boolean);
+
+                            return (
+                              <div key={operation.id || operation.operationType} className="py-3 first:pt-0 last:pb-0">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-black text-white">{OPERATION_LABELS[operation.operationType] || operation.operationType}</div>
+                                    {timestamps.length > 0 && (
+                                      <div className="mt-1 space-y-0.5 text-xs text-slate-400">
+                                        {timestamps.map((line) => (
+                                          <div key={line}>{line}</div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-black ${statusMeta.tw}`}>
+                                    {statusMeta.label}
+                                  </span>
+                                </div>
+
+                                {!editMode && operation.status === "PLANNED" && (
+                                  <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-500">
+                                    {operation.operationType === "TOPLAMA" ? "Kesim tamamlanınca açılır" : "Ölçü tamamlanınca açılır"}
+                                  </div>
+                                )}
+
+                                {!editMode && operation.status !== "PLANNED" && (
+                                  <div className="mt-3">
+                                    <ExecutionControlPanel
+                                      schedulePhaseId={phaseRow.id}
+                                      phaseOperationId={operation.id}
+                                      operationType={operation.operationType}
+                                      phaseType="IMALAT"
+                                      readOnly={operation.status === "COMPLETED" || operation.status === "CANCELLED"}
+                                      completedAt={operation.completedAt}
+                                      onTransitionSuccess={() => onUpdated()}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5">
                       <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Tahmini Süre</div>
                       <div className="mt-2 text-sm text-amber-200/60">Tahmini süre girilmedi</div>
@@ -609,7 +694,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
             )}
 
             {/* Execution Panel — tamamlanmış fazlarda da göster (timeline + fallback) */}
-            {task?.id && !editMode && (
+            {task?.id && !editMode && !hasImalatOperations && (
               <div className="mt-4">
                 <ExecutionControlPanel
                   schedulePhaseId={task.id}
@@ -644,7 +729,7 @@ export default function TaskDetailModal({ task, onClose, onUpdated, canEdit = tr
               </button>
             )}
 
-            {!editMode && task?.id && (() => {
+            {!editMode && task?.id && !hasImalatOperations && (() => {
               const execStatus = exec.execution?.status ?? null;
               const busy = exec.loading || exec.fetching;
               const isCompleted = !!(phaseRow?.isCompleted || execStatus === "COMPLETED");

@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
     }
 
     const schedulePhaseId = req.nextUrl.searchParams.get("schedulePhaseId") || ""
+    const phaseOperationId = req.nextUrl.searchParams.get("phaseOperationId") || null
     if (!schedulePhaseId) {
       return NextResponse.json({ error: "schedulePhaseId gerekli" }, { status: 400 })
     }
@@ -37,7 +38,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 403 })
     }
 
-    const execution = await getCurrentExecutionForPhase(schedulePhaseId, auth.atolyeId)
+    if (phaseOperationId) {
+      const operation = await prisma.schedulePhaseOperation.findFirst({
+        where: { id: phaseOperationId, schedulePhaseId },
+        select: { id: true },
+      })
+      if (!operation) {
+        return NextResponse.json({ error: "Operasyon bulunamadı" }, { status: 404 })
+      }
+    }
+
+    const execution = await getCurrentExecutionForPhase(schedulePhaseId, auth.atolyeId, phaseOperationId)
     return NextResponse.json({ ok: true, execution: execution ?? null })
   } catch (e: any) {
     console.error(e)
@@ -57,6 +68,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const schedulePhaseId = String(body.schedulePhaseId || "")
+    const phaseOperationId = body.phaseOperationId ? String(body.phaseOperationId) : null
     if (!schedulePhaseId) {
       return NextResponse.json({ error: "schedulePhaseId gerekli" }, { status: 400 })
     }
@@ -89,6 +101,7 @@ export async function POST(req: NextRequest) {
 
     const execution = await createExecution({
       schedulePhaseId,
+      phaseOperationId,
       atolyeId: auth.atolyeId,
       personelId,
       plannedStartAt: phase.plannedStart ?? null,

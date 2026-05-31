@@ -95,6 +95,7 @@ export class ExecutionError extends Error {
 
 export interface CreateExecutionInput {
   schedulePhaseId: string
+  phaseOperationId?: string | null
   atolyeId: string
   personelId?: string | null
   plannedStartAt?: Date | null
@@ -147,6 +148,14 @@ function operationStepForPhase(phase?: string | null) {
   return "DIGER"
 }
 
+function canUseStoneBrokenReason(
+  phase: string | null | undefined,
+  phaseOperation: { operationType: string } | null | undefined,
+) {
+  if (phaseOperation) return phaseOperation.operationType === "KESIM"
+  return phase === "IMALAT"
+}
+
 // ─── createExecution ──────────────────────────────────────────────────────────
 // Her zaman PLANNED durumunda başlar.
 // Tek personel owner şu an; schema multi-staff'a kapalı değil.
@@ -161,6 +170,7 @@ const ACTIVE_STATUSES: PhaseExecutionStatus[] = [
 export async function createExecution(input: CreateExecutionInput) {
   const {
     schedulePhaseId,
+    phaseOperationId,
     atolyeId,
     personelId,
     plannedStartAt,
@@ -172,8 +182,42 @@ export async function createExecution(input: CreateExecutionInput) {
   // Aynı faz için zaten aktif bir execution varsa yeni kayıt açma.
   // Transaction içinde: check + create atomik — race condition guard.
   const execution = await prisma.$transaction(async (tx) => {
+    const phaseOperation = phaseOperationId
+      ? await tx.schedulePhaseOperation.findUnique({
+          where: { id: phaseOperationId },
+          select: { id: true, schedulePhaseId: true, status: true },
+        })
+      : null
+
+    if (phaseOperationId && !phaseOperation) {
+      throw new ExecutionError("Operasyon bulunamadı", 404)
+    }
+    if (phaseOperation && phaseOperation.schedulePhaseId !== schedulePhaseId) {
+      throw new ExecutionError("Operasyon bu faza ait değil", 400)
+    }
+    if (phaseOperation && phaseOperation.status !== "READY") {
+      throw new ExecutionError("Operasyon başlatılmaya hazır değil", 409)
+    }
+
     const existing = await tx.phaseExecution.findFirst({
-      where: { schedulePhaseId, atolyeId, status: { in: ACTIVE_STATUSES } },
+      where: phaseOperationId
+        ? {
+            atolyeId,
+            status: { in: ACTIVE_STATUSES },
+            OR: [
+              { phaseOperationId },
+              { schedulePhaseId, phaseOperationId: null },
+            ],
+          }
+        : {
+            schedulePhaseId,
+            atolyeId,
+            status: { in: ACTIVE_STATUSES },
+            OR: [
+              { phaseOperationId: null },
+              { phaseOperationId: { not: null } },
+            ],
+          },
     })
     if (existing) {
       throw new ExecutionError(
@@ -185,6 +229,7 @@ export async function createExecution(input: CreateExecutionInput) {
     return tx.phaseExecution.create({
       data: {
         schedulePhaseId,
+        phaseOperationId: phaseOperationId ?? null,
         atolyeId,
         personelId: personelId ?? null,
         status: "PLANNED",
@@ -205,6 +250,7 @@ export async function createExecution(input: CreateExecutionInput) {
     data: {
       phaseExecutionId: execution.id,
       schedulePhaseId,
+      phaseOperationId: phaseOperationId ?? null,
       personelId: personelId ?? null,
       atolyeId,
       eventType: "CREATED",
@@ -245,10 +291,18 @@ export async function transitionExecution(input: TransitionInput) {
           phase: true,
           workSchedule: {
             select: {
+              id: true,
               isId: true,
               is: { select: { stoneSource: true } },
             },
           },
+        },
+      },
+      phaseOperation: {
+        select: {
+          id: true,
+          operationType: true,
+          status: true,
         },
       },
     },
@@ -262,6 +316,23 @@ export async function transitionExecution(input: TransitionInput) {
       `${execution.status} → ${toStatus} geçişine izin verilmiyor`,
       400,
     )
+  }
+
+  if (
+    execution.phaseOperationId &&
+    toStatus === "STARTED" &&
+    execution.phaseOperation?.status !== "READY" &&
+    execution.phaseOperation?.status !== "PAUSED"
+  ) {
+    throw new ExecutionError("Operasyon başlatılmaya hazır değil", 409)
+  }
+
+  if (
+    toStatus === "CANNOT_START" &&
+    cannotStartReason === "STONE_BROKEN_IN_CUTTING" &&
+    !canUseStoneBrokenReason(execution.schedulePhase?.phase, execution.phaseOperation)
+  ) {
+    throw new ExecutionError("Kesimde taş kırıldı nedeni sadece kesim operasyonunda kullanılabilir", 400)
   }
 
   const now = new Date()
@@ -319,7 +390,16 @@ export async function transitionExecution(input: TransitionInput) {
   // ── Atomic: optimistic lock + immutable event append ─────────────────────
   // updateMany ile { id, status: fromStatus } — eşzamanlı başka bir PATCH
   // status'u değiştirdiyse count === 0 gelir ve 409 fırlatılır.
-  const updated = await prisma.$transaction(async (tx) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
+    let toplamaReadyNotification:
+      | {
+          targetOperationId: string
+          workScheduleId: string
+          jobId: string
+          schedulePhaseId: string
+        }
+      | null = null
+
     const result = await tx.phaseExecution.updateMany({
       where: { id: executionId, status: fromStatus },
       data: update,
@@ -336,6 +416,7 @@ export async function transitionExecution(input: TransitionInput) {
       data: {
         phaseExecutionId: executionId,
         schedulePhaseId: execution.schedulePhaseId,
+        phaseOperationId: execution.phaseOperationId ?? null,
         personelId: personelId ?? null,
         atolyeId,
         eventType,
@@ -355,11 +436,55 @@ export async function transitionExecution(input: TransitionInput) {
                 ...(failureDescription ? { failureDescription } : {}),
                 ...(materialLossCost != null ? { materialLossCost } : {}),
               }
+            : toStatus === "COMPLETED" && execution.phaseOperation?.operationType === "KESIM"
+              ? {
+                  sourceOperationType: "KESIM",
+                  targetOperationType: "TOPLAMA",
+                }
             : undefined,
       },
     })
 
     const jobId = execution.schedulePhase.workSchedule.isId
+
+    if (execution.phaseOperationId) {
+      if (toStatus === "STARTED") {
+        await tx.schedulePhaseOperation.updateMany({
+          where: {
+            id: execution.phaseOperationId,
+            status: { in: ["READY", "PAUSED"] },
+          },
+          data: {
+            status: "STARTED",
+            startedAt: now,
+          },
+        })
+      }
+
+      if (toStatus === "PAUSED") {
+        await tx.schedulePhaseOperation.updateMany({
+          where: {
+            id: execution.phaseOperationId,
+            status: "STARTED",
+          },
+          data: {
+            status: "PAUSED",
+          },
+        })
+      }
+
+      if (toStatus === "CANNOT_START") {
+        await tx.schedulePhaseOperation.updateMany({
+          where: {
+            id: execution.phaseOperationId,
+            status: { in: ["READY", "STARTED", "PAUSED"] },
+          },
+          data: {
+            status: "CANNOT_START",
+          },
+        })
+      }
+    }
 
     if (
       toStatus === "CANNOT_START" &&
@@ -381,6 +506,7 @@ export async function transitionExecution(input: TransitionInput) {
           atolyeId,
           isId: jobId,
           phaseExecutionId: executionId,
+          phaseOperationId: execution.phaseOperationId ?? null,
           stockPlateId: reservation?.stockPlateId ?? null,
           fireType: "STONE_BROKEN_IN_CUTTING",
           status: "RESOLVED",
@@ -403,25 +529,138 @@ export async function transitionExecution(input: TransitionInput) {
     }
 
     if (toStatus === "COMPLETED") {
-      await tx.schedulePhase.update({
-        where: { id: execution.schedulePhaseId },
-        data: { isCompleted: true, completedAt: now, completedBy: personelId ?? null },
-      })
-      // MONTAJ tamamlandığında işi montaj_tamamlandi yap (togglePhaseCompletion ile tutarlı).
-      const phaseInfo = await tx.schedulePhase.findUnique({
-        where: { id: execution.schedulePhaseId },
-        select: { phase: true, workSchedule: { select: { isId: true } } },
-      })
-      if (phaseInfo?.phase === "MONTAJ") {
-        await tx.is.update({
-          where: { id: phaseInfo.workSchedule.isId },
-          data: { durum: "montaj_tamamlandi" },
+      if (execution.phaseOperationId) {
+        await tx.schedulePhaseOperation.updateMany({
+          where: {
+            id: execution.phaseOperationId,
+            status: { in: ["PLANNED", "READY", "STARTED", "PAUSED"] },
+          },
+          data: {
+            status: "COMPLETED",
+            completedAt: now,
+            completedBy: personelId ?? null,
+          },
         })
+
+        if (execution.phaseOperation?.operationType === "KESIM") {
+          const toplamaOperation = await tx.schedulePhaseOperation.findUnique({
+            where: {
+              schedulePhaseId_operationType: {
+                schedulePhaseId: execution.schedulePhaseId,
+                operationType: "TOPLAMA",
+              },
+            },
+            select: {
+              id: true,
+              schedulePhaseId: true,
+              schedulePhase: {
+                select: {
+                  workScheduleId: true,
+                  workSchedule: { select: { isId: true } },
+                },
+              },
+            },
+          })
+
+          const toplamaReadyResult = await tx.schedulePhaseOperation.updateMany({
+            where: {
+              schedulePhaseId: execution.schedulePhaseId,
+              operationType: "TOPLAMA",
+              status: "PLANNED",
+            },
+            data: {
+              status: "READY",
+              readyAt: now,
+            },
+          })
+
+          if (toplamaOperation && toplamaReadyResult.count > 0) {
+            toplamaReadyNotification = {
+              targetOperationId: toplamaOperation.id,
+              workScheduleId: toplamaOperation.schedulePhase.workScheduleId,
+              jobId: toplamaOperation.schedulePhase.workSchedule.isId,
+              schedulePhaseId: toplamaOperation.schedulePhaseId,
+            }
+          }
+        }
+
+        if (execution.phaseOperation?.operationType === "TOPLAMA") {
+          const siblingOperations = await tx.schedulePhaseOperation.findMany({
+            where: {
+              schedulePhaseId: execution.schedulePhaseId,
+              operationType: { in: ["KESIM", "TOPLAMA"] },
+            },
+            select: { operationType: true, status: true },
+          })
+          const operationStatus = new Map(
+            siblingOperations.map((operation) => [operation.operationType, operation.status]),
+          )
+          const productionComplete =
+            operationStatus.get("KESIM") === "COMPLETED" &&
+            operationStatus.get("TOPLAMA") === "COMPLETED"
+
+          if (productionComplete) {
+            await tx.schedulePhase.updateMany({
+              where: {
+                id: execution.schedulePhaseId,
+                isCompleted: false,
+              },
+              data: {
+                isCompleted: true,
+                completedAt: now,
+                completedBy: personelId ?? null,
+              },
+            })
+          }
+        }
+      } else {
+        await tx.schedulePhase.update({
+          where: { id: execution.schedulePhaseId },
+          data: { isCompleted: true, completedAt: now, completedBy: personelId ?? null },
+        })
+        // MONTAJ tamamlandığında işi montaj_tamamlandi yap (togglePhaseCompletion ile tutarlı).
+        const phaseInfo = await tx.schedulePhase.findUnique({
+          where: { id: execution.schedulePhaseId },
+          select: { phase: true, workScheduleId: true, workSchedule: { select: { isId: true } } },
+        })
+        if (phaseInfo?.phase === "OLCU") {
+          const imalatPhase = await tx.schedulePhase.findUnique({
+            where: {
+              workScheduleId_phase: {
+                workScheduleId: phaseInfo.workScheduleId,
+                phase: "IMALAT",
+              },
+            },
+            select: { id: true },
+          })
+          if (imalatPhase) {
+            await tx.schedulePhaseOperation.updateMany({
+              where: {
+                schedulePhaseId: imalatPhase.id,
+                operationType: "KESIM",
+                status: "PLANNED",
+              },
+              data: {
+                status: "READY",
+                readyAt: now,
+              },
+            })
+          }
+        }
+        if (phaseInfo?.phase === "MONTAJ") {
+          await tx.is.update({
+            where: { id: phaseInfo.workSchedule.isId },
+            data: { durum: "montaj_tamamlandi" },
+          })
+        }
       }
     }
 
-    return tx.phaseExecution.findUniqueOrThrow({ where: { id: executionId } })
+    const updatedExecution = await tx.phaseExecution.findUniqueOrThrow({ where: { id: executionId } })
+    return { updatedExecution, toplamaReadyNotification }
   })
+
+  const updated = transactionResult.updatedExecution
 
   // SSE execution_status — live-ops paneli invalidate eder (fire-and-forget).
   // Vercel multi-instance'da kayıp olabilir; polling fallback (10s) devreye girer.
@@ -485,6 +724,40 @@ export async function transitionExecution(input: TransitionInput) {
       ? ` (${CANNOT_START_LABELS[cannotStartReason] ?? cannotStartReason})`
       : ""
     const deepLink = `/dashboard/is-programi?phaseId=${execution.schedulePhaseId}`
+    const actorId = personelId ?? userId ?? null
+
+    if (transactionResult.toplamaReadyNotification) {
+      const toplamaReady = transactionResult.toplamaReadyNotification
+      await logActivity({
+        atolyeId,
+        personelId: personelId ?? undefined,
+        userId: userId ?? undefined,
+        type: "production_operation_ready",
+        eventType: "PRODUCTION_OPERATION_READY",
+        category: "production",
+        severity: "success",
+        source: "execution",
+        title: "Toplama hazır",
+        message: `${musteriAdi} - ${jobName} kesildi, toplamaya hazır.`,
+        refId: toplamaReady.targetOperationId,
+        refType: "SchedulePhaseOperation",
+        url: deepLink,
+        actorId: actorId ?? undefined,
+        actorName: actorName ?? undefined,
+        metadata: {
+          jobId: toplamaReady.jobId,
+          workScheduleId: toplamaReady.workScheduleId,
+          schedulePhaseId: toplamaReady.schedulePhaseId,
+          phaseOperationId: toplamaReady.targetOperationId,
+          targetPhaseOperationId: toplamaReady.targetOperationId,
+          sourceOperationType: "KESIM",
+          targetOperationType: "TOPLAMA",
+          targetOperationStatus: "READY",
+          phaseType: "IMALAT",
+        },
+        awaitPush: true,
+      })
+    }
 
     const MSG: Record<string, string> = {
       execution_started:      `${actorLabel} — ${musteriAdi} ${fazLabel} fazını başlattı`,
@@ -496,7 +769,6 @@ export async function transitionExecution(input: TransitionInput) {
     }
 
     const message = MSG[actType] ?? `${actorLabel} — ${musteriAdi} ${fazLabel} durumu değişti`
-    const actorId = personelId ?? userId ?? null
 
     if (toStatus === "CANNOT_START") {
       await emitMetrixEvent({

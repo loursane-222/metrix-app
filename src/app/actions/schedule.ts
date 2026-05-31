@@ -69,6 +69,11 @@ async function atolyeIdAl(): Promise<string | null> {
   return auth.atolyeId;
 }
 
+const DEFAULT_IMALAT_OPERATIONS = [
+  { operationType: "KESIM", status: "PLANNED" },
+  { operationType: "TOPLAMA", status: "PLANNED" },
+] as const;
+
 export async function getSchedulesForMonth(year: number, month: number) {
   const auth = await authBilgisiAl();
   if (!auth.atolyeId) return [];
@@ -128,6 +133,9 @@ export async function getSchedulesForMonth(year: number, month: number) {
       },
       executions: {
         select: { status: true },
+      },
+      operations: {
+        orderBy: { operationType: "asc" },
       },
     },
   };
@@ -253,6 +261,19 @@ export async function upsertWorkSchedule(data: {
       const phases = await tx.schedulePhase.findMany({ where: { workScheduleId: saved.id } });
       if (!existingSchedule) {
         const imalatPhase = phases.find((phase) => phase.phase === "IMALAT");
+        if (imalatPhase) {
+          await tx.schedulePhaseOperation.createMany({
+            data: DEFAULT_IMALAT_OPERATIONS.map((operation) => ({
+              schedulePhaseId: imalatPhase.id,
+              operationType: operation.operationType,
+              status: operation.status,
+              plannedStart: imalatPhase.plannedStart,
+              plannedEnd: imalatPhase.plannedEnd,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
         await activateDraftReservationsForJob(tx, {
           atolyeId,
           isId: data.isId,
@@ -362,19 +383,50 @@ export async function togglePhaseCompletion(data: {
     });
   }
 
-  const updated = await prisma.schedulePhase.update({
-    where: { id: data.schedulePhaseId },
-    data: {
-      isCompleted: data.isCompleted,
-      completedAt: data.isCompleted ? new Date() : null,
-      completedBy: data.isCompleted ? (userPersonel?.id ?? null) : null,
-      isOverridden: !!data.overrideNote,
-      overrideNote: data.overrideNote ?? null,
-      ...(data.photoUrl !== undefined && {
-        photoUrl: data.photoUrl || null,
-        photoUploadedAt: data.photoUrl ? new Date() : null,
-      }),
-    },
+  const now = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    const saved = await tx.schedulePhase.update({
+      where: { id: data.schedulePhaseId },
+      data: {
+        isCompleted: data.isCompleted,
+        completedAt: data.isCompleted ? now : null,
+        completedBy: data.isCompleted ? (userPersonel?.id ?? null) : null,
+        isOverridden: !!data.overrideNote,
+        overrideNote: data.overrideNote ?? null,
+        ...(data.photoUrl !== undefined && {
+          photoUrl: data.photoUrl || null,
+          photoUploadedAt: data.photoUrl ? now : null,
+        }),
+      },
+    });
+
+    if (phase.phase === "OLCU" && data.isCompleted === true) {
+      const imalatPhase = await tx.schedulePhase.findUnique({
+        where: {
+          workScheduleId_phase: {
+            workScheduleId: phase.workScheduleId,
+            phase: "IMALAT",
+          },
+        },
+        select: { id: true },
+      });
+
+      if (imalatPhase) {
+        await tx.schedulePhaseOperation.updateMany({
+          where: {
+            schedulePhaseId: imalatPhase.id,
+            operationType: "KESIM",
+            status: "PLANNED",
+          },
+          data: {
+            status: "READY",
+            readyAt: now,
+          },
+        });
+      }
+    }
+
+    return saved;
   });
 
   try {

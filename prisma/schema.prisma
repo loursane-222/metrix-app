@@ -181,15 +181,15 @@ model Is {
 
   karYuzdesi Decimal
 
-  toplamSureDakika Decimal @default(0)
-  iscilikMaliyeti  Decimal @default(0)
-  malzemeMaliyeti  Decimal @default(0)
+  toplamSureDakika        Decimal @default(0)
+  iscilikMaliyeti         Decimal @default(0)
+  malzemeMaliyeti         Decimal @default(0)
   operasyonelFireMaliyeti Decimal @default(0)
-  toplamMaliyet    Decimal @default(0)
-  kdvTutari        Decimal @default(0)
-  kdvDahilFiyat    Decimal @default(0)
-  satisFiyati      Decimal @default(0)
-  mtulSatisFiyati  Decimal @default(0)
+  toplamMaliyet           Decimal @default(0)
+  kdvTutari               Decimal @default(0)
+  kdvDahilFiyat           Decimal @default(0)
+  satisFiyati             Decimal @default(0)
+  mtulSatisFiyati         Decimal @default(0)
 
   tezgahBirimFiyatOverride      Decimal @default(0)
   tezgahArasiBirimFiyatOverride Decimal @default(0)
@@ -205,10 +205,10 @@ model Is {
 
   durum String @default("teklif_verildi")
 
-  tasDurumu String?
-  stoneSource String?
-  selectedStockPlateId String?
-  stockMaterialSnapshot Json?
+  tasDurumu                 String?
+  stoneSource               String?
+  selectedStockPlateId      String?
+  stockMaterialSnapshot     Json?
   customerOwnedMaterialNote String?
 
   whatsappOnay       Boolean @default(false)
@@ -265,6 +265,21 @@ enum PhaseExecutionStatus {
   RESCHEDULE_REQUESTED
 }
 
+enum ProductionOperationType {
+  KESIM
+  TOPLAMA
+}
+
+enum ProductionOperationStatus {
+  PLANNED
+  READY
+  STARTED
+  PAUSED
+  CANNOT_START
+  COMPLETED
+  CANCELLED
+}
+
 enum PersonelRolGrubu {
   OLCU
   KESIM
@@ -316,9 +331,41 @@ model SchedulePhase {
 
   fazAtamalar FazAtama[]
   executions  PhaseExecution[]
+  operations  SchedulePhaseOperation[]
 
   @@unique([workScheduleId, phase])
   @@map("schedule_phases")
+}
+
+model SchedulePhaseOperation {
+  id              String        @id @default(cuid())
+  schedulePhaseId String
+  schedulePhase   SchedulePhase @relation(fields: [schedulePhaseId], references: [id], onDelete: Cascade)
+
+  operationType ProductionOperationType
+  status        ProductionOperationStatus @default(PLANNED)
+
+  plannedStart DateTime?
+  plannedEnd   DateTime?
+  readyAt      DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  completedBy  String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  executions PhaseExecution[]
+  events     PhaseExecutionEvent[]
+  fireRecords FireRecord[]
+
+  @@unique([schedulePhaseId, operationType])
+  @@index([schedulePhaseId])
+  @@index([operationType])
+  @@index([status])
+  @@map("schedule_phase_operations")
 }
 
 model Personel {
@@ -467,37 +514,37 @@ model StockPurchase {
 }
 
 model StockPlate {
-  id                String   @id @default(cuid())
-  atolyeId          String
-  plateCode         String
-  productName       String
-  materialType      String?
-  brand             String?
-  colorName         String?
-  shadeCode         String?
-  batchNo           String?
-  supplierName      String?
-  warehouseId       String?
-  widthCm           Decimal  @default(0)
-  heightCm          Decimal  @default(0)
-  thicknessMm       Decimal?
-  totalAreaCm2      Decimal  @default(0)
-  remainingAreaCm2  Decimal  @default(0)
-  purchaseCurrency  String   @default("TRY")
-  purchaseUnitCost  Decimal  @default(0)
-  purchaseTotalCost Decimal  @default(0)
+  id                   String   @id @default(cuid())
+  atolyeId             String
+  plateCode            String
+  productName          String
+  materialType         String?
+  brand                String?
+  colorName            String?
+  shadeCode            String?
+  batchNo              String?
+  supplierName         String?
+  warehouseId          String?
+  widthCm              Decimal  @default(0)
+  heightCm             Decimal  @default(0)
+  thicknessMm          Decimal?
+  totalAreaCm2         Decimal  @default(0)
+  remainingAreaCm2     Decimal  @default(0)
+  purchaseCurrency     String   @default("TRY")
+  purchaseUnitCost     Decimal  @default(0)
+  purchaseTotalCost    Decimal  @default(0)
   purchaseOriginalCost Decimal?
-  purchaseFxRate    Decimal  @default(1)
-  status            String   @default("AVAILABLE")
-  sourceType        String?
-  sourceJobId       String?
-  stockPurchaseId   String?
-  notes             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  purchaseFxRate       Decimal  @default(1)
+  status               String   @default("AVAILABLE")
+  sourceType           String?
+  sourceJobId          String?
+  stockPurchaseId      String?
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  offcuts           StockOffcut[] @relation("PlateOffcuts")
-  movements         StockMovement[] @relation("PlateMovements")
+  offcuts   StockOffcut[]   @relation("PlateOffcuts")
+  movements StockMovement[] @relation("PlateMovements")
 
   @@unique([atolyeId, plateCode])
   @@index([atolyeId, productName])
@@ -544,8 +591,8 @@ model StockMovement {
   note            String?
   createdAt       DateTime @default(now())
 
-  stockPlate      StockPlate? @relation("PlateMovements", fields: [stockPlateId], references: [id], onDelete: SetNull)
-  offcut          StockOffcut? @relation("OffcutMovements", fields: [offcutId], references: [id], onDelete: SetNull)
+  stockPlate StockPlate?  @relation("PlateMovements", fields: [stockPlateId], references: [id], onDelete: SetNull)
+  offcut     StockOffcut? @relation("OffcutMovements", fields: [offcutId], references: [id], onDelete: SetNull)
 
   @@index([atolyeId, stockPlateId])
   @@index([atolyeId, isId])
@@ -555,7 +602,7 @@ model StockMovement {
 }
 
 model StockOffcut {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   atolyeId         String
   parentPlateId    String
   parentOffcutId   String?
@@ -565,23 +612,23 @@ model StockOffcut {
   materialType     String?
   widthCm          Decimal?
   heightCm         Decimal?
-  areaCm2          Decimal  @default(0)
-  remainingAreaCm2 Decimal  @default(0)
-  costPerM2        Decimal  @default(0)
-  totalCost        Decimal  @default(0)
-  currency         String   @default("TRY")
-  status           String   @default("AVAILABLE")
+  areaCm2          Decimal   @default(0)
+  remainingAreaCm2 Decimal   @default(0)
+  costPerM2        Decimal   @default(0)
+  totalCost        Decimal   @default(0)
+  currency         String    @default("TRY")
+  status           String    @default("AVAILABLE")
   sourceJobId      String?
   consumedAt       DateTime?
   scrappedAt       DateTime?
   notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  parentPlate      StockPlate @relation("PlateOffcuts", fields: [parentPlateId], references: [id], onDelete: Restrict)
-  parentOffcut     StockOffcut? @relation("OffcutChildren", fields: [parentOffcutId], references: [id], onDelete: SetNull)
-  childOffcuts     StockOffcut[] @relation("OffcutChildren")
-  movements        StockMovement[] @relation("OffcutMovements")
+  parentPlate  StockPlate      @relation("PlateOffcuts", fields: [parentPlateId], references: [id], onDelete: Restrict)
+  parentOffcut StockOffcut?    @relation("OffcutChildren", fields: [parentOffcutId], references: [id], onDelete: SetNull)
+  childOffcuts StockOffcut[]   @relation("OffcutChildren")
+  movements    StockMovement[] @relation("OffcutMovements")
 
   @@unique([atolyeId, offcutCode])
   @@index([atolyeId, parentPlateId])
@@ -615,6 +662,8 @@ model FireRecord {
   atolyeId         String
   isId             String?
   phaseExecutionId String?
+  phaseOperationId String?
+  phaseOperation   SchedulePhaseOperation? @relation(fields: [phaseOperationId], references: [id], onDelete: SetNull)
   stockPlateId     String?
   offcutId         String?
   fireType         String
@@ -634,6 +683,7 @@ model FireRecord {
   @@index([atolyeId, stockPlateId])
   @@index([atolyeId, offcutId])
   @@index([atolyeId, phaseExecutionId])
+  @@index([phaseOperationId])
   @@map("fire_records")
 }
 
@@ -735,6 +785,9 @@ model PhaseExecution {
   schedulePhaseId String
   schedulePhase   SchedulePhase @relation(fields: [schedulePhaseId], references: [id], onDelete: Cascade)
 
+  phaseOperationId String?
+  phaseOperation   SchedulePhaseOperation? @relation(fields: [phaseOperationId], references: [id], onDelete: SetNull)
+
   personelId String?
   personel   Personel? @relation(fields: [personelId], references: [id], onDelete: SetNull)
 
@@ -772,6 +825,7 @@ model PhaseExecution {
   events PhaseExecutionEvent[]
 
   @@index([schedulePhaseId])
+  @@index([phaseOperationId])
   @@index([atolyeId])
   @@index([personelId])
   @@map("phase_executions")
@@ -782,9 +836,11 @@ model PhaseExecutionEvent {
   phaseExecutionId String
   phaseExecution   PhaseExecution @relation(fields: [phaseExecutionId], references: [id], onDelete: Cascade)
 
-  schedulePhaseId String // denormalize — direkt faz bazlı sorgu
-  personelId      String? // eventi gerçekleştiren personel
-  atolyeId        String // denormalize
+  schedulePhaseId  String // denormalize — direkt faz bazlı sorgu
+  phaseOperationId String?
+  phaseOperation   SchedulePhaseOperation? @relation(fields: [phaseOperationId], references: [id], onDelete: SetNull)
+  personelId       String? // eventi gerçekleştiren personel
+  atolyeId         String // denormalize
 
   eventType String // PhaseExecutionEventType değeri (string)
   note      String?
@@ -807,6 +863,7 @@ model PhaseExecutionEvent {
 
   @@index([phaseExecutionId])
   @@index([schedulePhaseId])
+  @@index([phaseOperationId])
   @@index([atolyeId])
   @@index([atolyeId, createdAt])
   @@index([operationStep])
