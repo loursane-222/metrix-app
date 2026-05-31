@@ -10,6 +10,7 @@ import {
   syncJobStockDraftReservation,
 } from "@/lib/stock/reservations";
 import { notifyProposalApproved } from "@/lib/proposalNotifications";
+import { syncJobMaterialAllocations } from "@/lib/jobMaterialAllocationSync";
 
 
 
@@ -242,6 +243,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       atolyeId,
       isId: id,
       stockPlateId: safeSelectedStockPlateId,
+    })
+
+    await syncJobMaterialAllocations(tx, {
+      atolyeId,
+      jobId: id,
+      requirements: Array.isArray(body.materialRequirements) ? body.materialRequirements : undefined,
     })
   })
 

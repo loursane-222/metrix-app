@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 import { releaseOpenReservationsForJob, syncJobStockDraftReservation } from "@/lib/stock/reservations";
+import { syncJobMaterialAllocations } from "@/lib/jobMaterialAllocationSync";
 
 
 
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
     selectedStockPlateId,
     stockMaterialSnapshot,
     customerOwnedMaterialNote,
+    materialRequirements,
 
     ozelIscilik1Mtul, ozelIscilik1Dakika,
     ozelIscilik2Mtul, ozelIscilik2Dakika,
@@ -292,6 +294,12 @@ export async function POST(req: NextRequest) {
       atolyeId,
       isId: created.id,
       stockPlateId: safeSelectedStockPlateId,
+    })
+
+    await syncJobMaterialAllocations(tx, {
+      atolyeId,
+      jobId: created.id,
+      requirements: Array.isArray(materialRequirements) ? materialRequirements : undefined,
     })
 
     return created

@@ -119,6 +119,7 @@ type StockSelectPlate = {
   productName: string;
   materialType: string | null;
   shadeCode: string | null;
+  batchNo?: string | null;
   warehouse: { id: string; name: string; code: string | null } | null;
   widthCm: number;
   heightCm: number;
@@ -467,6 +468,7 @@ export default function YeniIsV3Page() {
   const [stockPickerOpen, setStockPickerOpen] = useState(false);
   const [stockQ, setStockQ] = useState("");
   const [stockPlates, setStockPlates] = useState<StockSelectPlate[]>([]);
+  const [selectedStockPlates, setSelectedStockPlates] = useState<StockSelectPlate[]>([]);
   const [stockLoading, setStockLoading] = useState(false);
   const [aiMode, setAiMode]                 = useState(false);
   const [kaydediliyor, setKaydediliyor]     = useState(false);
@@ -592,6 +594,30 @@ export default function YeniIsV3Page() {
             parcalar: yuklenenParcalar,
           }));
           setSeciliMusteriTelefon(is.musteriTelefonu || is.musteri?.telefon || "");
+          const allocationPlates = (is.materialRequirements || [])
+            .flatMap((requirement: any) => requirement.allocations || [])
+            .map((allocation: any) => allocation.stockPlate)
+            .filter(Boolean)
+            .map((plate: any) => ({
+              id: plate.id,
+              plateCode: plate.plateCode,
+              productName: plate.productName,
+              materialType: plate.materialType,
+              shadeCode: plate.shadeCode,
+              batchNo: plate.batchNo,
+              warehouse: null,
+              widthCm: Number(plate.widthCm || 0),
+              heightCm: Number(plate.heightCm || 0),
+              remainingAreaCm2: Number(plate.remainingAreaCm2 || 0),
+              remainingAreaM2: Number(plate.remainingAreaCm2 || 0) / 10000,
+              purchaseTotalCost: Number(plate.purchaseTotalCost || 0),
+              purchaseCurrency: "TRY",
+              status: plate.status || "AVAILABLE",
+              sourceType: "STOCK_PLATE",
+            }));
+          if (allocationPlates.length > 0) {
+            setSelectedStockPlates(allocationPlates);
+          }
         }).catch(() => {}).finally(() => setDuzenleYukleniyor(false));
         return;
       }
@@ -649,10 +675,12 @@ export default function YeniIsV3Page() {
 
   function stockSnapshotFromPlate(plate: StockSelectPlate) {
     return {
+      id: plate.id,
       plateCode: plate.plateCode,
       productName: plate.productName,
       materialType: plate.materialType,
       shadeCode: plate.shadeCode,
+      batchNo: plate.batchNo || null,
       warehouseName: plate.warehouse?.name || null,
       widthCm: plate.widthCm,
       heightCm: plate.heightCm,
@@ -671,6 +699,7 @@ export default function YeniIsV3Page() {
       stockMaterialSnapshot: source === "STOCK" ? prev.stockMaterialSnapshot : null,
       customerOwnedMaterialNote: source === "CUSTOMER_OWNED" ? prev.customerOwnedMaterialNote : "",
     }));
+    if (source !== "STOCK") setSelectedStockPlates([]);
     if (source === "STOCK") setStockPickerOpen(true);
   }
 
@@ -693,16 +722,52 @@ export default function YeniIsV3Page() {
     return () => clearTimeout(id);
   }, [stockPickerOpen, stockQ]);
 
-  function selectStockPlate(plate: StockSelectPlate) {
+  const stockBasketSummary = useMemo(() => {
+    const totalAreaCm2 = selectedStockPlates.reduce((sum, plate) => sum + Number(plate.remainingAreaCm2 || 0), 0);
+    const totalCost = selectedStockPlates.reduce((sum, plate) => sum + Number(plate.purchaseTotalCost || 0), 0);
+    const shadeCodes = [...new Set(selectedStockPlates.map((plate) => String(plate.shadeCode || "").trim()).filter(Boolean))];
+    return {
+      plateCount: selectedStockPlates.length,
+      totalAreaCm2,
+      totalCost,
+      shadeCodes,
+      shadeMixWarning: shadeCodes.length > 1 ? "Seçilen plakalar farklı shade kodlarına sahip." : "",
+    };
+  }, [selectedStockPlates]);
+
+  function toggleStockPlateInBasket(plate: StockSelectPlate) {
+    setSelectedStockPlates((prev) => {
+      const exists = prev.some((selected) => selected.id === plate.id);
+      return exists ? prev.filter((selected) => selected.id !== plate.id) : [...prev, plate];
+    });
+  }
+
+  function applyStockBasket() {
+    const primary = selectedStockPlates[0];
+    if (!primary) {
+      setForm((prev) => ({
+        ...prev,
+        selectedStockPlateId: "",
+        stockMaterialSnapshot: null,
+      }));
+      setStockPickerOpen(false);
+      return;
+    }
+
+    const averagePlateCost =
+      selectedStockPlates.length > 0
+        ? selectedStockPlates.reduce((sum, plate) => sum + Number(plate.purchaseTotalCost || 0), 0) / selectedStockPlates.length
+        : Number(primary.purchaseTotalCost || 0);
+
     setForm((prev) => ({
       ...prev,
       stoneSource: "STOCK",
-      selectedStockPlateId: plate.id,
-      stockMaterialSnapshot: stockSnapshotFromPlate(plate),
-      urunAdi: prev.urunAdi || plate.productName,
-      plakaEn: String(plate.widthCm || prev.plakaEn),
-      plakaBoy: String(plate.heightCm || prev.plakaBoy),
-      plakaFiyati: prev.plakaFiyati || String(plate.purchaseTotalCost || ""),
+      selectedStockPlateId: primary.id,
+      stockMaterialSnapshot: stockSnapshotFromPlate(primary),
+      urunAdi: prev.urunAdi || primary.productName,
+      plakaEn: String(primary.widthCm || prev.plakaEn),
+      plakaBoy: String(primary.heightCm || prev.plakaBoy),
+      plakaFiyati: prev.plakaFiyati || String(Math.round(averagePlateCost * 100) / 100 || ""),
       customerOwnedMaterialNote: "",
     }));
     setStockPickerOpen(false);
@@ -965,6 +1030,28 @@ export default function YeniIsV3Page() {
         operasyonTipi: x.tip, makineId: x.makineId || null,
         adet: 1, birimDakika: x.dakika, toplamDakika: x.mtul * x.dakika,
       }));
+      const stockRequirement =
+        form.stoneSource === "STOCK" && selectedStockPlates.length > 0
+          ? [{
+              productName: form.urunAdi || selectedStockPlates[0].productName,
+              materialType: selectedStockPlates[0].materialType || null,
+              requiredQuantity: selectedStockPlates.length,
+              requiredAreaCm2: stockBasketSummary.totalAreaCm2,
+              shadePolicy: "MIX_ALLOWED",
+              preferredShadeCode: stockBasketSummary.shadeCodes.length === 1 ? stockBasketSummary.shadeCodes[0] : null,
+              preferredLotNo: null,
+              status: "PLANNED",
+              notes: stockBasketSummary.shadeMixWarning || null,
+              allocations: selectedStockPlates.map((plate) => ({
+                stockPlateId: plate.id,
+                allocatedAreaCm2: plate.remainingAreaCm2,
+                allocatedPieces: 1,
+                status: "DRAFT",
+                source: "STOCK_PLATE",
+              })),
+            }]
+          : [];
+      const primaryStockPlate = selectedStockPlates[0] || null;
 
       const body = {
         musteriId: form.musteriId || null,
@@ -997,8 +1084,9 @@ export default function YeniIsV3Page() {
         notlar: form.notlar,
         tasDurumu: form.isModeli,
         stoneSource: form.stoneSource || null,
-        selectedStockPlateId: form.stoneSource === "STOCK" ? form.selectedStockPlateId || null : null,
-        stockMaterialSnapshot: form.stoneSource === "STOCK" ? form.stockMaterialSnapshot || null : null,
+        selectedStockPlateId: form.stoneSource === "STOCK" ? primaryStockPlate?.id || form.selectedStockPlateId || null : null,
+        stockMaterialSnapshot: form.stoneSource === "STOCK" ? (primaryStockPlate ? stockSnapshotFromPlate(primaryStockPlate) : form.stockMaterialSnapshot || null) : null,
+        materialRequirements: stockRequirement,
         customerOwnedMaterialNote: form.stoneSource === "CUSTOMER_OWNED" ? form.customerOwnedMaterialNote || "" : "",
         ozelIscilik1Mtul: "0", ozelIscilik1Dakika: "0",
         ozelIscilik2Mtul: "0", ozelIscilik2Dakika: "0",
@@ -1473,7 +1561,25 @@ export default function YeniIsV3Page() {
                 </div>
                 {form.stoneSource === "STOCK" && (
                   <div style={{ marginTop: "12px", border: "1px solid rgba(16,185,129,.22)", background: "rgba(16,185,129,.07)", borderRadius: "16px", padding: "12px" }}>
-                    {form.stockMaterialSnapshot ? (
+                    {selectedStockPlates.length > 0 ? (
+                      <div style={{ display: "grid", gap: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ fontSize: "12px", fontWeight: 900, color: "#d1fae5" }}>{selectedStockPlates.length} plaka seçildi</p>
+                            <p style={{ marginTop: "3px", fontSize: "11px", color: "#86efac" }}>
+                              {m2(stockBasketSummary.totalAreaCm2)} · {tl(stockBasketSummary.totalCost)}
+                              {stockBasketSummary.shadeCodes.length > 0 ? ` · Shade ${stockBasketSummary.shadeCodes.join(", ")}` : ""}
+                            </p>
+                          </div>
+                          <button type="button" onClick={() => setStockPickerOpen(true)} style={{ flexShrink: 0, border: "1px solid rgba(16,185,129,.28)", background: "rgba(16,185,129,.12)", borderRadius: "12px", padding: "9px 12px", color: "#bbf7d0", fontSize: "12px", fontWeight: 900 }}>Düzenle</button>
+                        </div>
+                        {stockBasketSummary.shadeMixWarning && (
+                          <div style={{ border: "1px solid rgba(245,158,11,.24)", background: "rgba(245,158,11,.10)", borderRadius: "12px", padding: "9px 10px", color: "#fde68a", fontSize: "11px", fontWeight: 800 }}>
+                            {stockBasketSummary.shadeMixWarning}
+                          </div>
+                        )}
+                      </div>
+                    ) : form.stockMaterialSnapshot ? (
                       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
                         <div style={{ minWidth: 0 }}>
                           <p style={{ fontSize: "12px", fontWeight: 900, color: "#d1fae5" }}>{form.stockMaterialSnapshot.plateCode} · {form.stockMaterialSnapshot.productName}</p>
@@ -2237,8 +2343,8 @@ export default function YeniIsV3Page() {
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                 <div>
                   <p style={{ fontSize: "10px", fontWeight: 900, letterSpacing: ".18em", color: "#60a5fa", textTransform: "uppercase" }}>Stoktan Kullan</p>
-                  <h2 style={{ marginTop: "4px", fontSize: "20px", fontWeight: 900, color: "#fff" }}>Uygun plaka seç</h2>
-                  <p style={{ marginTop: "4px", fontSize: "12px", color: "#64748b" }}>Bu patch plaka bilgisini işe bağlar; rezervasyon sonraki fazda yazılacak.</p>
+                  <h2 style={{ marginTop: "4px", fontSize: "20px", fontWeight: 900, color: "#fff" }}>Plaka sepeti</h2>
+                  <p style={{ marginTop: "4px", fontSize: "12px", color: "#64748b" }}>Birden fazla plaka ekleyebilirsin. İlk plaka legacy akış için ana plaka olarak kalır.</p>
                 </div>
                 <button type="button" onClick={() => setStockPickerOpen(false)} style={{ border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.06)", color: "#cbd5e1", borderRadius: "999px", width: "40px", height: "40px", fontWeight: 900 }}>×</button>
               </div>
@@ -2250,26 +2356,28 @@ export default function YeniIsV3Page() {
                 onChange={(e) => setStockQ(e.target.value)}
               />
             </div>
-            <div style={{ maxHeight: "calc(88dvh - 148px)", overflowY: "auto", padding: "14px", paddingBottom: "calc(24px + env(safe-area-inset-bottom,0px))" }}>
+            <div style={{ maxHeight: "calc(88dvh - 236px)", overflowY: "auto", padding: "14px", paddingBottom: "14px" }}>
               {stockLoading ? (
                 <div style={{ border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.04)", borderRadius: "18px", padding: "18px", color: "#94a3b8", fontSize: "13px" }}>Stok plakaları yükleniyor...</div>
               ) : stockPlates.length === 0 ? (
                 <div style={{ border: "1px dashed rgba(255,255,255,.12)", background: "rgba(255,255,255,.035)", borderRadius: "18px", padding: "18px", color: "#64748b", fontSize: "13px" }}>Uygun kullanılabilir plaka bulunamadı.</div>
               ) : (
                 <div style={{ display: "grid", gap: "10px" }}>
-                  {stockPlates.map((plate) => (
+                  {stockPlates.map((plate) => {
+                    const selected = selectedStockPlates.some((item) => item.id === plate.id);
+                    return (
                     <button
                       key={plate.id}
                       type="button"
-                      onClick={() => selectStockPlate(plate)}
-                      style={{ width: "100%", border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.04)", borderRadius: "18px", padding: "13px", color: "#fff", textAlign: "left", cursor: "pointer" }}
+                      onClick={() => toggleStockPlateInBasket(plate)}
+                      style={{ width: "100%", border: selected ? "1px solid rgba(16,185,129,.45)" : "1px solid rgba(255,255,255,.08)", background: selected ? "rgba(16,185,129,.12)" : "rgba(255,255,255,.04)", borderRadius: "18px", padding: "13px", color: "#fff", textAlign: "left", cursor: "pointer" }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
                         <div style={{ minWidth: 0 }}>
                           <p style={{ fontSize: "13px", fontWeight: 900 }}>{plate.plateCode} · {plate.productName}</p>
-                          <p style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>{plate.materialType || "Malzeme tipi yok"} · {plate.warehouse?.name || "Depo yok"}{plate.shadeCode ? ` · Shade ${plate.shadeCode}` : ""} · {plate.sourceType || "Kaynak yok"}</p>
+                          <p style={{ marginTop: "4px", fontSize: "11px", color: "#64748b" }}>{plate.materialType || "Malzeme tipi yok"} · {plate.warehouse?.name || "Depo yok"}{plate.shadeCode ? ` · Shade ${plate.shadeCode}` : ""}{plate.batchNo ? ` · Parti ${plate.batchNo}` : ""} · {plate.sourceType || "Kaynak yok"}</p>
                         </div>
-                        <span style={{ flexShrink: 0, border: "1px solid rgba(16,185,129,.25)", background: "rgba(16,185,129,.1)", color: "#86efac", borderRadius: "999px", padding: "5px 9px", fontSize: "10px", fontWeight: 900 }}>{plate.status}</span>
+                        <span style={{ flexShrink: 0, border: selected ? "1px solid rgba(16,185,129,.55)" : "1px solid rgba(148,163,184,.18)", background: selected ? "rgba(16,185,129,.18)" : "rgba(148,163,184,.08)", color: selected ? "#86efac" : "#cbd5e1", borderRadius: "999px", padding: "5px 9px", fontSize: "10px", fontWeight: 900 }}>{selected ? "Sepetten çıkar" : "Sepete ekle"}</span>
                       </div>
                       <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px" }}>
                         <YiChip label="Ölçü" value={`${plate.widthCm} x ${plate.heightCm}`} />
@@ -2277,9 +2385,28 @@ export default function YeniIsV3Page() {
                         <YiChip label="Maliyet" value={tl(plate.purchaseTotalCost)} tone="text-emerald-300" />
                       </div>
                     </button>
-                  ))}
+                  )})}
                 </div>
               )}
+            </div>
+            <div style={{ borderTop: "1px solid rgba(255,255,255,.08)", background: "rgba(3,7,18,.96)", padding: "12px 14px calc(14px + env(safe-area-inset-bottom,0px))" }}>
+              {stockBasketSummary.shadeMixWarning && (
+                <div style={{ marginBottom: "9px", border: "1px solid rgba(245,158,11,.24)", background: "rgba(245,158,11,.10)", borderRadius: "12px", padding: "8px 10px", color: "#fde68a", fontSize: "11px", fontWeight: 800 }}>
+                  {stockBasketSummary.shadeMixWarning}
+                </div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "10px" }}>
+                <YiChip label="Seçilen" value={`${stockBasketSummary.plateCount} plaka`} />
+                <YiChip label="Toplam alan" value={m2(stockBasketSummary.totalAreaCm2)} tone="text-blue-300" />
+                <YiChip label="Toplam maliyet" value={tl(stockBasketSummary.totalCost)} tone="text-emerald-300" />
+              </div>
+              <button
+                type="button"
+                onClick={applyStockBasket}
+                style={{ width: "100%", border: "none", background: "#10b981", borderRadius: "14px", padding: "12px", color: "#fff", fontSize: "13px", fontWeight: 900, cursor: "pointer" }}
+              >
+                Seçimi uygula
+              </button>
             </div>
           </div>
         </div>
