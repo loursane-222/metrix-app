@@ -7,6 +7,12 @@ import { jwtVerify } from "jose";
 import { PhaseType, PHASE_ORDER, canCompletePhase } from "@/lib/types/schedule";
 import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
 import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
+import {
+  notifyJobScheduled,
+  notifyPhaseCompleted,
+  notifyPhaseReopened,
+  notifyProductionOperationReady,
+} from "@/lib/scheduleNotifications";
 
 async function authBilgisiAl(): Promise<{
   userId: string | null;
@@ -304,6 +310,21 @@ export async function upsertWorkSchedule(data: {
 
   revalidatePath("/dashboard/is-programi");
 
+  if (!existingSchedule) {
+    const firstPhase = schedule.phases.find((phase: { phase: PhaseType }) => phase.phase === "OLCU") ?? schedule.phases[0];
+    if (firstPhase) {
+      await notifyJobScheduled({
+        atolyeId,
+        jobId: data.isId,
+        jobName: is.urunAdi,
+        customerName: is.musteriAdi,
+        workScheduleId: schedule.id,
+        phaseId: firstPhase.id,
+        phaseType: firstPhase.phase,
+      });
+    }
+  }
+
   if (existingSchedule && data.phases?.length) {
     const previousByPhase = new Map(existingSchedule.phases.map((phase) => [phase.phase, phase]));
     for (const phaseData of data.phases) {
@@ -419,7 +440,15 @@ export async function togglePhaseCompletion(data: {
   }
 
   const now = new Date();
-  const updated = await prisma.$transaction(async (tx) => {
+  const phaseStateChanged = phase.isCompleted !== data.isCompleted;
+  type CuttingReadyNotification = {
+    phaseOperationId: string;
+    schedulePhaseId: string;
+    workScheduleId: string;
+    jobId: string;
+  };
+  const txResult = await prisma.$transaction(async (tx) => {
+    let cuttingReadyNotification: CuttingReadyNotification | null = null;
     const saved = await tx.schedulePhase.update({
       where: { id: data.schedulePhaseId },
       data: {
@@ -447,7 +476,16 @@ export async function togglePhaseCompletion(data: {
       });
 
       if (imalatPhase) {
-        await tx.schedulePhaseOperation.updateMany({
+        const kesimOperation = await tx.schedulePhaseOperation.findUnique({
+          where: {
+            schedulePhaseId_operationType: {
+              schedulePhaseId: imalatPhase.id,
+              operationType: "KESIM",
+            },
+          },
+          select: { id: true },
+        });
+        const readyResult = await tx.schedulePhaseOperation.updateMany({
           where: {
             schedulePhaseId: imalatPhase.id,
             operationType: "KESIM",
@@ -458,28 +496,49 @@ export async function togglePhaseCompletion(data: {
             readyAt: now,
           },
         });
+        if (kesimOperation && readyResult.count > 0) {
+          cuttingReadyNotification = {
+            phaseOperationId: kesimOperation.id,
+            schedulePhaseId: imalatPhase.id,
+            workScheduleId: phase.workScheduleId,
+            jobId: phase.workSchedule.isId,
+          };
+        }
       }
     }
 
-    return saved;
+    return { saved, cuttingReadyNotification };
   });
+  const updated = txResult.saved;
 
   try {
-    const { logActivity } = await import('@/lib/activityLogger')
-    const phaseLabels: Record<string, string> = { OLCU: 'Olcu', IMALAT: 'Imalat', MONTAJ: 'Montaj', TAS_ALINACAK: 'Tas Alinacak' }
-    const fazAdi = phaseLabels[phase.phase] || phase.phase
-    const musteriAdi = phase.workSchedule.is.musteriAdi || 'Musteri'
-    const mesaj = data.isCompleted
-      ? musteriAdi + ' – ' + fazAdi + ' fazi tamamlandi.'
-      : musteriAdi + ' – ' + fazAdi + ' fazi tamamlandi isaretlenmesi geri alindi.'
-    await logActivity({
+    const phaseContext = {
       atolyeId: phase.workSchedule.is.atolyeId,
-      type: data.isCompleted ? 'faz_tamamlandi' : 'faz_geri_alindi',
-      message: mesaj,
-      refId: phase.workSchedule.isId,
       userId: auth.userId || undefined,
       personelId: auth.personelId || undefined,
-    })
+      jobId: phase.workSchedule.isId,
+      jobName: phase.workSchedule.is.urunAdi,
+      customerName: phase.workSchedule.is.musteriAdi,
+      workScheduleId: phase.workScheduleId,
+      phaseId: phase.id,
+      phaseType: phase.phase,
+    };
+    if (phaseStateChanged) {
+      if (data.isCompleted) {
+        await notifyPhaseCompleted(phaseContext);
+      } else {
+        await notifyPhaseReopened(phaseContext);
+      }
+    }
+    if (txResult.cuttingReadyNotification) {
+      await notifyProductionOperationReady({
+        ...phaseContext,
+        phaseId: txResult.cuttingReadyNotification.schedulePhaseId,
+        phaseType: "IMALAT",
+        phaseOperationId: txResult.cuttingReadyNotification.phaseOperationId,
+        operationType: "KESIM",
+      });
+    }
   } catch {}
 
   revalidatePath("/dashboard/is-programi");

@@ -1,15 +1,7 @@
 import { getAtolyeAuth } from '@/lib/getAtolyeId'
 import { prisma } from "@/lib/prisma";
-import { logActivity } from "@/lib/activityLogger";
+import { notifyPhaseAssigned, notifyPhaseAssignmentRemoved } from "@/lib/scheduleNotifications";
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { jwtVerify } from 'jose'
-
-const FAZ_LABEL: Record<string, string> = {
-  IMALAT: "imalat", MONTAJ: "montaj", OLCU: "ölçü", TAS_ALINACAK: "taş alınacak",
-}
-
-
 
 // Bir faz için atamaları getir
 export async function GET(req: NextRequest) {
@@ -61,21 +53,37 @@ export async function POST(req: NextRequest) {
   try {
     const phaseCtx = await prisma.schedulePhase.findUnique({
       where: { id: schedulePhaseId },
-      select: { phase: true, workSchedule: { select: { is: { select: { musteriAdi: true } } } } },
+      select: {
+        id: true,
+        phase: true,
+        workScheduleId: true,
+        workSchedule: {
+          select: {
+            isId: true,
+            is: { select: { musteriAdi: true, urunAdi: true } },
+          },
+        },
+      },
     })
     const adSoyad = `${atama.personel.ad}${atama.personel.soyad ? " " + atama.personel.soyad : ""}`.trim()
-    const musteriAdi = phaseCtx?.workSchedule?.is?.musteriAdi || "—"
-    const fazLabel = FAZ_LABEL[phaseCtx?.phase ?? ""] ?? "faz"
-    await logActivity({
-      atolyeId,
-      userId: auth.userId ?? undefined,
-      type: "program_personel_eklendi",
-      message: `${adSoyad} — ${musteriAdi} ${fazLabel} fazına atandı`,
-      refId: schedulePhaseId,
-      url: `/dashboard/is-programi?phaseId=${schedulePhaseId}`,
-    })
+    if (phaseCtx) {
+      await notifyPhaseAssigned({
+        atolyeId,
+        userId: auth.userId ?? undefined,
+        personelId: auth.personelId ?? undefined,
+        jobId: phaseCtx.workSchedule.isId,
+        jobName: phaseCtx.workSchedule.is.urunAdi,
+        customerName: phaseCtx.workSchedule.is.musteriAdi,
+        workScheduleId: phaseCtx.workScheduleId,
+        phaseId: phaseCtx.id,
+        phaseType: phaseCtx.phase,
+        assignedPersonelIds: [atama.personel.id],
+        assignedPersonelNames: [adSoyad],
+        action: "added",
+      })
+    }
   } catch {
-    // fire-and-forget — log hatası API response'u kırmasın
+    // Bildirim hatası API response'u kırmasın.
   }
 
   return NextResponse.json({ atama })
@@ -91,6 +99,31 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ hata: 'ID gerekli.' }, { status: 400 })
 
+  const existing = await prisma.fazAtama.findFirst({
+    where: {
+      id,
+      schedulePhase: { workSchedule: { is: { atolyeId } } },
+    },
+    include: {
+      personel: { select: { id: true, ad: true, soyad: true } },
+      schedulePhase: {
+        select: {
+          id: true,
+          phase: true,
+          workScheduleId: true,
+          workSchedule: {
+            select: {
+              isId: true,
+              is: { select: { musteriAdi: true, urunAdi: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+  if (!existing)
+    return NextResponse.json({ hata: 'Bulunamadı veya yetki yok.' }, { status: 404 })
+
   const result = await prisma.fazAtama.deleteMany({
     where: {
       id,
@@ -99,5 +132,23 @@ export async function DELETE(req: NextRequest) {
   })
   if (result.count === 0)
     return NextResponse.json({ hata: 'Bulunamadı veya yetki yok.' }, { status: 404 })
+  try {
+    const adSoyad = `${existing.personel.ad}${existing.personel.soyad ? " " + existing.personel.soyad : ""}`.trim()
+    await notifyPhaseAssignmentRemoved({
+      atolyeId,
+      userId: auth.userId ?? undefined,
+      personelId: auth.personelId ?? undefined,
+      jobId: existing.schedulePhase.workSchedule.isId,
+      jobName: existing.schedulePhase.workSchedule.is.urunAdi,
+      customerName: existing.schedulePhase.workSchedule.is.musteriAdi,
+      workScheduleId: existing.schedulePhase.workScheduleId,
+      phaseId: existing.schedulePhase.id,
+      phaseType: existing.schedulePhase.phase,
+      assignedPersonelIds: [existing.personel.id],
+      assignedPersonelNames: [adSoyad],
+    })
+  } catch {
+    // Bildirim hatası API response'u kırmasın.
+  }
   return NextResponse.json({ ok: true })
 }

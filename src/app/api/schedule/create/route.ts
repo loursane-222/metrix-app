@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { activateDraftReservationsForJob, isStockReservationConflict } from "@/lib/stock/reservations";
+import { notifyJobScheduled } from "@/lib/scheduleNotifications";
 
 async function ownerAtolyeIdAl() {
   const cookieStore = await cookies();
@@ -229,6 +230,19 @@ export async function POST(req: NextRequest) {
           `[schedule/create] Personel atama bloğu hata verdi (program yine de oluşturuldu) — isId: ${isId}, hata: ${personelErr instanceof Error ? personelErr.message : String(personelErr)}`
         );
       }
+    }
+
+    const firstPhase = schedule.phases.find((phase) => phase.phase === "OLCU") ?? schedule.phases[0];
+    if (firstPhase) {
+      await notifyJobScheduled({
+        atolyeId,
+        jobId: schedule.isId,
+        jobName: schedule.is?.urunAdi,
+        customerName: schedule.is?.musteriAdi,
+        workScheduleId: schedule.id,
+        phaseId: firstPhase.id,
+        phaseType: firstPhase.phase,
+      });
     }
 
     return NextResponse.json({ ok: true, schedule });

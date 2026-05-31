@@ -4,6 +4,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { emitMetrixEvent } from "@/lib/events/emitMetrixEvent";
 import { appendExecutionTimelineEvent } from "@/lib/execution/events";
 import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
+import { notifyPhaseAssigned } from "@/lib/scheduleNotifications";
 import { NextRequest, NextResponse } from "next/server";
 
 const phaseLabel: Record<string, string> = { OLCU: "Olcu", IMALAT: "Imalat", MONTAJ: "Montaj", TAS_ALINACAK: "Tas Alinacak" };
@@ -169,8 +170,20 @@ export async function PATCH(req: NextRequest) {
     if (personelIds !== null) {
       const yeniPersoneller = await prisma.personel.findMany({ where: { id: { in: personelIds } }, select: { ad: true, soyad: true } });
       const isimler = yeniPersoneller.map((p) => p.ad + " " + p.soyad).join(", ") || "personel kaldirildi";
-      const deepLink = `/dashboard/is-programi?phaseId=${phaseId}`;
-      await logActivity({ atolyeId: auth.atolyeId, type: "program_personel_degisti", message: musteriAdi + " – " + fazAdi + " fazina atama degisti: " + isimler, refId: phaseId, url: deepLink, userId: auth.userId, personelId: auth.personelId || undefined });
+      await notifyPhaseAssigned({
+        atolyeId: auth.atolyeId,
+        userId: auth.userId,
+        personelId: auth.personelId || null,
+        jobId: phase.workSchedule.isId,
+        jobName: phase.workSchedule.is.urunAdi,
+        customerName: musteriAdi,
+        workScheduleId: phase.workScheduleId,
+        phaseId,
+        phaseType: phase.phase,
+        assignedPersonelIds: personelIds,
+        assignedPersonelNames: isimler ? [isimler] : [],
+        action: "changed",
+      });
     }
 
     const prevNotes = phase.workSchedule.notes ?? "";

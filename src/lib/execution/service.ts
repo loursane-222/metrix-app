@@ -2,7 +2,13 @@ import { PhaseExecutionStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { sseEmitter } from "@/lib/sseEmitter"
 import { logActivity } from "@/lib/activityLogger"
-import { emitMetrixEvent } from "@/lib/events/emitMetrixEvent"
+import {
+  notifyInstallationCompleted,
+  notifyPhaseCompleted,
+  notifyProductionOperationCompleted,
+  notifyProductionOperationReady,
+  notifyStoneBrokenInCutting,
+} from "@/lib/scheduleNotifications"
 import { canTransition, eventTypeForTransition } from "./transitions"
 
 // ─── Working-hours constants (Istanbul UTC+3, fixed shift) ────────────────────
@@ -399,6 +405,15 @@ export async function transitionExecution(input: TransitionInput) {
           schedulePhaseId: string
         }
       | null = null
+    let cuttingReadyNotification:
+      | {
+          targetOperationId: string
+          workScheduleId: string
+          jobId: string
+          schedulePhaseId: string
+        }
+      | null = null
+    let parentPhaseCompleted = false
 
     const result = await tx.phaseExecution.updateMany({
       where: { id: executionId, status: fromStatus },
@@ -600,7 +615,7 @@ export async function transitionExecution(input: TransitionInput) {
             operationStatus.get("TOPLAMA") === "COMPLETED"
 
           if (productionComplete) {
-            await tx.schedulePhase.updateMany({
+            const parentResult = await tx.schedulePhase.updateMany({
               where: {
                 id: execution.schedulePhaseId,
                 isCompleted: false,
@@ -611,6 +626,7 @@ export async function transitionExecution(input: TransitionInput) {
                 completedBy: personelId ?? null,
               },
             })
+            parentPhaseCompleted = parentResult.count > 0
           }
         }
       } else {
@@ -634,7 +650,16 @@ export async function transitionExecution(input: TransitionInput) {
             select: { id: true },
           })
           if (imalatPhase) {
-            await tx.schedulePhaseOperation.updateMany({
+            const kesimOperation = await tx.schedulePhaseOperation.findUnique({
+              where: {
+                schedulePhaseId_operationType: {
+                  schedulePhaseId: imalatPhase.id,
+                  operationType: "KESIM",
+                },
+              },
+              select: { id: true },
+            })
+            const readyResult = await tx.schedulePhaseOperation.updateMany({
               where: {
                 schedulePhaseId: imalatPhase.id,
                 operationType: "KESIM",
@@ -645,6 +670,14 @@ export async function transitionExecution(input: TransitionInput) {
                 readyAt: now,
               },
             })
+            if (kesimOperation && readyResult.count > 0) {
+              cuttingReadyNotification = {
+                targetOperationId: kesimOperation.id,
+                workScheduleId: phaseInfo.workScheduleId,
+                jobId: phaseInfo.workSchedule.isId,
+                schedulePhaseId: imalatPhase.id,
+              }
+            }
           }
         }
         if (phaseInfo?.phase === "MONTAJ") {
@@ -657,7 +690,7 @@ export async function transitionExecution(input: TransitionInput) {
     }
 
     const updatedExecution = await tx.phaseExecution.findUniqueOrThrow({ where: { id: executionId } })
-    return { updatedExecution, toplamaReadyNotification }
+    return { updatedExecution, toplamaReadyNotification, cuttingReadyNotification, parentPhaseCompleted }
   })
 
   const updated = transactionResult.updatedExecution
@@ -697,8 +730,10 @@ export async function transitionExecution(input: TransitionInput) {
         where: { id: execution.schedulePhaseId },
         select: {
           phase: true,
+          workScheduleId: true,
           workSchedule: {
             select: {
+              id: true,
               isId: true,
               is: { select: { musteriAdi: true, urunAdi: true } },
             },
@@ -725,37 +760,46 @@ export async function transitionExecution(input: TransitionInput) {
       : ""
     const deepLink = `/dashboard/is-programi?phaseId=${execution.schedulePhaseId}`
     const actorId = personelId ?? userId ?? null
+    const workScheduleId = phaseCtx?.workSchedule?.id ?? execution.schedulePhase.workSchedule.id
+    const jobId = phaseCtx?.workSchedule?.isId ?? execution.schedulePhase.workSchedule.isId
+    const phaseType = phaseCtx?.phase ?? execution.schedulePhase?.phase ?? null
+    const baseScheduleContext = {
+      atolyeId,
+      userId: userId ?? undefined,
+      personelId: personelId ?? undefined,
+      actorId,
+      actorName: actorName ?? null,
+      jobId,
+      jobName,
+      customerName: musteriAdi,
+      workScheduleId,
+      phaseId: execution.schedulePhaseId,
+      phaseType: phaseType ?? "UNKNOWN",
+    }
 
     if (transactionResult.toplamaReadyNotification) {
       const toplamaReady = transactionResult.toplamaReadyNotification
-      await logActivity({
-        atolyeId,
-        personelId: personelId ?? undefined,
-        userId: userId ?? undefined,
-        type: "production_operation_ready",
-        eventType: "PRODUCTION_OPERATION_READY",
-        category: "production",
-        severity: "success",
-        source: "execution",
-        title: "Toplama hazır",
-        message: `${musteriAdi} - ${jobName} kesildi, toplamaya hazır.`,
-        refId: toplamaReady.targetOperationId,
-        refType: "SchedulePhaseOperation",
-        url: deepLink,
-        actorId: actorId ?? undefined,
-        actorName: actorName ?? undefined,
-        metadata: {
-          jobId: toplamaReady.jobId,
-          workScheduleId: toplamaReady.workScheduleId,
-          schedulePhaseId: toplamaReady.schedulePhaseId,
-          phaseOperationId: toplamaReady.targetOperationId,
-          targetPhaseOperationId: toplamaReady.targetOperationId,
-          sourceOperationType: "KESIM",
-          targetOperationType: "TOPLAMA",
-          targetOperationStatus: "READY",
-          phaseType: "IMALAT",
-        },
-        awaitPush: true,
+      await notifyProductionOperationReady({
+        ...baseScheduleContext,
+        jobId: toplamaReady.jobId,
+        workScheduleId: toplamaReady.workScheduleId,
+        phaseId: toplamaReady.schedulePhaseId,
+        phaseType: "IMALAT",
+        phaseOperationId: toplamaReady.targetOperationId,
+        operationType: "TOPLAMA",
+      })
+    }
+
+    if (transactionResult.cuttingReadyNotification) {
+      const cuttingReady = transactionResult.cuttingReadyNotification
+      await notifyProductionOperationReady({
+        ...baseScheduleContext,
+        jobId: cuttingReady.jobId,
+        workScheduleId: cuttingReady.workScheduleId,
+        phaseId: cuttingReady.schedulePhaseId,
+        phaseType: "IMALAT",
+        phaseOperationId: cuttingReady.targetOperationId,
+        operationType: "KESIM",
       })
     }
 
@@ -771,79 +815,46 @@ export async function transitionExecution(input: TransitionInput) {
     const message = MSG[actType] ?? `${actorLabel} — ${musteriAdi} ${fazLabel} durumu değişti`
 
     if (toStatus === "CANNOT_START") {
-      await emitMetrixEvent({
-        atolyeId,
-        type: "EXECUTION_CANNOT_START",
-        source: "execution",
-        severity: "warning",
-        entityType: "execution",
-        entityId: executionId,
-        title: "İşleme başlanamadı",
-        message,
-        url: deepLink,
-        actorId,
-        actorName: actorName ?? null,
-        actorUserId: userId ?? null,
-        actorPersonelId: personelId ?? null,
-        notify: true,
-        feed: true,
-        risk: true,
-        aiMemory: true,
-        payload: {
-          executionId,
-          schedulePhaseId: execution.schedulePhaseId,
-          phaseId: execution.schedulePhaseId,
-          phaseType: phaseCtx?.phase ?? execution.schedulePhase?.phase ?? null,
-          fromStatus,
-          toStatus,
-          reasonCode: cannotStartReason ?? null,
+      if (
+        cannotStartReason === "STONE_BROKEN_IN_CUTTING" &&
+        execution.phaseOperationId &&
+        execution.phaseOperation?.operationType === "KESIM"
+      ) {
+        await notifyStoneBrokenInCutting({
+          ...baseScheduleContext,
+          phaseOperationId: execution.phaseOperationId,
+          operationType: "KESIM",
+          reasonCode: cannotStartReason,
           failureDescription: failureDescription ?? null,
           materialLossCost: materialLossCost ?? null,
-          costType: materialLossCost != null ? "MATERIAL_LOSS" : null,
-          costAmount: materialLossCost ?? null,
-          currency: materialLossCost != null ? "TRY" : null,
-          actorId,
-          actorName: actorName ?? null,
-          jobId: phaseCtx?.workSchedule?.isId ?? null,
-          jobName,
-          customerName: musteriAdi,
-        },
-      })
+        })
+      } else {
+        await logActivity({
+          atolyeId,
+          personelId: personelId ?? undefined,
+          userId: userId ?? undefined,
+          type: actType,
+          message,
+          refId: executionId,
+          url: deepLink,
+          awaitPush: true,
+        })
+      }
     } else if (toStatus === "COMPLETED") {
-      await emitMetrixEvent({
-        atolyeId,
-        type: "EXECUTION_COMPLETED",
-        source: "execution",
-        severity: "success",
-        entityType: "execution",
-        entityId: executionId,
-        title: "Faz tamamlandı",
-        message,
-        url: deepLink,
-        actorId,
-        actorName: actorName ?? null,
-        actorUserId: userId ?? null,
-        actorPersonelId: personelId ?? null,
-        notify: true,
-        feed: true,
-        risk: false,
-        aiMemory: true,
-        payload: {
-          executionId,
-          schedulePhaseId: execution.schedulePhaseId,
-          phaseId: execution.schedulePhaseId,
-          phaseType: phaseCtx?.phase ?? execution.schedulePhase?.phase ?? null,
-          fromStatus,
-          toStatus,
-          actualMinutes: updated.actualMinutes ?? null,
-          mtul: updated.mtul ?? null,
-          actorId,
-          actorName: actorName ?? null,
-          jobId: phaseCtx?.workSchedule?.isId ?? null,
-          jobName,
-          customerName: musteriAdi,
-        },
-      })
+      if (execution.phaseOperationId && execution.phaseOperation?.operationType) {
+        await notifyProductionOperationCompleted({
+          ...baseScheduleContext,
+          phaseOperationId: execution.phaseOperationId,
+          operationType: execution.phaseOperation.operationType,
+        })
+        if (execution.phaseOperation.operationType === "TOPLAMA" && transactionResult.parentPhaseCompleted) {
+          await notifyPhaseCompleted(baseScheduleContext)
+        }
+      } else if (phaseType === "MONTAJ") {
+        await notifyInstallationCompleted(baseScheduleContext)
+      } else {
+        await notifyPhaseCompleted(baseScheduleContext)
+      }
     } else {
       await logActivity({
         atolyeId,
