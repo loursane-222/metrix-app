@@ -1,4 +1,9 @@
 import { logActivity } from "@/lib/activityLogger";
+import {
+  getNotificationEventConfig,
+  NotificationEventType,
+  shouldAwaitPushForEvent,
+} from "@/lib/notificationCatalog";
 
 const phaseLabel: Record<string, string> = {
   OLCU: "Ölçü",
@@ -59,17 +64,19 @@ export async function notifySchedulePhaseDateChanged(params: {
     ? new Date(params.newPlannedStart).toLocaleDateString("tr-TR")
     : "boş";
   const deepLink = `/dashboard/is-programi?phaseId=${params.phaseId}`;
+  const eventType = NotificationEventType.SCHEDULE.PHASE_DATE_CHANGED;
+  const eventConfig = getNotificationEventConfig(eventType);
 
   await logActivity({
     atolyeId: params.atolyeId,
     userId: params.userId || undefined,
     personelId: params.personelId || undefined,
-    type: "program_tarih_degisti",
-    eventType: "SCHEDULE_PHASE_DATE_CHANGED",
-    category: "schedule",
-    severity: "info",
+    type: eventType,
+    eventType,
+    category: eventConfig.category,
+    severity: eventConfig.severity,
     source: params.source,
-    title: "Faz tarihi değişti",
+    title: eventConfig.defaultTitle,
     message: `${params.jobName} – ${fazAdi} fazının tarihi ${dateText} olarak güncellendi.`,
     refId: params.phaseId,
     refType: "schedule_phase",
@@ -84,8 +91,8 @@ export async function notifySchedulePhaseDateChanged(params: {
       oldPlannedEnd: toIso(params.oldPlannedEnd),
       newPlannedEnd: toIso(params.newPlannedEnd),
       notificationPipelineVersion: "N1",
-      pushAwaited: true,
+      pushAwaited: shouldAwaitPushForEvent(eventType),
     },
-    awaitPush: true,
+    awaitPush: shouldAwaitPushForEvent(eventType),
   });
 }
