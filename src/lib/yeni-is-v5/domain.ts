@@ -73,7 +73,7 @@ export type AreaProductDraft = {
   name: string;
   productType: ProductType;
   quantity: number;
-  materialSelection: MaterialSelectionDraft;
+  defaultMaterialSelection: MaterialSelectionDraft;
   pieces: CuttingPieceDraft[];
   sortOrder: number;
   notes?: string;
@@ -92,6 +92,7 @@ export type CuttingPieceDraft = {
   edgeType?: string;
   veinDirection: VeinDirection;
   shapeType: ShapeType;
+  materialSelection?: MaterialSelectionDraft;
   areaCm2: number;
   linearMeter?: number;
   notes?: string;
@@ -259,7 +260,8 @@ export function rebuildMaterialGroups(jobDraft: JobDraft): MaterialGroupDraft[] 
   for (const area of jobDraft.areas) {
     for (const product of area.products) {
       for (const piece of product.pieces) {
-        const key = buildMaterialGroupKey(product.materialSelection, piece);
+        const effectiveMaterial = getEffectiveMaterialSelection(product, piece);
+        const key = buildMaterialGroupKey(effectiveMaterial, piece);
         const existingGroup = groups.get(key);
         const pieceAreaCm2 = calculatePieceAreaCm2(piece);
 
@@ -275,14 +277,14 @@ export function rebuildMaterialGroups(jobDraft: JobDraft): MaterialGroupDraft[] 
 
         const group: MaterialGroupDraft = {
           key,
-          displayName: getMaterialDisplayName(product.materialSelection),
-          material: { ...product.materialSelection },
+          displayName: getMaterialDisplayName(effectiveMaterial),
+          material: { ...effectiveMaterial },
           pieceIds: [piece.id],
           areaIds: [area.id],
           productIds: [product.id],
           totalPieceAreaCm2: pieceAreaCm2,
           estimatedSlabCount: 0,
-          costPreview: createEmptyCostPreview(product.materialSelection.currency),
+          costPreview: createEmptyCostPreview(effectiveMaterial.currency),
           quoteLines: [],
           status: "incomplete",
         };
@@ -329,7 +331,7 @@ export function createEmptyProductDraft(areaId: string): AreaProductDraft {
     name: "",
     productType: "countertop",
     quantity: 1,
-    materialSelection: createEmptyMaterialSelectionDraft(),
+    defaultMaterialSelection: createEmptyMaterialSelectionDraft(),
     pieces: [],
     sortOrder: 0,
   };
@@ -427,6 +429,13 @@ function addUnique(target: string[], value: string): void {
   if (!target.includes(value)) {
     target.push(value);
   }
+}
+
+function getEffectiveMaterialSelection(
+  product: Pick<AreaProductDraft, "defaultMaterialSelection">,
+  piece: Pick<CuttingPieceDraft, "materialSelection">,
+): MaterialSelectionDraft {
+  return piece.materialSelection ?? product.defaultMaterialSelection;
 }
 
 function createDraftId(prefix: string): string {
