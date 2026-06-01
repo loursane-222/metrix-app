@@ -19,7 +19,6 @@
     "cloudinary": "^2.9.0",
     "dayjs": "^1.11.20",
     "exceljs": "^4.4.0",
-    "firebase": "^12.12.1",
     "google-auth-library": "^10.6.2",
     "html2pdf.js": "^0.10.2",
     "jose": "^6.0.10",

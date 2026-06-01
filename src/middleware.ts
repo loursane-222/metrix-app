@@ -15,8 +15,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/apple-icon') ||
     pathname.startsWith('/icon.') ||
     pathname === '/manifest.webmanifest' ||
-    pathname === '/sw.js' ||
-    pathname === '/firebase-messaging-sw.js'
+    pathname === '/sw.js'
   ) {
     return NextResponse.next()
   }
