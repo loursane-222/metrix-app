@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAtolyeAuth } from "@/lib/getAtolyeId";
+import { requirePlan } from "@/lib/subscription/guard";
 
 function n(value: unknown) {
   if (value == null) return 0;
@@ -47,6 +48,9 @@ function emptyProduct(productName: string, materialType: string | null) {
 
 export async function GET() {
   try {
+    const planGuard = await requirePlan("business");
+    if (!planGuard.ok) return planGuard.response;
+
     const auth = await getAtolyeAuth();
     if (!auth?.atolyeId) {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });

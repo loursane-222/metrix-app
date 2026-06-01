@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import MobileTabBar from "./MobileTabBar";
+import { getPlanLabel, getRequiredPlanForPath, hasSubscriptionAccess } from "@/lib/subscription/plans";
 
 type Atolye = {
   atolyeAdi?: string;
@@ -13,18 +14,21 @@ type CurrentUser = {
   role?: "admin" | "personel";
   personelId?: string | null;
   allowedMenus?: string[] | null;
+  abonelikPlani?: string | null;
+  abonelikBitis?: string | null;
 };
 
 const menuItems = [
-  { href: "/dashboard", label: "Dashboard", badge: "Genel Bakış", onboardingTarget: "dashboard" },
-  { href: "/dashboard/isler", label: "İşler", badge: "Teklifler", onboardingTarget: "yeni-is" },
-  { href: "/dashboard/musteriler", label: "Müşteriler", badge: "CRM", onboardingTarget: "musteriler" },
-  { href: "/dashboard/is-programi", label: "İş Programı", badge: "Planlama", onboardingTarget: "is-programi" },
-  { href: "/dashboard/stok", label: "Stok", badge: "Malzeme", onboardingTarget: "stok" },
-  { href: "/dashboard/atolye", label: "Atölye", badge: "Maliyet", onboardingTarget: "atolye-gideri" },
-  { href: "/dashboard/personel", label: "Personel", badge: "Ekip", onboardingTarget: "personel" },
-  { href: "/dashboard/plaka-planlayici", label: "Plaka Planlayıcı", badge: "Optimizasyon", onboardingTarget: "plaka-planlayici" },
-  { href: "/dashboard/tahsilatlar", label: "Tahsilat & Cari", badge: "Finans", onboardingTarget: "tahsilat" },
+  { href: "/dashboard", label: "Dashboard", badge: "Genel Bakış", onboardingTarget: "dashboard", minPlan: getRequiredPlanForPath("/dashboard") },
+  { href: "/dashboard/isler", label: "İşler", badge: "Teklifler", onboardingTarget: "yeni-is", minPlan: getRequiredPlanForPath("/dashboard/isler") },
+  { href: "/dashboard/musteriler", label: "Müşteriler", badge: "CRM", onboardingTarget: "musteriler", minPlan: getRequiredPlanForPath("/dashboard/musteriler") },
+  { href: "/dashboard/is-programi", label: "İş Programı", badge: "Planlama", onboardingTarget: "is-programi", minPlan: getRequiredPlanForPath("/dashboard/is-programi") },
+  { href: "/dashboard/stok", label: "Stok", badge: "Malzeme", onboardingTarget: "stok", minPlan: getRequiredPlanForPath("/dashboard/stok") },
+  { href: "/dashboard/atolye", label: "Atölye", badge: "Maliyet", onboardingTarget: "atolye-gideri", minPlan: getRequiredPlanForPath("/dashboard/atolye") },
+  { href: "/dashboard/personel", label: "Personel", badge: "Ekip", onboardingTarget: "personel", minPlan: getRequiredPlanForPath("/dashboard/personel") },
+  { href: "/dashboard/plaka-planlayici", label: "Plaka Planlayıcı", badge: "Optimizasyon", onboardingTarget: "plaka-planlayici", minPlan: getRequiredPlanForPath("/dashboard/plaka-planlayici") },
+  { href: "/dashboard/tahsilatlar", label: "Tahsilat & Cari", badge: "Finans", onboardingTarget: "tahsilat", minPlan: getRequiredPlanForPath("/dashboard/tahsilatlar") },
+  { href: "/dashboard/abonelik", label: "Abonelik", badge: "Paketler", onboardingTarget: "abonelik", minPlan: getRequiredPlanForPath("/dashboard/abonelik") },
 ];
 
 export default function Sidebar() {
@@ -68,10 +72,17 @@ export default function Sidebar() {
   }, []);
 
   const visibleMenuItems = useMemo(() => {
-    if (!currentUser || currentUser.role !== "personel") return menuItems;
+    const plan = currentUser?.abonelikPlani || "demo";
+    const planFiltered = menuItems.filter((item) => hasSubscriptionAccess(plan, item.minPlan, currentUser?.abonelikBitis));
+    if (!currentUser || currentUser.role !== "personel") return planFiltered;
     const allowed = currentUser.allowedMenus || ["/dashboard"];
     const allowedSet = new Set(allowed);
-    return menuItems.filter((item) => allowedSet.has(item.href));
+    return planFiltered.filter((item) => item.href === "/dashboard/abonelik" || allowedSet.has(item.href));
+  }, [currentUser]);
+
+  const lockedMenuItems = useMemo(() => {
+    const plan = currentUser?.abonelikPlani || "demo";
+    return menuItems.filter((item) => !hasSubscriptionAccess(plan, item.minPlan, currentUser?.abonelikBitis));
   }, [currentUser]);
 
   async function logout() {
@@ -151,6 +162,22 @@ export default function Sidebar() {
             );
           })}
         </nav>
+        {lockedMenuItems.length > 0 && (
+          <div className="mt-3 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-3">
+            <p className="text-xs font-semibold text-blue-100">Paket yükseltme</p>
+            <p className="mt-1 text-[11px] leading-4 text-slate-300">
+              Bazı modüller daha üst paketlerde. Paket farklarını abonelik sayfasında görebilirsiniz.
+            </p>
+            <Link
+              href="/dashboard/abonelik"
+              onClick={() => mobile && setMobileOpen(false)}
+              className="mt-2 inline-flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15"
+            >
+              <span>Planları Gör</span>
+              <span>{getPlanLabel(lockedMenuItems[0].minPlan)}</span>
+            </Link>
+          </div>
+        )}
       </div>
 
       <button

@@ -3,10 +3,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 import MetrixGuideLauncher from "@/components/onboarding/MetrixGuideLauncher";
+import { getRequiredPlanForPath, hasSubscriptionAccess } from "@/lib/subscription/plans";
 
 type CurrentUser = {
   role?: "admin" | "personel";
   allowedMenus?: string[] | null;
+  abonelikPlani?: string | null;
+  abonelikBitis?: string | null;
 };
 
 const tabItems = [
@@ -15,6 +18,7 @@ const tabItems = [
     label: "Ana Sayfa",
     exact: true,
     onboardingTarget: "dashboard",
+    minPlan: getRequiredPlanForPath("/dashboard"),
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#60a5fa" : "rgba(148,163,184,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
@@ -26,6 +30,7 @@ const tabItems = [
     label: "İşler",
     exact: false,
     onboardingTarget: "yeni-is",
+    minPlan: getRequiredPlanForPath("/dashboard/isler"),
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#60a5fa" : "rgba(148,163,184,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
@@ -38,6 +43,7 @@ const tabItems = [
     exact: false,
     fab: true,
     onboardingTarget: "yeni-is",
+    minPlan: getRequiredPlanForPath("/dashboard/yeni-is-v3"),
     icon: (_active: boolean) => (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -49,6 +55,7 @@ const tabItems = [
     label: "Program",
     exact: false,
     onboardingTarget: "is-programi",
+    minPlan: getRequiredPlanForPath("/dashboard/is-programi"),
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#60a5fa" : "rgba(148,163,184,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -61,6 +68,7 @@ const tabItems = [
     exact: false,
     more: true,
     onboardingTarget: "more",
+    minPlan: getRequiredPlanForPath("/dashboard"),
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? "#60a5fa" : "rgba(148,163,184,0.6)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
@@ -76,6 +84,7 @@ const moreItems = [
     sub: "Malzeme / Stok",
     color: "#06b6d4",
     onboardingTarget: "stok",
+    minPlan: getRequiredPlanForPath("/dashboard/stok"),
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
@@ -90,6 +99,7 @@ const moreItems = [
     sub: "CRM & ekstre",
     color: "#22c55e",
     onboardingTarget: "musteriler",
+    minPlan: getRequiredPlanForPath("/dashboard/musteriler"),
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
@@ -102,6 +112,7 @@ const moreItems = [
     sub: "Maliyet ayarları",
     color: "#f59e0b",
     onboardingTarget: "atolye-gideri",
+    minPlan: getRequiredPlanForPath("/dashboard/atolye"),
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -114,6 +125,7 @@ const moreItems = [
     sub: "Ekip yönetimi",
     color: "#a78bfa",
     onboardingTarget: "personel",
+    minPlan: getRequiredPlanForPath("/dashboard/personel"),
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
@@ -126,6 +138,7 @@ const moreItems = [
     sub: "Optimizasyon",
     color: "#38bdf8",
     onboardingTarget: "plaka-planlayici",
+    minPlan: getRequiredPlanForPath("/dashboard/plaka-planlayici"),
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
@@ -138,9 +151,25 @@ const moreItems = [
     sub: "Finans & ödeme planı",
     color: "#10b981",
     onboardingTarget: "tahsilat",
+    minPlan: getRequiredPlanForPath("/dashboard/tahsilatlar"),
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+      </svg>
+    ),
+  },
+  {
+    href: "/dashboard/abonelik",
+    label: "Abonelik",
+    sub: "Paketler",
+    color: "#60a5fa",
+    onboardingTarget: "abonelik",
+    minPlan: getRequiredPlanForPath("/dashboard/abonelik"),
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+        <path d="M16 11h2"/>
+        <path d="M6 15h6"/>
       </svg>
     ),
   },
@@ -164,15 +193,19 @@ export default function MobileTabBar({ currentUser }: { currentUser: CurrentUser
   }, [pathname]);
 
   const visibleTabs = useMemo(() => {
-    if (!currentUser || currentUser.role !== "personel") return tabItems;
+    const plan = currentUser?.abonelikPlani || "demo";
+    const planFiltered = tabItems.filter((item) => item.more || hasSubscriptionAccess(plan, item.minPlan, currentUser?.abonelikBitis));
+    if (!currentUser || currentUser.role !== "personel") return planFiltered;
     const allowed = new Set(currentUser.allowedMenus || ["/dashboard"]);
-    return tabItems.filter((item) => item.fab || item.more || allowed.has(item.href));
+    return planFiltered.filter((item) => item.fab || item.more || allowed.has(item.href));
   }, [currentUser]);
 
   const visibleMoreItems = useMemo(() => {
-    if (!currentUser || currentUser.role !== "personel") return moreItems;
+    const plan = currentUser?.abonelikPlani || "demo";
+    const planFiltered = moreItems.filter((item) => hasSubscriptionAccess(plan, item.minPlan, currentUser?.abonelikBitis));
+    if (!currentUser || currentUser.role !== "personel") return planFiltered;
     const allowed = new Set(currentUser.allowedMenus || ["/dashboard"]);
-    return moreItems.filter((item) => allowed.has(item.href));
+    return planFiltered.filter((item) => item.href === "/dashboard/abonelik" || allowed.has(item.href));
   }, [currentUser]);
 
   const morePathlar = visibleMoreItems.map((m) => m.href);

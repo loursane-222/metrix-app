@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { getPurchasablePlanDetails } from '@/lib/subscription/plans'
 
 type Step = 'form' | 'verify'
 
@@ -15,6 +16,7 @@ export default function RegisterPage() {
   const [kullanimOnay, setKullanimOnay] = useState(false)
   const [kvkkOnay, setKvkkOnay] = useState(false)
   const [modal, setModal] = useState<null | 'kullanim' | 'kvkk'>(null)
+  const plans = useMemo(() => getPurchasablePlanDetails(), [])
 
   function guncelle(field: string, value: string) {
     setForm(p => ({ ...p, [field]: value }))
@@ -81,7 +83,7 @@ export default function RegisterPage() {
                   <p className="font-semibold text-white">METRIX ATÖLYE YÖNETİM SİSTEMİ KULLANIM KOŞULLARI</p>
                   <p className="mt-3">Metrix, tezgah atölyeleri için maliyet hesaplama, teklif yönetimi ve operasyon takibi hizmeti sunar.</p>
                   <p className="mt-3">Kullanıcı, kayıt sırasında doğru bilgi vermeyi ve hesap güvenliğinden sorumlu olduğunu kabul eder.</p>
-                  <p className="mt-3">Kayıt sonrası 30 gün ücretsiz deneme hakkı tanınır. Deneme sonunda abonelik koşulları geçerlidir.</p>
+                  <p className="mt-3">Kayıt sonrası 14 gün ücretsiz deneme hakkı tanınır. Deneme sonunda abonelik koşulları geçerlidir.</p>
                   <p className="mt-3">Sisteme girilen verilerin doğruluğundan kullanıcı sorumludur.</p>
                 </div>
               ) : (
@@ -103,7 +105,49 @@ export default function RegisterPage() {
       <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-blue-500/15 blur-[110px]" />
       <div className="absolute right-0 top-1/3 h-80 w-80 rounded-full bg-violet-500/15 blur-[120px]" />
 
-      <div className="relative z-10 w-full max-w-md rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+      <div className="relative z-10 grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:items-start">
+        <section className="rounded-[32px] border border-white/10 bg-white/[0.045] p-6 text-white backdrop-blur-2xl shadow-[0_30px_80px_rgba(0,0,0,0.35)] sm:p-7">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-300">Metrix2 Demo</p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">14 gün ücretsiz dene</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+            Demo süresince tüm özellikler açıktır. 14 gün sonunda Basic, Pro veya Business paketlerinden sana uygun olanla devam edebilirsin.
+          </p>
+
+          <div className="mt-5 grid grid-cols-1 gap-3 xl:grid-cols-3">
+            {plans.map((plan) => (
+              <article key={plan.plan} className="flex min-h-[390px] flex-col rounded-3xl border border-white/10 bg-slate-950/35 p-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{plan.shortLabel}</p>
+                  <h2 className="mt-2 text-xl font-black text-white">{plan.label}</h2>
+                  <p className="mt-3 text-2xl font-black text-white">{plan.price}</p>
+                  {plan.priceNote && <p className="mt-1 text-xs font-semibold text-slate-400">{plan.priceNote}</p>}
+                </div>
+
+                <div className="mt-4 flex-1 space-y-2">
+                  {plan.features.map((feature) => (
+                    <div key={feature.title} className="flex items-start gap-2 rounded-2xl border border-white/10 bg-white/[0.035] p-2.5">
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-300" />
+                      <p className="text-xs font-semibold leading-5 text-white">{feature.title}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {plan.checkoutUrl && (
+                  <a
+                    href={plan.checkoutUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-4 inline-flex min-h-[42px] items-center justify-center rounded-2xl border border-white/10 bg-white text-sm font-bold text-slate-950 transition hover:bg-blue-100"
+                  >
+                    Paketi incele
+                  </a>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+
+      <div className="w-full rounded-[32px] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
         <div className="mx-auto w-16 h-16 rounded-2xl overflow-hidden border border-white/10 mb-5 flex items-center justify-center bg-white/10">
           <img src="/icon.png" className="w-full h-full object-cover" alt="Metrix" />
         </div>
@@ -111,7 +155,7 @@ export default function RegisterPage() {
         {step === 'form' ? (
           <>
             <h2 className="text-2xl font-bold text-white text-center">Hesap Oluştur</h2>
-            <p className="text-center text-white/50 text-sm mt-2 mb-5">30 gün ücretsiz deneme ile başla</p>
+            <p className="text-center text-white/50 text-sm mt-2 mb-5">14 gün ücretsiz deneme ile başla</p>
             {hata && <div className="mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 p-3 rounded-xl">{hata}</div>}
             <form onSubmit={kodGonder} className="space-y-3">
               <input placeholder="Firma / Atölye adı" value={form.ad} onChange={e => guncelle('ad', e.target.value)} required className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 focus:border-blue-500 outline-none transition" />
@@ -129,7 +173,7 @@ export default function RegisterPage() {
                 </label>
               </div>
               <button type="submit" disabled={yukleniyor} className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold mt-3 disabled:opacity-60 transition hover:opacity-90">
-                {yukleniyor ? 'Kod gönderiliyor...' : '📧 Doğrulama Kodu Gönder'}
+                {yukleniyor ? 'Kod gönderiliyor...' : '14 gün ücretsiz başla'}
               </button>
             </form>
           </>
@@ -154,7 +198,7 @@ export default function RegisterPage() {
                 className="w-full px-4 py-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/20 focus:border-blue-500 outline-none text-center text-3xl font-black tracking-[0.5em] transition"
               />
               <button type="submit" disabled={yukleniyor || code.length !== 6} className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold disabled:opacity-50 transition">
-                {yukleniyor ? 'Hesap oluşturuluyor...' : 'Hesabı Oluştur →'}
+                {yukleniyor ? 'Hesap oluşturuluyor...' : '14 gün ücretsiz başla'}
               </button>
               <div className="flex items-center justify-between">
                 <button type="button" onClick={() => { setStep('form'); setHata(''); setCode(''); }} className="text-sm text-white/40 hover:text-white/60 transition">
@@ -175,6 +219,7 @@ export default function RegisterPage() {
         <p className="mt-6 text-center text-sm text-white/50">
           Zaten hesabın var mı? <Link href="/login" className="text-blue-400 hover:text-blue-300">Giriş Yap</Link>
         </p>
+      </div>
       </div>
     </div>
   )

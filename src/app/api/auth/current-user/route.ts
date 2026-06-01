@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
+import { normalizePlan } from "@/lib/subscription/plans";
 
 const MENU_YETKI_MAP: Record<string, string> = {
   "/dashboard": "dashboard",
@@ -62,6 +63,10 @@ export async function GET() {
     if (role === "personel") {
       const personelId = (payload as any).personelId || null;
       const atolyeId = (payload as any).atolyeId || null;
+      const owner = await prisma.user.findUnique({
+        where: { id: payload.id as string },
+        select: { aktif: true, abonelikBitis: true, abonelikPlani: true },
+      });
 
       const allowedMenus = personelId
         ? await getPersonelMenuleri(personelId)
@@ -73,7 +78,9 @@ export async function GET() {
         role,
         personelId,
         atolyeId,
-        aktif: true,
+        aktif: owner?.aktif ?? true,
+        abonelikBitis: owner?.abonelikBitis ?? null,
+        abonelikPlani: normalizePlan(owner?.abonelikPlani),
         allowedMenus,
       });
     }
@@ -100,7 +107,7 @@ export async function GET() {
 
     const simdi = new Date();
     const abonelikBitis = user.abonelikBitis;
-    const abonelikPlani = (user as any).abonelikPlani || "demo";
+    const abonelikPlani = normalizePlan((user as any).abonelikPlani);
     const demoBitti = abonelikBitis ? abonelikBitis < simdi : true;
 
     return NextResponse.json({

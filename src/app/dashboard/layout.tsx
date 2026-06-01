@@ -8,6 +8,7 @@ import GuideReturnBar from "@/components/onboarding/GuideReturnBar";
 import OnboardingTourController from "@/components/onboarding/OnboardingTourController";
 import DashboardGuideLauncher from "@/components/onboarding/DashboardGuideLauncher";
 import PageActionCoach from "@/components/onboarding/PageActionCoach";
+import { getRequiredPlanForPath, hasSubscriptionAccess } from "@/lib/subscription/plans";
 
 export default function DashboardLayout({
   children,
@@ -59,18 +60,36 @@ export default function DashboardLayout({
       .then((res) => res.json())
       .then(async (data) => {
         if (!data?.userId) { router.push("/login"); return; }
-        if (!data.aktif) { router.push("/abonelik"); return; }
+        if (!data.aktif) {
+          if (pathname !== "/dashboard/abonelik") {
+            router.push("/dashboard/abonelik");
+            return;
+          }
+          setAktif(true);
+          setLoading(false);
+          return;
+        }
 
         // Abonelik süresi kontrolü
         if (data.abonelikBitis) {
           const bitis = new Date(data.abonelikBitis)
           const simdi = new Date()
           if (bitis < simdi) {
-            router.push("/abonelik")
+            if (pathname !== "/dashboard/abonelik") {
+              router.push("/dashboard/abonelik")
+              return
+            }
+            setAktif(true);
+            setLoading(false);
             return
           }
         }
-        if (!pathname.startsWith("/dashboard/onboarding")) {
+        const requiredPlan = getRequiredPlanForPath(pathname);
+        if (pathname !== "/dashboard/abonelik" && !hasSubscriptionAccess(data.abonelikPlani, requiredPlan, data.abonelikBitis)) {
+          router.push(`/dashboard/abonelik?upgrade=1&required=${requiredPlan}`);
+          return;
+        }
+        if (!pathname.startsWith("/dashboard/onboarding") && pathname !== "/dashboard/abonelik") {
           try {
             const atolyeRes = await fetch("/api/atolye", { credentials: "include" });
             const atolyeData = await atolyeRes.json();
