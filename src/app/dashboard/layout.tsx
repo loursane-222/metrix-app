@@ -8,6 +8,7 @@ import GuideReturnBar from "@/components/onboarding/GuideReturnBar";
 import OnboardingTourController from "@/components/onboarding/OnboardingTourController";
 import DashboardGuideLauncher from "@/components/onboarding/DashboardGuideLauncher";
 import PageActionCoach from "@/components/onboarding/PageActionCoach";
+import TrialReminderPopup from "@/components/subscription/TrialReminderPopup";
 import { getRequiredPlanForPath, hasSubscriptionAccess } from "@/lib/subscription/plans";
 
 export default function DashboardLayout({
@@ -71,6 +72,10 @@ export default function DashboardLayout({
         }
 
         // Abonelik süresi kontrolü
+        if (data.trial?.isTrialExpired && pathname !== "/dashboard/abonelik") {
+          router.push("/dashboard/abonelik?expired=1");
+          return;
+        }
         if (data.abonelikBitis) {
           const bitis = new Date(data.abonelikBitis)
           const simdi = new Date()
@@ -129,6 +134,7 @@ export default function DashboardLayout({
         style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}>
         <div className="min-h-[100dvh] w-full md:[padding-bottom:0]" id="dashboard-inner">
           <DailyPlanPopup />
+          <TrialReminderPopup />
           <GuideReturnBar />
           <OnboardingTourController />
           <PageActionCoach />

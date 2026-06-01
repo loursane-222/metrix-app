@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import { normalizePlan } from "@/lib/subscription/plans";
+import { getTrialStatus } from "@/lib/subscription/trial";
 
 const MENU_YETKI_MAP: Record<string, string> = {
   "/dashboard": "dashboard",
@@ -67,6 +68,9 @@ export async function GET() {
         where: { id: payload.id as string },
         select: { aktif: true, abonelikBitis: true, abonelikPlani: true },
       });
+      const abonelikPlani = normalizePlan(owner?.abonelikPlani);
+      const abonelikBitis = owner?.abonelikBitis ?? null;
+      const trial = getTrialStatus({ abonelikPlani, abonelikBitis });
 
       const allowedMenus = personelId
         ? await getPersonelMenuleri(personelId)
@@ -79,8 +83,9 @@ export async function GET() {
         personelId,
         atolyeId,
         aktif: owner?.aktif ?? true,
-        abonelikBitis: owner?.abonelikBitis ?? null,
-        abonelikPlani: normalizePlan(owner?.abonelikPlani),
+        abonelikBitis,
+        abonelikPlani,
+        trial,
         allowedMenus,
       });
     }
@@ -109,6 +114,7 @@ export async function GET() {
     const abonelikBitis = user.abonelikBitis;
     const abonelikPlani = normalizePlan((user as any).abonelikPlani);
     const demoBitti = abonelikBitis ? abonelikBitis < simdi : true;
+    const trial = getTrialStatus({ abonelikPlani, abonelikBitis });
 
     return NextResponse.json({
       userId: user.id,
@@ -118,6 +124,7 @@ export async function GET() {
       abonelikBitis: user.abonelikBitis,
       abonelikPlani,
       demoBitti,
+      trial,
       atolyeId: atolye.id,
       allowedMenus: null, // admin tüm menüleri görür
     });

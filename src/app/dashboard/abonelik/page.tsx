@@ -12,6 +12,9 @@ import {
 type CurrentUser = {
   abonelikPlani?: string | null;
   abonelikBitis?: string | null;
+  trial?: {
+    isTrialExpired?: boolean;
+  } | null;
 };
 
 const accentClasses: Record<string, string> = {
@@ -95,6 +98,12 @@ export default function DashboardAbonelikPage() {
         <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-100">
           Yeni kayıt olan atölyeler 14 gün boyunca tüm özellikleri ücretsiz kullanır.
         </div>
+
+        {currentUser?.trial?.isTrialExpired && (
+          <div className="rounded-2xl border border-amber-300/25 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100">
+            Demo süreniz sona erdi. Metrix’i kullanmaya devam etmek için lütfen size uygun paketi seçin.
+          </div>
+        )}
 
         {message && (
           <div
