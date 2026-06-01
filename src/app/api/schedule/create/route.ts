@@ -7,6 +7,7 @@ import { activateDraftReservationsForJob, isStockReservationConflict } from "@/l
 import { notifyJobScheduled } from "@/lib/scheduleNotifications";
 import { notifyStockReserved } from "@/lib/stockNotifications";
 import { syncStonePurchasePhaseForOlcu } from "@/lib/scheduleStonePhase";
+import { getJwtSecretBytes } from "@/lib/env";
 
 async function ownerAtolyeIdAl() {
   const cookieStore = await cookies();
@@ -14,11 +15,7 @@ async function ownerAtolyeIdAl() {
   if (!token) return null;
 
   try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
 
     const user = await prisma.user.findUnique({
       where: { id: (payload as any).id },

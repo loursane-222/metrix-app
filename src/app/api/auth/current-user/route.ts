@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
+import { getJwtSecretBytes } from "@/lib/env";
 import { normalizePlan } from "@/lib/subscription/plans";
 import { getTrialStatus } from "@/lib/subscription/trial";
 
@@ -54,11 +55,7 @@ export async function GET() {
       return NextResponse.json({ userId: null }, { status: 401 });
     }
 
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     const role = (payload as any).role || "admin";
 
     if (role === "personel") {

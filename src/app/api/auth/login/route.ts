@@ -2,12 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { SignJWT } from 'jose'
+import { getJwtSecretBytes } from '@/lib/env'
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password, beniHatirla } = await req.json()
 
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
+    const secret = getJwtSecretBytes()
     const sureDakika = beniHatirla ? 60 * 24 * 30 : 60 * 24
 
     const admin = await prisma.user.findUnique({ where: { email } })

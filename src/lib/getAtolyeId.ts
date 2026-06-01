@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
+import { getJwtSecretBytes } from "@/lib/env";
 
 export type AtolyeAuth = {
   atolyeId: string;
@@ -15,10 +16,7 @@ export async function getAtolyeAuth(): Promise<AtolyeAuth | null> {
     const token = cookieStore.get("metrix-token")?.value;
     if (!token) return null;
 
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     const p = payload as any;
 
     // Personel girişi — atolyeId token'da gömülü

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
+import { getJwtSecretBytes } from "@/lib/env";
 
 type PhaseKey = "OLCU" | "IMALAT" | "MONTAJ";
 
@@ -12,11 +13,7 @@ async function ownerAtolyeIdAl() {
   if (!token) return null;
 
   try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
 
     const user = await prisma.user.findUnique({
       where: { id: (payload as any).id },

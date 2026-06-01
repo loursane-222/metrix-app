@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
+import { getJwtSecretBytes } from '@/lib/env'
 
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@metrix.com'
@@ -11,8 +12,7 @@ async function adminKontrol() {
   const token = cookieStore.get('metrix-token')?.value
   if (!token) return null
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    const { payload } = await jwtVerify(token, secret)
+    const { payload } = await jwtVerify(token, getJwtSecretBytes())
     const kullanici = payload as { id: string; email: string }
     if (kullanici.email !== ADMIN_EMAIL) return null
     return kullanici

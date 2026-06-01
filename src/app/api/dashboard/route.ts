@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { buildOperationsSummary } from "@/lib/ai/operations-summary";
+import { getJwtSecretBytes } from "@/lib/env";
 
 function phaseLabel(phase: string) {
   const map: Record<string, string> = {
@@ -37,10 +38,7 @@ async function getAuthAtolyeId() {
   const token = cookieStore.get("metrix-token")?.value;
   if (!token) return null;
   try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     if ((payload as any).role === "personel") {
       return (payload as any).atolyeId || null;
     }

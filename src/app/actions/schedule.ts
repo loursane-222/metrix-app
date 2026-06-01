@@ -9,6 +9,7 @@ import { activateDraftReservationsForJob, isStockReservationConflict } from "@/l
 import { notifySchedulePhaseDateChanged } from "@/lib/schedulePhaseNotifications";
 import { notifyStockReserved } from "@/lib/stockNotifications";
 import { syncStonePurchasePhaseForOlcu } from "@/lib/scheduleStonePhase";
+import { getJwtSecretBytes } from "@/lib/env";
 import {
   notifyJobScheduled,
   notifyPhaseCompleted,
@@ -30,11 +31,7 @@ async function authBilgisiAl(): Promise<{
   }
 
   try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     const role = (payload as any).role || "admin";
 
     // Personel girişi — token'da personelId ve atolyeId direkt var

@@ -40,6 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 firebase-service-account.json
+*service-account*.json
+.firebase-service-account*.json
 
 # backup & development artifacts
 *.bak

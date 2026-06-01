@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
+import { getJwtSecretBytes } from '@/lib/env'
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
@@ -47,8 +48,7 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024')
-    await jwtVerify(token, secret)
+    await jwtVerify(token, getJwtSecretBytes())
     return NextResponse.next()
   } catch {
     if (pathname.startsWith('/api/')) {

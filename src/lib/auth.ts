@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken'
+import { getJwtSecret } from "@/lib/env";
 
-const SECRET = process.env.JWT_SECRET || 'metrix-gizli-anahtar-2024'
+const SECRET = getJwtSecret()
 
 export function tokenOlustur(kullaniciId: string, email: string) {
   return jwt.sign(

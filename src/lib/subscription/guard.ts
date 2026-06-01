@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getJwtSecretBytes } from "@/lib/env";
 import {
   getPlanLabel,
   hasSubscriptionAccess,
@@ -25,10 +26,7 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
   const token = cookieStore.get("metrix-token")?.value;
   if (!token) return null;
 
-  const secret = new TextEncoder().encode(
-    process.env.JWT_SECRET || "metrix-gizli-anahtar-2024",
-  );
-  const { payload } = await jwtVerify(token, secret);
+  const { payload } = await jwtVerify(token, getJwtSecretBytes());
   const userId = payload.id as string | undefined;
   if (!userId) return null;
 

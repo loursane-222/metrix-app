@@ -2,16 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
+import { getJwtSecretBytes } from "@/lib/env";
 
 async function getAtolyeId() {
   const cookieStore = await cookies();
   const token = cookieStore.get("metrix-token")?.value;
   if (!token) return null;
   try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || "metrix-gizli-anahtar-2024"
-    );
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     if ((payload as any).role === "personel") {
       return (payload as any).atolyeId || null;
     }
