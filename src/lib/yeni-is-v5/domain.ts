@@ -131,6 +131,15 @@ export type MaterialGroupDraft = {
   status: MaterialGroupStatus;
 };
 
+export type MaterialGroupSummary = {
+  materialGroupKey: string;
+  totalPieceCount: number;
+  totalAreaCm2: number;
+  totalLinearMeter: number;
+  areaCount: number;
+  productCount: number;
+};
+
 export type PlateLayoutDraft = {
   materialGroupKey: string;
   slabWidthCm: number;
@@ -299,6 +308,23 @@ export function rebuildMaterialGroups(jobDraft: JobDraft): MaterialGroupDraft[] 
   return Array.from(groups.values());
 }
 
+export function summarizeMaterialGroup(jobDraft: JobDraft, group: MaterialGroupDraft): MaterialGroupSummary {
+  const pieces = findPiecesForGroup(jobDraft, group);
+
+  return {
+    materialGroupKey: group.key,
+    totalPieceCount: pieces.reduce((sum, piece) => sum + Math.max(0, piece.quantity), 0),
+    totalAreaCm2: group.totalPieceAreaCm2,
+    totalLinearMeter: roundPreviewNumber(pieces.reduce((sum, piece) => sum + Math.max(0, piece.linearMeter ?? 0), 0)),
+    areaCount: group.areaIds.length,
+    productCount: group.productIds.length,
+  };
+}
+
+export function summarizeMaterialGroups(jobDraft: JobDraft): MaterialGroupSummary[] {
+  return rebuildMaterialGroups(jobDraft).map((group) => summarizeMaterialGroup(jobDraft, group));
+}
+
 export function createEmptyJobDraft(): JobDraft {
   return {
     id: createDraftId("job"),
@@ -436,6 +462,27 @@ function getEffectiveMaterialSelection(
   piece: Pick<CuttingPieceDraft, "materialSelection">,
 ): MaterialSelectionDraft {
   return piece.materialSelection ?? product.defaultMaterialSelection;
+}
+
+function findPiecesForGroup(jobDraft: JobDraft, group: MaterialGroupDraft): CuttingPieceDraft[] {
+  const pieceIds = new Set(group.pieceIds);
+  const pieces: CuttingPieceDraft[] = [];
+
+  for (const area of jobDraft.areas) {
+    for (const product of area.products) {
+      for (const piece of product.pieces) {
+        if (pieceIds.has(piece.id)) {
+          pieces.push(piece);
+        }
+      }
+    }
+  }
+
+  return pieces;
+}
+
+function roundPreviewNumber(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function createDraftId(prefix: string): string {

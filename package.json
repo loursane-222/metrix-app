@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "test:labor-v2": "tsc -p src/lib/labor-v2/tsconfig.test.json --outDir /private/tmp/metrix2-labor-v2-test && node /private/tmp/metrix2-labor-v2-test/run-tests.js"
+    "test:labor-v2": "tsc -p src/lib/labor-v2/tsconfig.test.json --outDir /private/tmp/metrix2-labor-v2-test && node /private/tmp/metrix2-labor-v2-test/run-tests.js",
+    "test:yeni-is-v5": "tsc -p src/lib/yeni-is-v5/tsconfig.test.json --outDir /private/tmp/metrix2-yeni-is-v5-test && node /private/tmp/metrix2-yeni-is-v5-test/run-tests.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "target": "ES2020",
+    "noEmit": false,
+    "types": ["node"]
+  },
+  "include": [
+    "./domain.ts",
+    "./fixtures/**/*.ts",
+    "./__tests__/**/*.ts",
+    "./run-tests.ts"
+  ]
+}
