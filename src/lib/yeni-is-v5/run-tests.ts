@@ -16,6 +16,12 @@ import {
   testBuildLayoutPreviewMarksMissingMaterial,
   testBuildLayoutPreviewPreservesPieceMetadata,
   testBuildLayoutPreviewSendsPieceOverrideToDifferentGroup,
+  testBuildPurchaseRequirementPreviewAggregatesTotals,
+  testBuildPurchaseRequirementPreviewCreatesRequirementPerStockRequirement,
+  testBuildPurchaseRequirementPreviewCreatesSingleRequirement,
+  testBuildPurchaseRequirementPreviewDefaultsToPurchaseRequired,
+  testBuildPurchaseRequirementPreviewTransfersPlateCount,
+  testBuildPurchaseRequirementPreviewTransfersPurchaseArea,
   testBuildQuotePreviewCreatesSingleLineForSingleMaterial,
   testBuildQuotePreviewDoesNotCreateWasteLine,
   testBuildQuotePreviewMergesSameAreaProductMaterial,
@@ -64,6 +70,12 @@ const tests: Array<[string, () => void]> = [
   ["stock requirement plate count", testCalculateEstimatedPlateCountUsesDefaultPlateArea],
   ["stock requirement includes waste area", testBuildStockRequirementPreviewIncludesWasteAreaInTotal],
   ["stock requirement totals aggregation", testBuildStockRequirementPreviewAggregatesTotals],
+  ["purchase requirement single material", testBuildPurchaseRequirementPreviewCreatesSingleRequirement],
+  ["purchase requirement multiple materials", testBuildPurchaseRequirementPreviewCreatesRequirementPerStockRequirement],
+  ["purchase requirement plate transfer", testBuildPurchaseRequirementPreviewTransfersPlateCount],
+  ["purchase requirement area transfer", testBuildPurchaseRequirementPreviewTransfersPurchaseArea],
+  ["purchase requirement totals aggregation", testBuildPurchaseRequirementPreviewAggregatesTotals],
+  ["purchase requirement default status", testBuildPurchaseRequirementPreviewDefaultsToPurchaseRequired],
 ];
 
 for (const [name, run] of tests) {

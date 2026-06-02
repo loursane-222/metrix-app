@@ -6,6 +6,7 @@ import {
   buildMaterialGroupKey,
   buildCostPreview,
   buildLayoutPreview,
+  buildPurchaseRequirementPreview,
   buildQuotePreview,
   buildQuoteLineDisplayName,
   buildStockRequirementPreview,
@@ -734,6 +735,134 @@ export function testBuildStockRequirementPreviewAggregatesTotals() {
   assert.equal(preview.totals.totalRequiredAreaCm2, 10000);
   assert.equal(preview.totals.totalWasteAreaCm2, 1200);
   assert.equal(preview.totals.totalAreaCm2, 11200);
+}
+
+export function testBuildPurchaseRequirementPreviewCreatesSingleRequirement() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const stockRequirementPreview = buildStockRequirementPreview(
+    buildLayoutPreview(
+      createJob([
+        createArea("area-kitchen", "Mutfak", [
+          createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+            createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+          ]),
+        ]),
+      ]),
+    ),
+  );
+  const preview = buildPurchaseRequirementPreview(stockRequirementPreview);
+  const [requirement] = preview.requirements;
+
+  assert.equal(preview.jobId, stockRequirementPreview.jobId);
+  assert.equal(preview.requirements.length, 1);
+  assert.equal(requirement.materialGroupId, stockRequirementPreview.requirements[0].materialGroupId);
+  assert.equal(requirement.materialSelection.materialName, "Calacatta");
+}
+
+export function testBuildPurchaseRequirementPreviewCreatesRequirementPerStockRequirement() {
+  const calacatta = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const stockRequirementPreview = buildStockRequirementPreview(
+    buildLayoutPreview(
+      createJob([
+        createArea("area-kitchen", "Mutfak", [
+          createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+            createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+          ]),
+          createProduct("product-island", "area-kitchen", "Ada", nero, [
+            createPiece("piece-nero", "area-kitchen", "product-island", "Nero", 100, 40, 1, 1.4),
+          ]),
+        ]),
+      ]),
+    ),
+  );
+  const preview = buildPurchaseRequirementPreview(stockRequirementPreview);
+
+  assert.equal(preview.requirements.length, 2);
+  assert.equal(new Set(preview.requirements.map((requirement) => requirement.materialGroupId)).size, 2);
+}
+
+export function testBuildPurchaseRequirementPreviewTransfersPlateCount() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const stockRequirementPreview = buildStockRequirementPreview(
+    buildLayoutPreview(
+      createJob([
+        createArea("area-kitchen", "Mutfak", [
+          createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+            createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 400, 200, 1, 4),
+          ]),
+        ]),
+      ]),
+    ),
+  );
+  const [stockRequirement] = stockRequirementPreview.requirements;
+  const [purchaseRequirement] = buildPurchaseRequirementPreview(stockRequirementPreview).requirements;
+
+  assert.equal(stockRequirement.estimatedPlateCount, 2);
+  assert.equal(purchaseRequirement.estimatedPlateCount, stockRequirement.estimatedPlateCount);
+  assert.equal(purchaseRequirement.purchasePlateCount, stockRequirement.estimatedPlateCount);
+}
+
+export function testBuildPurchaseRequirementPreviewTransfersPurchaseArea() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const stockRequirementPreview = buildStockRequirementPreview(
+    buildLayoutPreview(
+      createJob([
+        createArea("area-kitchen", "Mutfak", [
+          createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+            createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+          ]),
+        ]),
+      ]),
+    ),
+  );
+  const [stockRequirement] = stockRequirementPreview.requirements;
+  const [purchaseRequirement] = buildPurchaseRequirementPreview(stockRequirementPreview).requirements;
+
+  assert.equal(purchaseRequirement.requiredAreaCm2, stockRequirement.requiredAreaCm2);
+  assert.equal(purchaseRequirement.purchaseAreaCm2, stockRequirement.totalAreaCm2);
+}
+
+export function testBuildPurchaseRequirementPreviewAggregatesTotals() {
+  const calacatta = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const stockRequirementPreview = buildStockRequirementPreview(
+    buildLayoutPreview(
+      createJob([
+        createArea("area-kitchen", "Mutfak", [
+          createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+            createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+          ]),
+          createProduct("product-island", "area-kitchen", "Ada", nero, [
+            createPiece("piece-nero", "area-kitchen", "product-island", "Nero", 100, 40, 1, 1.4),
+          ]),
+        ]),
+      ]),
+    ),
+  );
+  const preview = buildPurchaseRequirementPreview(stockRequirementPreview);
+
+  assert.equal(preview.totals.requirementCount, 2);
+  assert.equal(preview.totals.purchaseAreaCm2, 11200);
+  assert.equal(preview.totals.purchasePlateCount, 2);
+}
+
+export function testBuildPurchaseRequirementPreviewDefaultsToPurchaseRequired() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const stockRequirementPreview = buildStockRequirementPreview(
+    buildLayoutPreview(
+      createJob([
+        createArea("area-kitchen", "Mutfak", [
+          createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+            createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+          ]),
+        ]),
+      ]),
+    ),
+  );
+  const preview = buildPurchaseRequirementPreview(stockRequirementPreview);
+
+  assert.equal(preview.requirements.every((requirement) => requirement.status === "purchase-required"), true);
 }
 
 type ComparableSummary = {

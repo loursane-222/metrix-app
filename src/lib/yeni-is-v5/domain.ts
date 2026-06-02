@@ -260,6 +260,30 @@ export type StockRequirementPreview = {
   totals: StockRequirementTotals;
 };
 
+export type PurchaseRequirementStatus = "ready" | "purchase-required" | "stock-covered";
+
+export type PurchaseRequirementItem = {
+  materialGroupId: string;
+  materialSelection: MaterialSelectionDraft;
+  requiredAreaCm2: number;
+  estimatedPlateCount: number;
+  purchaseAreaCm2: number;
+  purchasePlateCount: number;
+  status: PurchaseRequirementStatus;
+};
+
+export type PurchaseRequirementTotals = {
+  requirementCount: number;
+  purchaseAreaCm2: number;
+  purchasePlateCount: number;
+};
+
+export type PurchaseRequirementPreview = {
+  jobId: string;
+  requirements: PurchaseRequirementItem[];
+  totals: PurchaseRequirementTotals;
+};
+
 export type CostPreviewItem = {
   id: string;
   areaId: string;
@@ -734,6 +758,38 @@ export function calculateEstimatedPlateCount(totalAreaCm2: number, plateAreaCm2:
   }
 
   return Math.ceil(normalizedTotalAreaCm2 / normalizedPlateAreaCm2);
+}
+
+export function buildPurchaseRequirementPreview(
+  stockRequirementPreview: StockRequirementPreview,
+): PurchaseRequirementPreview {
+  const requirements = stockRequirementPreview.requirements.map<PurchaseRequirementItem>((requirement) => ({
+    materialGroupId: requirement.materialGroupId,
+    materialSelection: { ...requirement.materialSelection },
+    requiredAreaCm2: requirement.requiredAreaCm2,
+    estimatedPlateCount: requirement.estimatedPlateCount,
+    purchaseAreaCm2: requirement.totalAreaCm2,
+    purchasePlateCount: requirement.estimatedPlateCount,
+    status: "purchase-required",
+  }));
+
+  return {
+    jobId: stockRequirementPreview.jobId,
+    requirements,
+    totals: buildPurchaseRequirementTotals(requirements),
+  };
+}
+
+export function buildPurchaseRequirementTotals(
+  requirements: Pick<PurchaseRequirementItem, "purchaseAreaCm2" | "purchasePlateCount">[],
+): PurchaseRequirementTotals {
+  return {
+    requirementCount: requirements.length,
+    purchaseAreaCm2: roundPreviewNumber(
+      requirements.reduce((sum, requirement) => sum + requirement.purchaseAreaCm2, 0),
+    ),
+    purchasePlateCount: requirements.reduce((sum, requirement) => sum + requirement.purchasePlateCount, 0),
+  };
 }
 
 export function createEmptyJobDraft(): JobDraft {
