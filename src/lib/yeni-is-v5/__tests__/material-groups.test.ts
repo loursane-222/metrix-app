@@ -18,6 +18,7 @@ import {
   summarizeMaterialGroup,
 } from "../domain";
 import { buildJobV5PersistencePlan } from "../persistence";
+import { JobV5SaveError, saveJobV5Draft } from "../save";
 import type {
   AreaProductDraft,
   CostPreview,
@@ -27,6 +28,7 @@ import type {
   MaterialSelectionDraft,
   QuotePreviewLine,
 } from "../domain";
+import type { JobV5SaveDbClient, JobV5SaveTransactionClient } from "../save";
 
 export function testMaterialGroupFixtures() {
   for (const fixture of materialGroupFixtures) {
@@ -1229,6 +1231,150 @@ export function testBuildJobV5PersistencePlanReplacesUnsafeDraftIds() {
   assert.equal(plan.pieces[0].id, "piece_area_0_product_0_piece_0");
 }
 
+export async function testSaveJobV5DraftCreateUsesSingleTransactionAndSafeCreateOrder() {
+  const material = createMaterial({ materialName: "Calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const db = createMockSaveDb();
+
+  const result = await saveJobV5Draft(db, {
+    mode: "create",
+    job,
+    atolyeId: "atolye-1",
+    title: "Mutfak Tezgah",
+  });
+
+  assert.equal(db.transactionCount, 1);
+  assert.deepEqual(db.calls, [
+    "transaction:start",
+    "jobV5.create",
+    "jobV5Area.createMany",
+    "jobV5MaterialSelection.createMany",
+    "jobV5Product.createMany",
+    "jobV5Piece.createMany",
+    "transaction:commit",
+  ]);
+  assert.deepEqual(result.counts, {
+    areas: 1,
+    products: 1,
+    pieces: 1,
+    materialSelections: 1,
+  });
+}
+
+export async function testSaveJobV5DraftUpdateChecksOwnershipBeforeReplacingChildren() {
+  const material = createMaterial({ materialName: "Calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const db = createMockSaveDb();
+
+  await saveJobV5Draft(db, {
+    mode: "update",
+    job,
+    jobId: "persisted-job",
+    atolyeId: "atolye-1",
+    title: "Mutfak Tezgah",
+  });
+
+  assert.deepEqual(db.calls.slice(0, 3), [
+    "transaction:start",
+    "jobV5.findFirst",
+    "jobV5Piece.deleteMany",
+  ]);
+  assert.deepEqual(db.calls.slice(2, 11), [
+    "jobV5Piece.deleteMany",
+    "jobV5Product.deleteMany",
+    "jobV5MaterialSelection.deleteMany",
+    "jobV5Area.deleteMany",
+    "jobV5.update",
+    "jobV5Area.createMany",
+    "jobV5MaterialSelection.createMany",
+    "jobV5Product.createMany",
+    "jobV5Piece.createMany",
+  ]);
+  assert.equal(db.deletedJobIds.every((jobId) => jobId === "persisted-job"), true);
+  assert.equal(db.created.jobId, "persisted-job");
+}
+
+export async function testSaveJobV5DraftUpdateRollsBackWhenOwnershipFails() {
+  const job = createJob([]);
+  const db = createMockSaveDb({ jobFound: false });
+
+  await assert.rejects(
+    () =>
+      saveJobV5Draft(db, {
+        mode: "update",
+        job,
+        jobId: "other-job",
+        atolyeId: "atolye-1",
+        title: "Mutfak Tezgah",
+      }),
+    (error) => error instanceof JobV5SaveError && error.code === "not-found",
+  );
+
+  assert.deepEqual(db.calls, [
+    "transaction:start",
+    "jobV5.findFirst",
+    "transaction:rollback",
+  ]);
+}
+
+export async function testSaveJobV5DraftValidatesCustomerOwnership() {
+  const job = {
+    ...createJob([]),
+    customer: { id: "customer-1", name: "Contract Customer" },
+  };
+  const db = createMockSaveDb({ customerFound: false });
+
+  await assert.rejects(
+    () =>
+      saveJobV5Draft(db, {
+        mode: "create",
+        job,
+        atolyeId: "atolye-1",
+        title: "Mutfak Tezgah",
+      }),
+    (error) => error instanceof JobV5SaveError && error.code === "forbidden",
+  );
+
+  assert.deepEqual(db.calls, ["transaction:start", "musteri.findFirst", "transaction:rollback"]);
+}
+
+export async function testSaveJobV5DraftCreateDoesNotPartiallyWriteOutsideTransaction() {
+  const material = createMaterial({ materialName: "Calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const db = createMockSaveDb({ failOn: "jobV5Product.createMany" });
+
+  await assert.rejects(() =>
+    saveJobV5Draft(db, {
+      mode: "create",
+      job,
+      atolyeId: "atolye-1",
+      title: "Mutfak Tezgah",
+    }),
+  );
+
+  assert.equal(db.transactionCount, 1);
+  assert.equal(db.calls.includes("transaction:rollback"), true);
+  assert.equal(db.calls.includes("transaction:commit"), false);
+}
+
 type ComparableSummary = {
   materialName: string;
   source: string;
@@ -1359,4 +1505,154 @@ function createMaterial(overrides: Partial<MaterialSelectionDraft>): MaterialSel
     requiresVeinMatch: false,
     ...overrides,
   };
+}
+
+type MockSaveDbOptions = {
+  jobFound?: boolean;
+  customerFound?: boolean;
+  failOn?: string;
+};
+
+type MockSaveDb = JobV5SaveDbClient & {
+  calls: string[];
+  transactionCount: number;
+  deletedJobIds: string[];
+  created: {
+    jobId: string | null;
+  };
+};
+
+function createMockSaveDb(options: MockSaveDbOptions = {}): MockSaveDb {
+  const calls: string[] = [];
+  const deletedJobIds: string[] = [];
+  const created = { jobId: null as string | null };
+  let transactionCount = 0;
+  const tx = createMockSaveTx(calls, deletedJobIds, created, options);
+
+  return {
+    calls,
+    deletedJobIds,
+    created,
+    get transactionCount() {
+      return transactionCount;
+    },
+    async $transaction<T>(run: (transaction: JobV5SaveTransactionClient) => Promise<T>): Promise<T> {
+      transactionCount += 1;
+      calls.push("transaction:start");
+
+      try {
+        const result = await run(tx);
+        calls.push("transaction:commit");
+        return result;
+      } catch (error) {
+        calls.push("transaction:rollback");
+        throw error;
+      }
+    },
+  };
+}
+
+function createMockSaveTx(
+  calls: string[],
+  deletedJobIds: string[],
+  created: { jobId: string | null },
+  options: MockSaveDbOptions,
+): JobV5SaveTransactionClient {
+  function record(call: string) {
+    calls.push(call);
+
+    if (options.failOn === call) {
+      throw new Error(`${call} failed`);
+    }
+  }
+
+  return {
+    jobV5: {
+      async findFirst() {
+        record("jobV5.findFirst");
+        return options.jobFound === false ? null : { id: "job-1" };
+      },
+      async create(args: unknown) {
+        record("jobV5.create");
+        created.jobId = readDataJobId(args);
+        return {};
+      },
+      async update(args: unknown) {
+        record("jobV5.update");
+        created.jobId = readWhereJobId(args);
+        return {};
+      },
+    },
+    jobV5Area: {
+      async createMany() {
+        record("jobV5Area.createMany");
+        return {};
+      },
+      async deleteMany(args: unknown) {
+        record("jobV5Area.deleteMany");
+        deletedJobIds.push(readWhereJobId(args));
+        return {};
+      },
+    },
+    jobV5MaterialSelection: {
+      async createMany() {
+        record("jobV5MaterialSelection.createMany");
+        return {};
+      },
+      async deleteMany(args: unknown) {
+        record("jobV5MaterialSelection.deleteMany");
+        deletedJobIds.push(readWhereJobId(args));
+        return {};
+      },
+    },
+    jobV5Product: {
+      async createMany(args: unknown) {
+        record("jobV5Product.createMany");
+        created.jobId = readFirstDataJobId(args);
+        return {};
+      },
+      async deleteMany(args: unknown) {
+        record("jobV5Product.deleteMany");
+        deletedJobIds.push(readWhereJobId(args));
+        return {};
+      },
+    },
+    jobV5Piece: {
+      async createMany() {
+        record("jobV5Piece.createMany");
+        return {};
+      },
+      async deleteMany(args: unknown) {
+        record("jobV5Piece.deleteMany");
+        deletedJobIds.push(readWhereJobId(args));
+        return {};
+      },
+    },
+    musteri: {
+      async findFirst(args: unknown) {
+        if (readWhereCustomerId(args)) {
+          record("musteri.findFirst");
+          return options.customerFound === false ? null : { id: "customer-1" };
+        }
+
+        return null;
+      },
+    },
+  };
+}
+
+function readDataJobId(args: unknown): string {
+  return ((args as { data: { id: string } }).data.id);
+}
+
+function readFirstDataJobId(args: unknown): string {
+  return ((args as { data: Array<{ jobId: string }> }).data[0].jobId);
+}
+
+function readWhereJobId(args: unknown): string {
+  return ((args as { where: { id?: string; jobId?: string } }).where.id ?? (args as { where: { jobId: string } }).where.jobId);
+}
+
+function readWhereCustomerId(args: unknown): string | null {
+  return ((args as { where: { id?: string } }).where.id ?? null);
 }

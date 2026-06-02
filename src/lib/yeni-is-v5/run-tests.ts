@@ -34,6 +34,11 @@ import {
   testBuildJobV5PersistencePlanReplacesUnsafeDraftIds,
   testBuildJobV5PersistencePlanRequiresAtolyeId,
   testBuildJobV5PersistencePlanRequiresTitle,
+  testSaveJobV5DraftCreateDoesNotPartiallyWriteOutsideTransaction,
+  testSaveJobV5DraftCreateUsesSingleTransactionAndSafeCreateOrder,
+  testSaveJobV5DraftUpdateChecksOwnershipBeforeReplacingChildren,
+  testSaveJobV5DraftUpdateRollsBackWhenOwnershipFails,
+  testSaveJobV5DraftValidatesCustomerOwnership,
   testBuildPurchaseRequirementPreviewAggregatesTotals,
   testBuildPurchaseRequirementPreviewCreatesRequirementPerStockRequirement,
   testBuildPurchaseRequirementPreviewCreatesSingleRequirement,
@@ -56,7 +61,7 @@ import {
   testWasteIsCostOnlyAndNotSeparateCustomerQuoteLine,
 } from "./__tests__/material-groups.test";
 
-const tests: Array<[string, () => void]> = [
+const tests: Array<[string, () => void | Promise<void>]> = [
   ["material group fixtures", testMaterialGroupFixtures],
   ["material group unique keys", testMaterialGroupKeysAreUniquePerGroup],
   ["material group summary counts", testMaterialGroupSummariesUseUniqueAreaAndProductCounts],
@@ -112,11 +117,20 @@ const tests: Array<[string, () => void]> = [
   ["persistence plan requires title", testBuildJobV5PersistencePlanRequiresTitle],
   ["persistence plan requires atolyeId", testBuildJobV5PersistencePlanRequiresAtolyeId],
   ["persistence plan replaces unsafe draft ids", testBuildJobV5PersistencePlanReplacesUnsafeDraftIds],
+  ["v5 save create transaction order", testSaveJobV5DraftCreateUsesSingleTransactionAndSafeCreateOrder],
+  ["v5 save update ownership and replace", testSaveJobV5DraftUpdateChecksOwnershipBeforeReplacingChildren],
+  ["v5 save update ownership rollback", testSaveJobV5DraftUpdateRollsBackWhenOwnershipFails],
+  ["v5 save customer ownership", testSaveJobV5DraftValidatesCustomerOwnership],
+  ["v5 save no partial writes outside transaction", testSaveJobV5DraftCreateDoesNotPartiallyWriteOutsideTransaction],
 ];
 
-for (const [name, run] of tests) {
-  run();
-  console.log(`ok - ${name}`);
+async function main() {
+  for (const [name, run] of tests) {
+    await run();
+    console.log(`ok - ${name}`);
+  }
+
+  console.log(`${tests.length} yeni-is-v5 tests passed`);
 }
 
-console.log(`${tests.length} yeni-is-v5 tests passed`);
+void main();
