@@ -17,6 +17,7 @@ import {
   rebuildMaterialGroups,
   summarizeMaterialGroup,
 } from "../domain";
+import { buildJobV5PersistencePlan } from "../persistence";
 import type {
   AreaProductDraft,
   CostPreview,
@@ -1018,6 +1019,214 @@ export function testBuildPlateAssignmentPreviewAggregatesTotals() {
   assert.equal(preview.totals.assignedPieceCount, 2);
   assert.equal(preview.totals.usedAreaCm2, 10000);
   assert.equal(preview.totals.remainingAreaCm2, 94976);
+}
+
+export function testBuildJobV5PersistencePlanMapsSingleAreaProductPiece() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const plan = buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+
+  assert.deepEqual(plan.job, {
+    id: "job-contract",
+    atolyeId: "atolye-1",
+    musteriId: null,
+    customerName: "Contract Customer",
+    customerPhone: "",
+    customerEmail: "",
+    customerAddress: "",
+    customerType: "",
+    title: "Mutfak Tezgah",
+    name: "Mutfak Tezgah",
+    status: "draft",
+    notes: null,
+  });
+  assert.deepEqual(plan.areas[0], {
+    id: "area-kitchen",
+    jobId: "job-contract",
+    name: "Mutfak",
+    areaType: "kitchen",
+    sortOrder: 0,
+  });
+  assert.equal(plan.products[0].id, "product-countertop");
+  assert.equal(plan.products[0].areaId, "area-kitchen");
+  assert.equal(plan.pieces[0].id, "piece-countertop");
+  assert.equal(plan.pieces[0].areaCm2, 6000);
+}
+
+export function testBuildJobV5PersistencePlanMapsProductDefaultMaterialSelection() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const plan = buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+  const materialSelectionId = plan.productDefaultMaterialSelectionId["product-countertop"];
+  const materialSelection = plan.materialSelections.find((record) => record.id === materialSelectionId);
+
+  assert.ok(materialSelection);
+  assert.equal(plan.products[0].defaultMaterialSelectionId, materialSelectionId);
+  assert.equal(materialSelection.materialName, "Calacatta");
+  assert.equal(materialSelection.stockPlateId, "stock-calacatta");
+}
+
+export function testBuildJobV5PersistencePlanMapsPieceOverrideMaterialSelection() {
+  const defaultMaterial = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const overrideMaterial = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const piece = {
+    ...createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+    materialSelection: overrideMaterial,
+  };
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", defaultMaterial, [piece]),
+    ]),
+  ]);
+  const plan = buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+  const overrideMaterialSelectionId = plan.pieceOverrideMaterialSelectionId["piece-countertop"];
+  const overrideRecord = plan.materialSelections.find((record) => record.id === overrideMaterialSelectionId);
+
+  assert.equal(plan.pieces[0].materialSelectionId, overrideMaterialSelectionId);
+  assert.ok(overrideRecord);
+  assert.equal(overrideRecord.materialName, "Nero");
+  assert.equal(overrideRecord.stockPlateId, "stock-nero");
+}
+
+export function testBuildJobV5PersistencePlanLeavesPieceOverrideNullWhenMissing() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const plan = buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+
+  assert.equal(plan.pieces[0].materialSelectionId, null);
+  assert.deepEqual(plan.pieceOverrideMaterialSelectionId, {});
+}
+
+export function testBuildJobV5PersistencePlanDoesNotDedupeSameMaterialAcrossProducts() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+      createProduct("product-island", "area-kitchen", "Ada", material, [
+        createPiece("piece-island", "area-kitchen", "product-island", "Ada", 120, 80, 1, 2.4),
+      ]),
+    ]),
+  ]);
+  const plan = buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+
+  assert.equal(plan.materialSelections.length, 2);
+  assert.notEqual(
+    plan.productDefaultMaterialSelectionId["product-countertop"],
+    plan.productDefaultMaterialSelectionId["product-island"],
+  );
+}
+
+export function testBuildJobV5PersistencePlanPreservesOriginalMaterialSelectionSnapshot() {
+  const material = createMaterial({
+    materialName: "Calacatta",
+    materialType: "quartz",
+    shadeCode: "A",
+    lotNo: "L1",
+    requiresVeinMatch: true,
+  });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const plan = buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+  const [record] = plan.materialSelections;
+
+  assert.equal(record.snapshotJson.schemaVersion, 1);
+  assert.equal(record.snapshotJson.source, "job-draft");
+  assert.deepEqual(record.snapshotJson.materialSelection, material);
+}
+
+export function testBuildJobV5PersistencePlanMapsSeriesToCollectionAndSlabPriceToUnitCost() {
+  const material = createMaterial({ series: "Royal", slabPrice: 1250 });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const plan = buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+
+  assert.equal(plan.materialSelections[0].collection, "Royal");
+  assert.equal(plan.materialSelections[0].unitCost, 1250);
+}
+
+export function testBuildJobV5PersistencePlanDoesNotPersistDerivedPreviewFields() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = {
+    ...createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+          createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+        ]),
+      ]),
+    ]),
+    materialGroups: [{ key: "derived" }],
+    quotePreview: [{ id: "derived" }],
+    totals: { derived: true },
+  } as unknown as JobDraft;
+  const plan = buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+
+  assert.equal(Object.prototype.hasOwnProperty.call(plan, "materialGroups"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(plan, "quotePreview"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(plan, "costPreview"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(plan, "totals"), false);
+}
+
+export function testBuildJobV5PersistencePlanRequiresTitle() {
+  const job = createJob([]);
+
+  assert.throws(() => buildJobV5PersistencePlan({ job, atolyeId: "atolye-1", title: "" }), /title is required/);
+}
+
+export function testBuildJobV5PersistencePlanRequiresAtolyeId() {
+  const job = createJob([]);
+
+  assert.throws(
+    () => buildJobV5PersistencePlan({ job, atolyeId: " ", title: "Mutfak Tezgah" }),
+    /atolyeId is required/,
+  );
+}
+
+export function testBuildJobV5PersistencePlanReplacesUnsafeDraftIds() {
+  const material = createMaterial({ materialName: "Calacatta" });
+  const job = createJob([
+    createArea("area_draft", "Mutfak", [
+      createProduct("product_draft", "area_draft", "Tezgah", material, [
+        createPiece("piece_draft", "area_draft", "product_draft", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const draftJob = { ...job, id: "job_draft" };
+  const plan = buildJobV5PersistencePlan({ job: draftJob, atolyeId: "atolye-1", title: "Mutfak Tezgah" });
+
+  assert.equal(plan.job.id, "job_job");
+  assert.equal(plan.areas[0].id, "area_area_0");
+  assert.equal(plan.products[0].id, "product_area_0_product_0");
+  assert.equal(plan.pieces[0].id, "piece_area_0_product_0_piece_0");
 }
 
 type ComparableSummary = {
