@@ -43,6 +43,11 @@ import {
   testParseSaveJobV5DraftRequestAcceptsCreatePayload,
   testParseSaveJobV5DraftRequestDerivesUpdateFromJobId,
   testParseSaveJobV5DraftRequestRejectsInvalidPayload,
+  testSaveJobV5DraftClientMapsUnknownHttpErrorTo500,
+  testSaveJobV5DraftClientNormalizesHttpErrors,
+  testSaveJobV5DraftClientPostsTypedPayload,
+  testSaveJobV5DraftClientRejectsInvalidSuccessResponse,
+  testSaveJobV5DraftClientSendsJobIdForUpdate,
   testBuildPurchaseRequirementPreviewAggregatesTotals,
   testBuildPurchaseRequirementPreviewCreatesRequirementPerStockRequirement,
   testBuildPurchaseRequirementPreviewCreatesSingleRequirement,
@@ -130,6 +135,11 @@ const tests: Array<[string, () => void | Promise<void>]> = [
   ["v5 save route update payload validation", testParseSaveJobV5DraftRequestDerivesUpdateFromJobId],
   ["v5 save route rejects invalid payload", testParseSaveJobV5DraftRequestRejectsInvalidPayload],
   ["v5 save route error mapping", testMapJobV5SaveErrorMapsRouteResponses],
+  ["v5 save client posts typed payload", testSaveJobV5DraftClientPostsTypedPayload],
+  ["v5 save client sends job id for update", testSaveJobV5DraftClientSendsJobIdForUpdate],
+  ["v5 save client normalizes http errors", testSaveJobV5DraftClientNormalizesHttpErrors],
+  ["v5 save client maps unknown http errors", testSaveJobV5DraftClientMapsUnknownHttpErrorTo500],
+  ["v5 save client rejects invalid success response", testSaveJobV5DraftClientRejectsInvalidSuccessResponse],
 ];
 
 async function main() {

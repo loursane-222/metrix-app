@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { materialGroupFixtures } from "../fixtures/material-groups";
 import {
+  JobV5ClientError,
+  saveJobV5Draft as saveJobV5DraftFromClient,
+} from "../client";
+import {
   DEFAULT_COST_PREVIEW_WASTE_RATIO,
   PLATE_AREA_CM2,
   buildMaterialGroupKey,
@@ -1435,6 +1439,89 @@ export function testMapJobV5SaveErrorMapsRouteResponses() {
   assert.equal(mapJobV5SaveError(new Error("unexpected")).status, 500);
 }
 
+export async function testSaveJobV5DraftClientPostsTypedPayload() {
+  const job = createJob([]);
+  const calls: Array<{ input: string; init?: { method?: string; headers?: Record<string, string>; body?: string } }> = [];
+  const fetch = createMockFetch({
+    status: 200,
+    body: { success: true, jobId: "job-v5-1", mode: "create" },
+    calls,
+  });
+
+  const result = await saveJobV5DraftFromClient({
+    job,
+    title: "Mutfak Tezgah",
+    fetch,
+  });
+
+  assert.deepEqual(result, { success: true, jobId: "job-v5-1", mode: "create" });
+  assert.equal(calls[0].input, "/api/yeni-is-v5/save");
+  assert.equal(calls[0].init?.method, "POST");
+  assert.equal(calls[0].init?.headers?.["Content-Type"], "application/json");
+  assert.deepEqual(JSON.parse(calls[0].init?.body ?? ""), {
+    job,
+    title: "Mutfak Tezgah",
+  });
+}
+
+export async function testSaveJobV5DraftClientSendsJobIdForUpdate() {
+  const calls: Array<{ input: string; init?: { method?: string; headers?: Record<string, string>; body?: string } }> = [];
+  const fetch = createMockFetch({
+    status: 200,
+    body: { success: true, jobId: "job-v5-1", mode: "update" },
+    calls,
+  });
+
+  const result = await saveJobV5DraftFromClient({
+    job: createJob([]),
+    title: "Mutfak Tezgah",
+    jobId: "job-v5-1",
+    fetch,
+  });
+  const payload = JSON.parse(calls[0].init?.body ?? "");
+
+  assert.equal(result.mode, "update");
+  assert.equal(payload.jobId, "job-v5-1");
+}
+
+export async function testSaveJobV5DraftClientNormalizesHttpErrors() {
+  for (const status of [400, 401, 403, 404, 500] as const) {
+    const fetch = createMockFetch({
+      status,
+      body: { success: false, error: `error-${status}` },
+    });
+
+    await assert.rejects(
+      () => saveJobV5DraftFromClient({ job: createJob([]), title: "Mutfak Tezgah", fetch }),
+      (error) => error instanceof JobV5ClientError && error.status === status && error.message === `error-${status}`,
+    );
+  }
+}
+
+export async function testSaveJobV5DraftClientMapsUnknownHttpErrorTo500() {
+  const fetch = createMockFetch({
+    status: 418,
+    body: { success: false, error: "teapot" },
+  });
+
+  await assert.rejects(
+    () => saveJobV5DraftFromClient({ job: createJob([]), title: "Mutfak Tezgah", fetch }),
+    (error) => error instanceof JobV5ClientError && error.status === 500 && error.message === "teapot",
+  );
+}
+
+export async function testSaveJobV5DraftClientRejectsInvalidSuccessResponse() {
+  const fetch = createMockFetch({
+    status: 200,
+    body: { success: true, jobId: "job-v5-1", mode: "bad" },
+  });
+
+  await assert.rejects(
+    () => saveJobV5DraftFromClient({ job: createJob([]), title: "Mutfak Tezgah", fetch }),
+    (error) => error instanceof JobV5ClientError && error.status === 500,
+  );
+}
+
 type ComparableSummary = {
   materialName: string;
   source: string;
@@ -1715,4 +1802,38 @@ function readWhereJobId(args: unknown): string {
 
 function readWhereCustomerId(args: unknown): string | null {
   return ((args as { where: { id?: string } }).where.id ?? null);
+}
+
+type MockFetchCall = {
+  input: string;
+  init?: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  };
+};
+
+function createMockFetch(options: {
+  status: number;
+  body: unknown;
+  calls?: MockFetchCall[];
+}) {
+  return async (
+    input: string,
+    init?: {
+      method?: string;
+      headers?: Record<string, string>;
+      body?: string;
+    },
+  ) => {
+    options.calls?.push({ input, init });
+
+    return {
+      ok: options.status >= 200 && options.status < 300,
+      status: options.status,
+      async json() {
+        return options.body;
+      },
+    };
+  };
 }

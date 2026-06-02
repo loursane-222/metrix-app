@@ -8,6 +8,7 @@
     "types": ["node"]
   },
   "include": [
+    "./client.ts",
     "./domain.ts",
     "./fixtures/**/*.ts",
     "./__tests__/**/*.ts",
