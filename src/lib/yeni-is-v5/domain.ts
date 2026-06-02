@@ -284,6 +284,57 @@ export type PurchaseRequirementPreview = {
   totals: PurchaseRequirementTotals;
 };
 
+export type PlateAssignmentStatus = "ready" | "overflow" | "missing-material" | "empty";
+
+export type PlateAssignedPiece = {
+  areaId: string;
+  areaName: string;
+  productId: string;
+  productName: string;
+  pieceId: string;
+  pieceName: string;
+  widthCm: number;
+  heightCm: number;
+  areaCm2: number;
+  materialGroupId: string;
+  virtualPlateId: string;
+};
+
+export type VirtualPlate = {
+  id: string;
+  materialGroupId: string;
+  plateIndex: number;
+  widthCm: number;
+  heightCm: number;
+  areaCm2: number;
+  assignedPieces: PlateAssignedPiece[];
+  usedAreaCm2: number;
+  remainingAreaCm2: number;
+  status: PlateAssignmentStatus;
+};
+
+export type PlateAssignmentGroup = {
+  id: string;
+  materialGroupId: string;
+  materialSelection: MaterialSelectionDraft;
+  plates: VirtualPlate[];
+  status: PlateAssignmentStatus;
+};
+
+export type PlateAssignmentTotals = {
+  groupCount: number;
+  plateCount: number;
+  assignedPieceCount: number;
+  usedAreaCm2: number;
+  remainingAreaCm2: number;
+};
+
+export type PlateAssignmentPreview = {
+  jobId: string;
+  groups: PlateAssignmentGroup[];
+  totals: PlateAssignmentTotals;
+};
+
 export type CostPreviewItem = {
   id: string;
   areaId: string;
@@ -792,6 +843,16 @@ export function buildPurchaseRequirementTotals(
   };
 }
 
+export function buildPlateAssignmentPreview(layoutPreview: LayoutPreview): PlateAssignmentPreview {
+  const groups = layoutPreview.groups.map((group) => buildPlateAssignmentGroup(group));
+
+  return {
+    jobId: layoutPreview.jobId,
+    groups,
+    totals: buildPlateAssignmentTotals(groups),
+  };
+}
+
 export function createEmptyJobDraft(): JobDraft {
   return {
     id: createDraftId("job"),
@@ -1108,6 +1169,106 @@ function buildStockRequirementTotals(requirements: StockRequirementItem[]): Stoc
       requirements.reduce((sum, requirement) => sum + requirement.wasteAreaCm2, 0),
     ),
     totalAreaCm2: roundPreviewNumber(requirements.reduce((sum, requirement) => sum + requirement.totalAreaCm2, 0)),
+  };
+}
+
+function buildPlateAssignmentGroup(group: LayoutPreviewGroup): PlateAssignmentGroup {
+  const plateCount = calculateEstimatedPlateCount(group.totalAreaCm2);
+  const plates = createVirtualPlates(group.materialGroupId, plateCount);
+  const hasOverflow = group.pieces.some((piece) => piece.areaCm2 > PLATE_AREA_CM2);
+  const status = getPlateAssignmentGroupStatus(group, hasOverflow);
+
+  if (status !== "empty") {
+    assignPiecesToVirtualPlates(group.pieces, plates);
+  }
+
+  return {
+    id: `plate-assignment-${group.materialGroupId}`,
+    materialGroupId: group.materialGroupId,
+    materialSelection: { ...group.materialSelection },
+    plates,
+    status,
+  };
+}
+
+function createVirtualPlates(materialGroupId: string, plateCount: number): VirtualPlate[] {
+  return Array.from({ length: Math.max(0, plateCount) }, (_, index) => ({
+    id: `virtual-plate-${materialGroupId}-${index + 1}`,
+    materialGroupId,
+    plateIndex: index + 1,
+    widthCm: DEFAULT_STOCK_REQUIREMENT_PLATE_WIDTH_CM,
+    heightCm: DEFAULT_STOCK_REQUIREMENT_PLATE_HEIGHT_CM,
+    areaCm2: PLATE_AREA_CM2,
+    assignedPieces: [],
+    usedAreaCm2: 0,
+    remainingAreaCm2: PLATE_AREA_CM2,
+    status: "ready",
+  }));
+}
+
+function assignPiecesToVirtualPlates(pieces: LayoutPreviewPiece[], plates: VirtualPlate[]): void {
+  let currentPlateIndex = 0;
+
+  for (const piece of pieces) {
+    if (plates.length === 0) {
+      continue;
+    }
+
+    let plate = plates[currentPlateIndex] ?? plates[plates.length - 1];
+
+    if (piece.areaCm2 <= PLATE_AREA_CM2 && piece.areaCm2 > plate.remainingAreaCm2 && currentPlateIndex < plates.length - 1) {
+      currentPlateIndex += 1;
+      plate = plates[currentPlateIndex];
+    }
+
+    plate.assignedPieces.push(createPlateAssignedPiece(piece, plate.id));
+    plate.usedAreaCm2 = roundPreviewNumber(plate.usedAreaCm2 + piece.areaCm2);
+    plate.remainingAreaCm2 = roundPreviewNumber(plate.areaCm2 - plate.usedAreaCm2);
+    plate.status = plate.remainingAreaCm2 < 0 ? "overflow" : "ready";
+  }
+}
+
+function createPlateAssignedPiece(piece: LayoutPreviewPiece, virtualPlateId: string): PlateAssignedPiece {
+  return {
+    areaId: piece.areaId,
+    areaName: piece.areaName,
+    productId: piece.productId,
+    productName: piece.productName,
+    pieceId: piece.pieceId,
+    pieceName: piece.pieceName,
+    widthCm: piece.widthCm,
+    heightCm: piece.heightCm,
+    areaCm2: piece.areaCm2,
+    materialGroupId: piece.materialGroupId,
+    virtualPlateId,
+  };
+}
+
+function getPlateAssignmentGroupStatus(group: LayoutPreviewGroup, hasOverflow: boolean): PlateAssignmentStatus {
+  if (group.pieces.length === 0 || group.status === "empty") {
+    return "empty";
+  }
+
+  if (group.status === "missing-material" || isMissingMaterialSelection(group.materialSelection)) {
+    return "missing-material";
+  }
+
+  if (hasOverflow) {
+    return "overflow";
+  }
+
+  return "ready";
+}
+
+function buildPlateAssignmentTotals(groups: PlateAssignmentGroup[]): PlateAssignmentTotals {
+  const plates = groups.flatMap((group) => group.plates);
+
+  return {
+    groupCount: groups.length,
+    plateCount: plates.length,
+    assignedPieceCount: plates.reduce((sum, plate) => sum + plate.assignedPieces.length, 0),
+    usedAreaCm2: roundPreviewNumber(plates.reduce((sum, plate) => sum + plate.usedAreaCm2, 0)),
+    remainingAreaCm2: roundPreviewNumber(plates.reduce((sum, plate) => sum + plate.remainingAreaCm2, 0)),
   };
 }
 

@@ -6,6 +6,7 @@ import {
   buildMaterialGroupKey,
   buildCostPreview,
   buildLayoutPreview,
+  buildPlateAssignmentPreview,
   buildPurchaseRequirementPreview,
   buildQuotePreview,
   buildQuoteLineDisplayName,
@@ -863,6 +864,160 @@ export function testBuildPurchaseRequirementPreviewDefaultsToPurchaseRequired() 
   const preview = buildPurchaseRequirementPreview(stockRequirementPreview);
 
   assert.equal(preview.requirements.every((requirement) => requirement.status === "purchase-required"), true);
+}
+
+export function testBuildPlateAssignmentPreviewCreatesSingleVirtualPlate() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+          createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildPlateAssignmentPreview(layoutPreview);
+  const [group] = preview.groups;
+
+  assert.equal(preview.jobId, layoutPreview.jobId);
+  assert.equal(group.plates.length, 1);
+  assert.equal(group.plates[0].widthCm, 162);
+  assert.equal(group.plates[0].heightCm, 324);
+  assert.equal(group.plates[0].areaCm2, PLATE_AREA_CM2);
+  assert.equal(group.status, "ready");
+}
+
+export function testBuildPlateAssignmentPreviewCreatesTwoVirtualPlatesForLargeArea() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+          createPiece("piece-a", "area-kitchen", "product-countertop", "A", 300, 100, 1, 3),
+          createPiece("piece-b", "area-kitchen", "product-countertop", "B", 200, 100, 1, 2),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildPlateAssignmentPreview(layoutPreview);
+  const [group] = preview.groups;
+
+  assert.equal(layoutPreview.groups[0].totalAreaCm2, 56000);
+  assert.equal(group.plates.length, 2);
+  assert.equal(group.plates.reduce((sum, plate) => sum + plate.assignedPieces.length, 0), 2);
+}
+
+export function testBuildPlateAssignmentPreviewSendsPieceOverrideToDifferentGroup() {
+  const defaultMaterial = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const overrideMaterial = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const area = createArea("area-kitchen", "Mutfak", [
+    createProduct("product-countertop", "area-kitchen", "Tezgah", defaultMaterial, [
+      createPiece("piece-default", "area-kitchen", "product-countertop", "Default", 100, 60, 1, 1.6),
+      {
+        ...createPiece("piece-override", "area-kitchen", "product-countertop", "Override", 100, 40, 1, 1.4),
+        materialSelection: overrideMaterial,
+      },
+    ]),
+  ]);
+  const layoutPreview = buildLayoutPreview(createJob([area]));
+  const preview = buildPlateAssignmentPreview(layoutPreview);
+  const overridePiece = area.products[0].pieces[1];
+  const overrideGroupId = buildMaterialGroupKey(effectiveMaterialSelection(area.products[0], overridePiece), overridePiece);
+  const overrideGroup = preview.groups.find((group) => group.materialGroupId === overrideGroupId);
+
+  assert.equal(preview.groups.length, 2);
+  assert.equal(overrideGroup?.plates[0].assignedPieces.length, 1);
+  assert.equal(overrideGroup?.plates[0].assignedPieces[0].pieceId, "piece-override");
+}
+
+export function testBuildPlateAssignmentPreviewPreservesAssignedPieceMetadata() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-bathroom", "Banyo", [
+        createProduct("product-vanity", "area-bathroom", "Lavabo", material, [
+          createPiece("piece-vanity", "area-bathroom", "product-vanity", "Lavabo Tabla", 80, 50, 1, 1.3),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildPlateAssignmentPreview(layoutPreview);
+  const [piece] = preview.groups[0].plates[0].assignedPieces;
+
+  assert.equal(piece.areaId, "area-bathroom");
+  assert.equal(piece.areaName, "Banyo");
+  assert.equal(piece.productId, "product-vanity");
+  assert.equal(piece.productName, "Lavabo");
+  assert.equal(piece.pieceId, "piece-vanity");
+  assert.equal(piece.pieceName, "Lavabo Tabla");
+  assert.equal(piece.widthCm, 80);
+  assert.equal(piece.heightCm, 50);
+  assert.equal(piece.areaCm2, 4000);
+  assert.equal(piece.virtualPlateId, preview.groups[0].plates[0].id);
+}
+
+export function testBuildPlateAssignmentPreviewMarksOverflow() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+          createPiece("piece-oversize", "area-kitchen", "product-countertop", "Oversize", 400, 200, 1, 4),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildPlateAssignmentPreview(layoutPreview);
+
+  assert.equal(preview.groups[0].status, "overflow");
+  assert.equal(preview.groups[0].plates.some((plate) => plate.status === "overflow"), true);
+}
+
+export function testBuildPlateAssignmentPreviewMarksMissingMaterial() {
+  const missingMaterial = createMaterial({
+    materialName: "",
+    source: "unknown",
+    stockPlateId: undefined,
+    shadeCode: undefined,
+    lotNo: undefined,
+  });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", missingMaterial, [
+          createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildPlateAssignmentPreview(layoutPreview);
+
+  assert.equal(preview.groups[0].status, "missing-material");
+}
+
+export function testBuildPlateAssignmentPreviewAggregatesTotals() {
+  const calacatta = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+          createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+        ]),
+        createProduct("product-island", "area-kitchen", "Ada", nero, [
+          createPiece("piece-nero", "area-kitchen", "product-island", "Nero", 100, 40, 1, 1.4),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildPlateAssignmentPreview(layoutPreview);
+
+  assert.equal(preview.totals.groupCount, 2);
+  assert.equal(preview.totals.plateCount, 2);
+  assert.equal(preview.totals.assignedPieceCount, 2);
+  assert.equal(preview.totals.usedAreaCm2, 10000);
+  assert.equal(preview.totals.remainingAreaCm2, 94976);
 }
 
 type ComparableSummary = {

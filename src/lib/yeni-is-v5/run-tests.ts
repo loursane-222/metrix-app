@@ -16,6 +16,13 @@ import {
   testBuildLayoutPreviewMarksMissingMaterial,
   testBuildLayoutPreviewPreservesPieceMetadata,
   testBuildLayoutPreviewSendsPieceOverrideToDifferentGroup,
+  testBuildPlateAssignmentPreviewAggregatesTotals,
+  testBuildPlateAssignmentPreviewCreatesSingleVirtualPlate,
+  testBuildPlateAssignmentPreviewCreatesTwoVirtualPlatesForLargeArea,
+  testBuildPlateAssignmentPreviewMarksMissingMaterial,
+  testBuildPlateAssignmentPreviewMarksOverflow,
+  testBuildPlateAssignmentPreviewPreservesAssignedPieceMetadata,
+  testBuildPlateAssignmentPreviewSendsPieceOverrideToDifferentGroup,
   testBuildPurchaseRequirementPreviewAggregatesTotals,
   testBuildPurchaseRequirementPreviewCreatesRequirementPerStockRequirement,
   testBuildPurchaseRequirementPreviewCreatesSingleRequirement,
@@ -76,6 +83,13 @@ const tests: Array<[string, () => void]> = [
   ["purchase requirement area transfer", testBuildPurchaseRequirementPreviewTransfersPurchaseArea],
   ["purchase requirement totals aggregation", testBuildPurchaseRequirementPreviewAggregatesTotals],
   ["purchase requirement default status", testBuildPurchaseRequirementPreviewDefaultsToPurchaseRequired],
+  ["plate assignment single virtual plate", testBuildPlateAssignmentPreviewCreatesSingleVirtualPlate],
+  ["plate assignment large area plates", testBuildPlateAssignmentPreviewCreatesTwoVirtualPlatesForLargeArea],
+  ["plate assignment piece override group", testBuildPlateAssignmentPreviewSendsPieceOverrideToDifferentGroup],
+  ["plate assignment preserves metadata", testBuildPlateAssignmentPreviewPreservesAssignedPieceMetadata],
+  ["plate assignment overflow status", testBuildPlateAssignmentPreviewMarksOverflow],
+  ["plate assignment missing material status", testBuildPlateAssignmentPreviewMarksMissingMaterial],
+  ["plate assignment totals aggregation", testBuildPlateAssignmentPreviewAggregatesTotals],
 ];
 
 for (const [name, run] of tests) {
