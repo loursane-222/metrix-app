@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import { materialGroupFixtures } from "../fixtures/material-groups";
-import { rebuildMaterialGroups, summarizeMaterialGroup } from "../domain";
+import {
+  buildMaterialGroupKey,
+  buildQuoteLineDisplayName,
+  effectiveMaterialSelection,
+  rebuildMaterialGroups,
+  summarizeMaterialGroup,
+} from "../domain";
+import type {
+  AreaProductDraft,
+  CostPreview,
+  CostPreviewItem,
+  JobAreaDraft,
+  JobDraft,
+  MaterialSelectionDraft,
+  QuotePreviewLine,
+} from "../domain";
 
 export function testMaterialGroupFixtures() {
   for (const fixture of materialGroupFixtures) {
@@ -56,6 +71,194 @@ export function testMaterialGroupSummariesUseUniqueAreaAndProductCounts() {
   assert.equal(summary.totalPieceCount, 2);
 }
 
+export function testEffectiveMaterialSelectionUsesProductDefault() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const product = createProduct("product-countertop", "area-kitchen", "Mutfak Tezgah", material, []);
+  const piece = createPiece("piece-countertop", "area-kitchen", product.id, "Tezgah", 100, 60, 1, 1.6);
+
+  assert.deepEqual(effectiveMaterialSelection(product, piece), material);
+}
+
+export function testEffectiveMaterialSelectionUsesPieceOverride() {
+  const defaultMaterial = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const overrideMaterial = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const product = createProduct("product-countertop", "area-kitchen", "Mutfak Tezgah", defaultMaterial, []);
+  const piece = {
+    ...createPiece("piece-countertop", "area-kitchen", product.id, "Tezgah", 100, 60, 1, 1.6),
+    materialSelection: overrideMaterial,
+  };
+
+  assert.deepEqual(effectiveMaterialSelection(product, piece), overrideMaterial);
+}
+
+export function testQuoteLinesCanSplitSameAreaProductByMaterialGroup() {
+  const defaultMaterial = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const overrideMaterial = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const area = createArea("area-kitchen", "Mutfak", [
+    createProduct("product-countertop", "area-kitchen", "Tezgah", defaultMaterial, [
+      createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Sol", 100, 60, 1, 1.6),
+      {
+        ...createPiece("piece-nero", "area-kitchen", "product-countertop", "Sag", 100, 60, 1, 1.6),
+        materialSelection: overrideMaterial,
+      },
+    ]),
+  ]);
+  const job = createJob([area]);
+  const groups = rebuildMaterialGroups(job);
+
+  assert.equal(groups.length, 2);
+
+  const quoteLines = groups.map<QuotePreviewLine>((group) => ({
+    id: `quote-${group.key}`,
+    areaId: area.id,
+    areaName: area.name,
+    productId: area.products[0].id,
+    productName: area.products[0].name,
+    materialGroupId: group.key,
+    materialGroupKey: group.key,
+    materialSelection: group.material,
+    displayName: buildQuoteLineDisplayName({
+      areaName: area.name,
+      productName: area.products[0].name,
+      materialSelection: group.material,
+    }),
+    label: group.displayName,
+    description: "",
+    unit: "square_meter",
+    quantity: 1.2,
+    unitPrice: 1000,
+    totalPrice: 1200,
+    customerVisible: true,
+    lineType: "material",
+  }));
+
+  assert.equal(new Set(quoteLines.map((line) => line.materialGroupId)).size, 2);
+  assert.deepEqual(new Set(quoteLines.map((line) => line.areaId)).size, 1);
+  assert.deepEqual(new Set(quoteLines.map((line) => line.productId)).size, 1);
+  assert.ok(quoteLines.some((line) => line.displayName === "Mutfak / Tezgah / Calacatta / Belenco / Royal"));
+  assert.ok(quoteLines.some((line) => line.displayName === "Mutfak / Tezgah / Nero / Belenco / Royal"));
+}
+
+export function testWasteIsCostOnlyAndNotSeparateCustomerQuoteLine() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const materialGroupId = buildMaterialGroupKey(material);
+  const wasteCost: CostPreviewItem = {
+    id: "cost-waste",
+    areaId: "area-kitchen",
+    areaName: "Mutfak",
+    productId: "product-countertop",
+    productName: "Tezgah",
+    materialGroupId,
+    materialGroupKey: materialGroupId,
+    materialSelection: material,
+    label: "Fire",
+    costType: "waste",
+    quantity: 0.2,
+    unit: "square_meter",
+    measurement: {
+      areaCm2: 2000,
+      squareMeter: 0.2,
+    },
+    waste: {
+      areaCm2: 2000,
+      ratio: 0.1,
+      cost: 250,
+      currency: "TRY",
+    },
+    amount: 250,
+    currency: "TRY",
+    customerVisible: false,
+  };
+  const costPreview: CostPreview = {
+    jobId: "job-contract",
+    materialCost: 1000,
+    laborCost: 0,
+    operationCost: 200,
+    wasteCost: 250,
+    extraCost: 0,
+    totalCost: 1450,
+    currency: "TRY",
+    totals: {
+      materialCost: 1000,
+      laborCost: 0,
+      operationCost: 200,
+      wasteCost: 250,
+      extraCost: 0,
+      totalCost: 1450,
+      currency: "TRY",
+    },
+    materialGroupBreakdown: [
+      {
+        materialGroupId,
+        materialGroupKey: materialGroupId,
+        materialSelection: material,
+        materialCost: 1000,
+        laborCost: 0,
+        operationCost: 200,
+        wasteCost: 250,
+        extraCost: 0,
+        totalCost: 1450,
+        currency: "TRY",
+      },
+    ],
+    wasteTotal: {
+      areaCm2: 2000,
+      ratio: 0.1,
+      cost: 250,
+      currency: "TRY",
+    },
+    details: [wasteCost],
+  };
+  const quoteLines: QuotePreviewLine[] = [
+    {
+      id: "quote-material",
+      areaId: "area-kitchen",
+      areaName: "Mutfak",
+      productId: "product-countertop",
+      productName: "Tezgah",
+      materialGroupId,
+      materialGroupKey: materialGroupId,
+      materialSelection: material,
+      displayName: "Mutfak / Tezgah / Calacatta / Belenco / Royal",
+      label: "Mutfak / Tezgah / Calacatta",
+      description: "",
+      unit: "square_meter",
+      quantity: 1,
+      unitPrice: 1450,
+      totalPrice: 1450,
+      includesWasteCost: true,
+      customerVisible: true,
+      lineType: "material",
+    },
+  ];
+
+  assert.equal(costPreview.wasteCost, 250);
+  assert.equal(costPreview.wasteTotal.cost, 250);
+  assert.equal(costPreview.details.filter((item) => item.costType === "waste").length, 1);
+  assert.equal(costPreview.details[0].customerVisible, false);
+  assert.equal(quoteLines.filter((line) => line.lineType === "extra" && line.label.toLocaleLowerCase("tr-TR").includes("fire")).length, 0);
+  assert.equal(quoteLines[0].includesWasteCost, true);
+}
+
+export function testMaterialGroupIdIsDerivedFromEffectiveMaterial() {
+  const defaultMaterial = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const overrideMaterial = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const area = createArea("area-kitchen", "Mutfak", [
+    createProduct("product-countertop", "area-kitchen", "Tezgah", defaultMaterial, [
+      {
+        ...createPiece("piece-nero", "area-kitchen", "product-countertop", "Sag", 100, 60, 1, 1.6),
+        materialSelection: overrideMaterial,
+      },
+    ]),
+  ]);
+  const job = createJob([area]);
+  const [group] = rebuildMaterialGroups(job);
+  const piece = area.products[0].pieces[0];
+  const effectiveMaterial = effectiveMaterialSelection(area.products[0], piece);
+
+  assert.equal(group.key, buildMaterialGroupKey(effectiveMaterial, piece));
+}
+
 type ComparableSummary = {
   materialName: string;
   source: string;
@@ -66,4 +269,124 @@ function compareSummary(left: ComparableSummary, right: ComparableSummary): numb
   return `${left.materialName}|${left.source}|${left.shadeCode ?? ""}`.localeCompare(
     `${right.materialName}|${right.source}|${right.shadeCode ?? ""}`,
   );
+}
+
+function createJob(areas: JobAreaDraft[]): JobDraft {
+  return {
+    id: "job-contract",
+    customer: { name: "Contract Customer" },
+    areas,
+    materialGroups: [],
+    quotePreview: [],
+    costPreview: {
+      jobId: "job-contract",
+      materialCost: 0,
+      laborCost: 0,
+      operationCost: 0,
+      wasteCost: 0,
+      extraCost: 0,
+      totalCost: 0,
+      currency: "TRY",
+      totals: {
+        materialCost: 0,
+        laborCost: 0,
+        operationCost: 0,
+        wasteCost: 0,
+        extraCost: 0,
+        totalCost: 0,
+        currency: "TRY",
+      },
+      materialGroupBreakdown: [],
+      wasteTotal: {
+        areaCm2: 0,
+        cost: 0,
+        currency: "TRY",
+      },
+      details: [],
+    },
+    totals: {
+      totalCost: 0,
+      subtotal: 0,
+      taxRate: 20,
+      taxAmount: 0,
+      grandTotal: 0,
+      marginAmount: 0,
+      marginPercent: 0,
+      currency: "TRY",
+    },
+    status: "draft",
+  };
+}
+
+function createArea(id: string, name: string, products: AreaProductDraft[]): JobAreaDraft {
+  return {
+    id,
+    name,
+    areaType: "kitchen",
+    sortOrder: 0,
+    products,
+  };
+}
+
+function createProduct(
+  id: string,
+  areaId: string,
+  name: string,
+  defaultMaterialSelection: MaterialSelectionDraft,
+  pieces: AreaProductDraft["pieces"],
+): AreaProductDraft {
+  return {
+    id,
+    areaId,
+    name,
+    productType: "countertop",
+    quantity: 1,
+    defaultMaterialSelection,
+    pieces,
+    sortOrder: 0,
+  };
+}
+
+function createPiece(
+  id: string,
+  areaId: string,
+  productId: string,
+  label: string,
+  widthCm: number,
+  heightCm: number,
+  quantity: number,
+  linearMeter: number,
+): AreaProductDraft["pieces"][number] {
+  return {
+    id,
+    areaId,
+    productId,
+    label,
+    pieceType: "main_piece",
+    widthCm,
+    heightCm,
+    quantity,
+    veinDirection: "none",
+    shapeType: "rectangle",
+    areaCm2: widthCm * heightCm * quantity,
+    linearMeter,
+  };
+}
+
+function createMaterial(overrides: Partial<MaterialSelectionDraft>): MaterialSelectionDraft {
+  return {
+    materialName: "Calacatta",
+    brand: "Belenco",
+    series: "Royal",
+    materialType: "quartz",
+    source: "stock",
+    slabWidthCm: 320,
+    slabHeightCm: 160,
+    slabPrice: 1000,
+    currency: "TRY",
+    shadeCode: "A",
+    lotNo: "L1",
+    requiresVeinMatch: false,
+    ...overrides,
+  };
 }

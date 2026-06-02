@@ -262,6 +262,7 @@ function createJob(areas: JobAreaDraft[]): JobDraft {
     materialGroups: [],
     quotePreview: [],
     costPreview: {
+      jobId: "job-fixture",
       materialCost: 0,
       laborCost: 0,
       operationCost: 0,
@@ -269,6 +270,21 @@ function createJob(areas: JobAreaDraft[]): JobDraft {
       extraCost: 0,
       totalCost: 0,
       currency: "TRY",
+      totals: {
+        materialCost: 0,
+        laborCost: 0,
+        operationCost: 0,
+        wasteCost: 0,
+        extraCost: 0,
+        totalCost: 0,
+        currency: "TRY",
+      },
+      materialGroupBreakdown: [],
+      wasteTotal: {
+        areaCm2: 0,
+        cost: 0,
+        currency: "TRY",
+      },
       details: [],
     },
     totals: {

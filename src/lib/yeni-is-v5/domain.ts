@@ -34,6 +34,44 @@ export type QuoteLineType = "material" | "labor" | "operation" | "discount" | "e
 
 export type QuoteUnit = "piece" | "linear_meter" | "square_meter" | "package";
 
+export type CostPreviewMeasurement = {
+  widthCm?: number;
+  heightCm?: number;
+  areaCm2?: number;
+  squareMeter?: number;
+  linearMeter?: number;
+};
+
+export type CostPreviewWaste = {
+  areaCm2: number;
+  ratio?: number;
+  cost: number;
+  currency: Currency;
+};
+
+export type CostPreviewTotals = {
+  materialCost: number;
+  laborCost: number;
+  operationCost: number;
+  wasteCost: number;
+  extraCost: number;
+  totalCost: number;
+  currency: Currency;
+};
+
+export type MaterialGroupCostBreakdown = {
+  materialGroupId: string;
+  materialGroupKey?: string;
+  materialSelection: MaterialSelectionDraft;
+  materialCost: number;
+  laborCost: number;
+  operationCost: number;
+  wasteCost: number;
+  extraCost: number;
+  totalCost: number;
+  currency: Currency;
+};
+
 export type JobCustomerDraft = {
   id?: string;
   name: string;
@@ -156,15 +194,30 @@ export type PlateLayoutDraft = {
 
 export type CostPreviewItem = {
   id: string;
+  areaId: string;
+  areaName: string;
+  productId: string;
+  productName: string;
+  pieceId?: string;
+  pieceName?: string;
+  materialGroupId: string;
+  materialGroupKey?: string;
+  materialSelection: MaterialSelectionDraft;
   label: string;
   costType: "material" | "labor" | "operation" | "waste" | "extra";
+  quantity: number;
+  unit: QuoteUnit;
+  measurement?: CostPreviewMeasurement;
+  waste?: CostPreviewWaste;
   amount: number;
   currency: Currency;
+  customerVisible: boolean;
   source?: string;
   metadata?: Record<string, unknown>;
 };
 
 export type CostPreview = {
+  jobId: string;
   materialCost: number;
   laborCost: number;
   operationCost: number;
@@ -172,22 +225,34 @@ export type CostPreview = {
   extraCost: number;
   totalCost: number;
   currency: Currency;
+  totals: CostPreviewTotals;
+  materialGroupBreakdown: MaterialGroupCostBreakdown[];
+  wasteTotal: CostPreviewWaste;
   details: CostPreviewItem[];
 };
 
 export type QuotePreviewLine = {
   id: string;
   areaId?: string;
+  areaName?: string;
+  productId?: string;
+  productName?: string;
+  materialGroupId?: string;
   materialGroupKey?: string;
+  materialSelection?: MaterialSelectionDraft;
+  displayName?: string;
   label: string;
   description: string;
   unit: QuoteUnit;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  includesWasteCost?: boolean;
+  customerVisible?: boolean;
   costAmount?: number;
   marginAmount?: number;
   areaNameSnapshot?: string;
+  productNameSnapshot?: string;
   materialNameSnapshot?: string;
   lineType: QuoteLineType;
 };
@@ -269,7 +334,7 @@ export function rebuildMaterialGroups(jobDraft: JobDraft): MaterialGroupDraft[] 
   for (const area of jobDraft.areas) {
     for (const product of area.products) {
       for (const piece of product.pieces) {
-        const effectiveMaterial = getEffectiveMaterialSelection(product, piece);
+        const effectiveMaterial = effectiveMaterialSelection(product, piece);
         const key = buildMaterialGroupKey(effectiveMaterial, piece);
         const existingGroup = groups.get(key);
         const pieceAreaCm2 = calculatePieceAreaCm2(piece);
@@ -394,6 +459,29 @@ export function createEmptyMaterialSelectionDraft(): MaterialSelectionDraft {
 }
 
 function createEmptyCostPreview(currency: Currency = DEFAULT_CURRENCY): CostPreview {
+  const totals = createEmptyCostPreviewTotals(currency);
+
+  return {
+    jobId: "",
+    materialCost: 0,
+    laborCost: 0,
+    operationCost: 0,
+    wasteCost: 0,
+    extraCost: 0,
+    totalCost: 0,
+    currency,
+    totals,
+    materialGroupBreakdown: [],
+    wasteTotal: {
+      areaCm2: 0,
+      cost: 0,
+      currency,
+    },
+    details: [],
+  };
+}
+
+function createEmptyCostPreviewTotals(currency: Currency): CostPreviewTotals {
   return {
     materialCost: 0,
     laborCost: 0,
@@ -402,7 +490,6 @@ function createEmptyCostPreview(currency: Currency = DEFAULT_CURRENCY): CostPrev
     extraCost: 0,
     totalCost: 0,
     currency,
-    details: [],
   };
 }
 
@@ -443,12 +530,23 @@ function getMaterialGroupStatus(group: Pick<MaterialGroupDraft, "material" | "to
   return "ready_for_layout";
 }
 
-function getMaterialDisplayName(material: MaterialSelectionDraft): string {
+function getMaterialDisplayName(material: Pick<MaterialSelectionDraft, "materialName" | "brand" | "series">): string {
   const parts = [material.materialName, material.brand, material.series].filter((part): part is string =>
     Boolean(part?.trim()),
   );
 
   return parts.length > 0 ? parts.join(" / ") : "Unnamed material";
+}
+
+export function buildQuoteLineDisplayName(input: {
+  areaName: string;
+  productName: string;
+  materialSelection: Pick<MaterialSelectionDraft, "materialName" | "brand" | "series" | "color">;
+}): string {
+  const materialName = getMaterialDisplayName(input.materialSelection);
+  const parts = [input.areaName, input.productName, materialName].filter((part) => part.trim().length > 0);
+
+  return parts.join(" / ");
 }
 
 function addUnique(target: string[], value: string): void {
@@ -457,7 +555,7 @@ function addUnique(target: string[], value: string): void {
   }
 }
 
-function getEffectiveMaterialSelection(
+export function effectiveMaterialSelection(
   product: Pick<AreaProductDraft, "defaultMaterialSelection">,
   piece: Pick<CuttingPieceDraft, "materialSelection">,
 ): MaterialSelectionDraft {
