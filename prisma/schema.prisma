@@ -64,6 +64,7 @@ model Atolye {
   makineler               Makine[]
   araclar                 Arac[]
   isler                   Is[]
+  jobsV5                  JobV5[]
   personeller             Personel[]
   musteriler              Musteri[]
   aylikGiderler           AylikGider[]
@@ -132,6 +133,7 @@ model Musteri {
   updatedAt DateTime @updatedAt
 
   isler         Is[]
+  jobsV5        JobV5[]
   tahsilatlar   Tahsilat[]
   odemePlanlari OdemePlani[]
 }
@@ -250,6 +252,149 @@ model IsOperasyon {
   toplamDakika Decimal
 
   createdAt DateTime @default(now())
+}
+
+model JobV5 {
+  id       String @id @default(cuid())
+  atolyeId String
+  atolye   Atolye @relation(fields: [atolyeId], references: [id], onDelete: Cascade)
+
+  musteriId String?
+  musteri   Musteri? @relation(fields: [musteriId], references: [id], onDelete: SetNull)
+
+  customerName    String @default("")
+  customerPhone   String @default("")
+  customerEmail   String @default("")
+  customerAddress String @default("")
+  customerType    String @default("")
+
+  title  String  @default("")
+  name   String  @default("")
+  status String  @default("draft")
+  notes  String?
+
+  areas              JobV5Area[]
+  products           JobV5Product[]
+  pieces             JobV5Piece[]
+  materialSelections JobV5MaterialSelection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([atolyeId])
+  @@index([musteriId])
+  @@index([atolyeId, status])
+  @@map("job_v5")
+}
+
+model JobV5Area {
+  id    String @id @default(cuid())
+  jobId String
+  job   JobV5  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  name      String  @default("")
+  areaType  String?
+  sortOrder Int     @default(0)
+
+  products JobV5Product[]
+  pieces   JobV5Piece[]
+
+  @@index([jobId])
+  @@index([jobId, sortOrder])
+  @@map("job_v5_areas")
+}
+
+model JobV5Product {
+  id    String @id @default(cuid())
+  jobId String
+  job   JobV5  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  areaId String
+  area   JobV5Area @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  name        String  @default("")
+  productType String?
+  quantity    Int     @default(1)
+  sortOrder   Int     @default(0)
+
+  defaultMaterialSelectionId String?
+  defaultMaterialSelection   JobV5MaterialSelection? @relation("JobV5ProductDefaultMaterialSelection", fields: [defaultMaterialSelectionId], references: [id], onDelete: SetNull)
+
+  pieces JobV5Piece[]
+
+  @@index([jobId])
+  @@index([areaId])
+  @@index([defaultMaterialSelectionId])
+  @@index([jobId, sortOrder])
+  @@map("job_v5_products")
+}
+
+model JobV5Piece {
+  id    String @id @default(cuid())
+  jobId String
+  job   JobV5  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  areaId String
+  area   JobV5Area @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   JobV5Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  label       String   @default("")
+  name        String   @default("")
+  pieceType   String?
+  widthCm     Decimal  @default(0)
+  heightCm    Decimal  @default(0)
+  quantity    Int      @default(1)
+  areaCm2     Decimal?
+  linearMeter Decimal?
+  sortOrder   Int      @default(0)
+
+  materialSelectionId String?
+  materialSelection   JobV5MaterialSelection? @relation("JobV5PieceMaterialSelection", fields: [materialSelectionId], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+  @@index([areaId])
+  @@index([productId])
+  @@index([materialSelectionId])
+  @@index([jobId, sortOrder])
+  @@map("job_v5_pieces")
+}
+
+model JobV5MaterialSelection {
+  id    String @id @default(cuid())
+  jobId String
+  job   JobV5  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  source          String   @default("unknown")
+  materialName    String   @default("")
+  brand           String?
+  collection      String?
+  color           String?
+  finish          String?
+  thicknessMm     Decimal?
+  slabWidthCm     Decimal?
+  slabHeightCm    Decimal?
+  unitCost        Decimal?
+  currency        String?
+  stockPlateId    String?
+  stockOffcutId   String?
+  stockPurchaseId String?
+  snapshotJson    Json?
+
+  defaultForProducts JobV5Product[] @relation("JobV5ProductDefaultMaterialSelection")
+  overrideForPieces  JobV5Piece[]   @relation("JobV5PieceMaterialSelection")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([source])
+  @@index([materialName])
+  @@index([stockPlateId])
+  @@index([stockOffcutId])
+  @@index([stockPurchaseId])
+  @@map("job_v5_material_selections")
 }
 
 enum PhaseType {
