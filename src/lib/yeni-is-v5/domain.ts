@@ -270,6 +270,7 @@ export type JobTotalsPreview = {
 
 const DEFAULT_CURRENCY: Currency = "TRY";
 const DEFAULT_TAX_RATE = 20;
+export const DEFAULT_COST_PREVIEW_WASTE_RATIO = 0.12;
 
 export function normalizeMaterialKeyPart(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined || value === "") {
@@ -388,6 +389,148 @@ export function summarizeMaterialGroup(jobDraft: JobDraft, group: MaterialGroupD
 
 export function summarizeMaterialGroups(jobDraft: JobDraft): MaterialGroupSummary[] {
   return rebuildMaterialGroups(jobDraft).map((group) => summarizeMaterialGroup(jobDraft, group));
+}
+
+export function buildCostPreview(jobDraft: JobDraft): CostPreview {
+  const materialGroups = rebuildMaterialGroups(jobDraft);
+  const currency = resolveCostPreviewCurrency(jobDraft, materialGroups);
+  const details: CostPreviewItem[] = [];
+  const materialGroupBreakdown: MaterialGroupCostBreakdown[] = [];
+  let materialCost = 0;
+  let operationCost = 0;
+  let wasteCost = 0;
+  let wasteAreaCm2 = 0;
+
+  for (const group of materialGroups) {
+    const groupMaterialCost = calculateMaterialCost(group);
+    const groupWasteAreaCm2 = calculateWasteAreaCm2(group.totalPieceAreaCm2);
+    const groupWasteCost = calculateWasteCost(groupMaterialCost);
+    const groupOperationCost = calculateOperationCost(group);
+    const groupTotalCost = roundPreviewNumber(groupMaterialCost + groupWasteCost + groupOperationCost);
+    const itemContext = getCostPreviewItemContext(jobDraft, group);
+
+    materialCost = roundPreviewNumber(materialCost + groupMaterialCost);
+    operationCost = roundPreviewNumber(operationCost + groupOperationCost);
+    wasteCost = roundPreviewNumber(wasteCost + groupWasteCost);
+    wasteAreaCm2 = roundPreviewNumber(wasteAreaCm2 + groupWasteAreaCm2);
+
+    materialGroupBreakdown.push({
+      materialGroupId: group.key,
+      materialGroupKey: group.key,
+      materialSelection: { ...group.material },
+      materialCost: groupMaterialCost,
+      laborCost: 0,
+      operationCost: groupOperationCost,
+      wasteCost: groupWasteCost,
+      extraCost: 0,
+      totalCost: groupTotalCost,
+      currency,
+    });
+
+    details.push(
+      createCostPreviewItem({
+        id: `cost-${group.key}-material`,
+        group,
+        context: itemContext,
+        costType: "material",
+        label: `${group.displayName} malzeme`,
+        quantity: roundPreviewNumber(cm2ToSquareMeter(group.totalPieceAreaCm2)),
+        amount: groupMaterialCost,
+        currency,
+        customerVisible: true,
+      }),
+      createCostPreviewItem({
+        id: `cost-${group.key}-waste`,
+        group,
+        context: itemContext,
+        costType: "waste",
+        label: `${group.displayName} fire`,
+        quantity: roundPreviewNumber(cm2ToSquareMeter(groupWasteAreaCm2)),
+        amount: groupWasteCost,
+        currency,
+        customerVisible: false,
+        waste: {
+          areaCm2: groupWasteAreaCm2,
+          ratio: DEFAULT_COST_PREVIEW_WASTE_RATIO,
+          cost: groupWasteCost,
+          currency,
+        },
+      }),
+      createCostPreviewItem({
+        id: `cost-${group.key}-operation`,
+        group,
+        context: itemContext,
+        costType: "operation",
+        label: `${group.displayName} operasyon`,
+        quantity: roundPreviewNumber(cm2ToSquareMeter(group.totalPieceAreaCm2)),
+        amount: groupOperationCost,
+        currency,
+        customerVisible: false,
+      }),
+    );
+  }
+
+  const totalCost = roundPreviewNumber(materialCost + operationCost + wasteCost);
+  const totals: CostPreviewTotals = {
+    materialCost,
+    laborCost: 0,
+    operationCost,
+    wasteCost,
+    extraCost: 0,
+    totalCost,
+    currency,
+  };
+
+  return {
+    jobId: jobDraft.id,
+    materialCost,
+    laborCost: 0,
+    operationCost,
+    wasteCost,
+    extraCost: 0,
+    totalCost,
+    currency,
+    totals,
+    materialGroupBreakdown,
+    wasteTotal: {
+      areaCm2: wasteAreaCm2,
+      ratio: DEFAULT_COST_PREVIEW_WASTE_RATIO,
+      cost: wasteCost,
+      currency,
+    },
+    details,
+  };
+}
+
+export function calculateMaterialCost(group: Pick<MaterialGroupDraft, "material" | "totalPieceAreaCm2">): number {
+  const slabPrice = Math.max(0, group.material.slabPrice ?? 0);
+  const slabWidthCm = Math.max(0, group.material.slabWidthCm ?? 0);
+  const slabHeightCm = Math.max(0, group.material.slabHeightCm ?? 0);
+  const slabAreaCm2 = slabWidthCm * slabHeightCm;
+
+  if (slabPrice <= 0 || slabAreaCm2 <= 0 || group.totalPieceAreaCm2 <= 0) {
+    return 0;
+  }
+
+  return roundPreviewNumber((group.totalPieceAreaCm2 / slabAreaCm2) * slabPrice);
+}
+
+export function calculateWasteCost(
+  materialCost: number,
+  wasteRatio: number = DEFAULT_COST_PREVIEW_WASTE_RATIO,
+): number {
+  return roundPreviewNumber(Math.max(0, materialCost) * Math.max(0, wasteRatio));
+}
+
+export function calculateWasteAreaCm2(
+  areaCm2: number,
+  wasteRatio: number = DEFAULT_COST_PREVIEW_WASTE_RATIO,
+): number {
+  return roundPreviewNumber(Math.max(0, areaCm2) * Math.max(0, wasteRatio));
+}
+
+export function calculateOperationCost(_group: Pick<MaterialGroupDraft, "pieceIds" | "totalPieceAreaCm2">): number {
+  return 0;
 }
 
 export function createEmptyJobDraft(): JobDraft {
@@ -530,6 +673,91 @@ function getMaterialGroupStatus(group: Pick<MaterialGroupDraft, "material" | "to
   return "ready_for_layout";
 }
 
+function resolveCostPreviewCurrency(jobDraft: JobDraft, materialGroups: MaterialGroupDraft[]): Currency {
+  return jobDraft.costPreview.currency ?? materialGroups[0]?.material.currency ?? DEFAULT_CURRENCY;
+}
+
+function getCostPreviewItemContext(
+  jobDraft: JobDraft,
+  group: Pick<MaterialGroupDraft, "areaIds" | "productIds" | "pieceIds">,
+): {
+  areaId: string;
+  areaName: string;
+  productId: string;
+  productName: string;
+  pieceId?: string;
+  pieceName?: string;
+} {
+  for (const area of jobDraft.areas) {
+    if (!group.areaIds.includes(area.id)) {
+      continue;
+    }
+
+    for (const product of area.products) {
+      if (!group.productIds.includes(product.id)) {
+        continue;
+      }
+
+      const piece = product.pieces.find((candidate) => group.pieceIds.includes(candidate.id));
+
+      return {
+        areaId: area.id,
+        areaName: area.name,
+        productId: product.id,
+        productName: product.name,
+        pieceId: piece?.id,
+        pieceName: piece?.label,
+      };
+    }
+  }
+
+  return {
+    areaId: group.areaIds[0] ?? "",
+    areaName: "",
+    productId: group.productIds[0] ?? "",
+    productName: "",
+    pieceId: group.pieceIds[0],
+  };
+}
+
+function createCostPreviewItem(input: {
+  id: string;
+  group: MaterialGroupDraft;
+  context: ReturnType<typeof getCostPreviewItemContext>;
+  costType: CostPreviewItem["costType"];
+  label: string;
+  quantity: number;
+  amount: number;
+  currency: Currency;
+  customerVisible: boolean;
+  waste?: CostPreviewWaste;
+}): CostPreviewItem {
+  return {
+    id: input.id,
+    areaId: input.context.areaId,
+    areaName: input.context.areaName,
+    productId: input.context.productId,
+    productName: input.context.productName,
+    pieceId: input.context.pieceId,
+    pieceName: input.context.pieceName,
+    materialGroupId: input.group.key,
+    materialGroupKey: input.group.key,
+    materialSelection: { ...input.group.material },
+    label: input.label,
+    costType: input.costType,
+    quantity: input.quantity,
+    unit: "square_meter",
+    measurement: {
+      areaCm2: input.costType === "waste" ? input.waste?.areaCm2 : input.group.totalPieceAreaCm2,
+      squareMeter: input.quantity,
+    },
+    waste: input.waste,
+    amount: input.amount,
+    currency: input.currency,
+    customerVisible: input.customerVisible,
+  };
+}
+
 function getMaterialDisplayName(material: Pick<MaterialSelectionDraft, "materialName" | "brand" | "series">): string {
   const parts = [material.materialName, material.brand, material.series].filter((part): part is string =>
     Boolean(part?.trim()),
@@ -581,6 +809,10 @@ function findPiecesForGroup(jobDraft: JobDraft, group: MaterialGroupDraft): Cutt
 
 function roundPreviewNumber(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function cm2ToSquareMeter(value: number): number {
+  return value / 10000;
 }
 
 function createDraftId(prefix: string): string {

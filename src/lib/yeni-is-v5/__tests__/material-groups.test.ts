@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { materialGroupFixtures } from "../fixtures/material-groups";
 import {
+  DEFAULT_COST_PREVIEW_WASTE_RATIO,
   buildMaterialGroupKey,
+  buildCostPreview,
   buildQuoteLineDisplayName,
+  calculateWasteCost,
   effectiveMaterialSelection,
   rebuildMaterialGroups,
   summarizeMaterialGroup,
@@ -257,6 +260,116 @@ export function testMaterialGroupIdIsDerivedFromEffectiveMaterial() {
   const effectiveMaterial = effectiveMaterialSelection(area.products[0], piece);
 
   assert.equal(group.key, buildMaterialGroupKey(effectiveMaterial, piece));
+}
+
+export function testBuildCostPreviewForSingleMaterialGroup() {
+  const material = createMaterial({ materialName: "Calacatta", slabPrice: 5120, stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-left", "area-kitchen", "product-countertop", "Sol", 100, 60, 1, 1.6),
+        createPiece("piece-right", "area-kitchen", "product-countertop", "Sag", 100, 40, 1, 1.4),
+      ]),
+    ]),
+  ]);
+  const preview = buildCostPreview(job);
+
+  assert.equal(preview.jobId, job.id);
+  assert.equal(preview.materialGroupBreakdown.length, 1);
+  assert.equal(preview.materialCost, 1000);
+  assert.equal(preview.wasteCost, 120);
+  assert.equal(preview.operationCost, 0);
+  assert.equal(preview.totalCost, 1120);
+  assert.equal(preview.details.length, 3);
+}
+
+export function testBuildCostPreviewForMultipleMaterialGroups() {
+  const calacatta = createMaterial({ materialName: "Calacatta", slabPrice: 5120, stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", slabPrice: 5120, stockPlateId: "stock-nero", shadeCode: "N" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+        createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+      ]),
+      createProduct("product-backsplash", "area-kitchen", "Tezgah Arasi", nero, [
+        createPiece("piece-nero", "area-kitchen", "product-backsplash", "Nero", 100, 40, 1, 1.4),
+      ]),
+    ]),
+  ]);
+  const preview = buildCostPreview(job);
+
+  assert.equal(preview.materialGroupBreakdown.length, 2);
+  assert.equal(preview.materialCost, 1000);
+  assert.equal(preview.wasteCost, 120);
+  assert.equal(preview.totalCost, 1120);
+  assert.equal(new Set(preview.materialGroupBreakdown.map((group) => group.materialGroupId)).size, 2);
+}
+
+export function testBuildCostPreviewUsesPieceOverrideMaterial() {
+  const defaultMaterial = createMaterial({ materialName: "Calacatta", slabPrice: 5120, stockPlateId: "stock-calacatta" });
+  const overrideMaterial = createMaterial({ materialName: "Nero", slabPrice: 5120, stockPlateId: "stock-nero", shadeCode: "N" });
+  const area = createArea("area-kitchen", "Mutfak", [
+    createProduct("product-countertop", "area-kitchen", "Tezgah", defaultMaterial, [
+      {
+        ...createPiece("piece-override", "area-kitchen", "product-countertop", "Override", 100, 60, 1, 1.6),
+        materialSelection: overrideMaterial,
+      },
+    ]),
+  ]);
+  const job = createJob([area]);
+  const preview = buildCostPreview(job);
+  const [breakdown] = preview.materialGroupBreakdown;
+  const piece = area.products[0].pieces[0];
+
+  assert.equal(preview.materialGroupBreakdown.length, 1);
+  assert.equal(breakdown.materialSelection.materialName, "Nero");
+  assert.equal(breakdown.materialGroupId, buildMaterialGroupKey(effectiveMaterialSelection(area.products[0], piece), piece));
+}
+
+export function testBuildCostPreviewCalculatesDefaultWaste() {
+  const material = createMaterial({ materialName: "Calacatta", slabPrice: 5120, stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const preview = buildCostPreview(job);
+  const wasteDetail = preview.details.find((detail) => detail.costType === "waste");
+
+  assert.equal(DEFAULT_COST_PREVIEW_WASTE_RATIO, 0.12);
+  assert.equal(calculateWasteCost(600), 72);
+  assert.equal(preview.wasteCost, 72);
+  assert.equal(preview.wasteTotal.areaCm2, 720);
+  assert.equal(wasteDetail?.customerVisible, false);
+}
+
+export function testBuildCostPreviewAggregatesTotals() {
+  const calacatta = createMaterial({ materialName: "Calacatta", slabPrice: 5120, stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", slabPrice: 5120, stockPlateId: "stock-nero", shadeCode: "N" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+        createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+      ]),
+      createProduct("product-island", "area-kitchen", "Ada", nero, [
+        createPiece("piece-nero", "area-kitchen", "product-island", "Nero", 100, 40, 1, 1.4),
+      ]),
+    ]),
+  ]);
+  const preview = buildCostPreview(job);
+  const breakdownMaterialCost = preview.materialGroupBreakdown.reduce((sum, group) => sum + group.materialCost, 0);
+  const breakdownWasteCost = preview.materialGroupBreakdown.reduce((sum, group) => sum + group.wasteCost, 0);
+  const breakdownOperationCost = preview.materialGroupBreakdown.reduce((sum, group) => sum + group.operationCost, 0);
+  const breakdownTotalCost = preview.materialGroupBreakdown.reduce((sum, group) => sum + group.totalCost, 0);
+
+  assert.equal(preview.totals.materialCost, breakdownMaterialCost);
+  assert.equal(preview.totals.wasteCost, breakdownWasteCost);
+  assert.equal(preview.totals.operationCost, breakdownOperationCost);
+  assert.equal(preview.totals.totalCost, breakdownTotalCost);
+  assert.equal(preview.totalCost, preview.totals.totalCost);
+  assert.equal(preview.wasteTotal.cost, preview.totals.wasteCost);
 }
 
 type ComparableSummary = {
