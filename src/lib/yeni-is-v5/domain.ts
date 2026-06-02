@@ -533,6 +533,78 @@ export function calculateOperationCost(_group: Pick<MaterialGroupDraft, "pieceId
   return 0;
 }
 
+export function buildQuotePreview(jobDraft: JobDraft): QuotePreviewLine[] {
+  const costPreview = buildCostPreview(jobDraft);
+  const costByMaterialGroupId = new Map(
+    costPreview.materialGroupBreakdown.map((breakdown) => [breakdown.materialGroupId, breakdown]),
+  );
+  const lines = new Map<string, QuotePreviewLine>();
+
+  for (const area of jobDraft.areas) {
+    for (const product of area.products) {
+      for (const piece of product.pieces) {
+        const materialSelection = effectiveMaterialSelection(product, piece);
+        const materialGroupId = buildMaterialGroupKey(materialSelection, piece);
+        const lineKey = buildQuotePreviewLineKey(area.id, product.id, materialGroupId);
+        const pieceQuantity = roundPreviewNumber(cm2ToSquareMeter(calculatePieceAreaCm2(piece)));
+        const existingLine = lines.get(lineKey);
+
+        if (existingLine) {
+          const quantity = roundPreviewNumber(existingLine.quantity + pieceQuantity);
+
+          lines.set(lineKey, {
+            ...existingLine,
+            quantity,
+            totalPrice: calculateQuoteLineTotalPrice(quantity, existingLine.unitPrice),
+          });
+          continue;
+        }
+
+        const displayName = buildQuoteLineDisplayName({
+          areaName: area.name,
+          productName: product.name,
+          materialSelection,
+        });
+        const unitPrice = calculateQuoteLineUnitPrice({
+          area,
+          product,
+          materialGroupId,
+          materialSelection,
+          costPreview,
+        });
+        const costBreakdown = costByMaterialGroupId.get(materialGroupId);
+
+        lines.set(lineKey, {
+          id: `quote-${lineKey}`,
+          areaId: area.id,
+          areaName: area.name,
+          productId: product.id,
+          productName: product.name,
+          materialGroupId,
+          materialGroupKey: materialGroupId,
+          materialSelection: { ...materialSelection },
+          displayName,
+          label: displayName,
+          description: "",
+          unit: "square_meter",
+          quantity: pieceQuantity,
+          unitPrice,
+          totalPrice: calculateQuoteLineTotalPrice(pieceQuantity, unitPrice),
+          includesWasteCost: true,
+          customerVisible: true,
+          costAmount: costBreakdown?.totalCost,
+          areaNameSnapshot: area.name,
+          productNameSnapshot: product.name,
+          materialNameSnapshot: materialSelection.materialName,
+          lineType: "material",
+        });
+      }
+    }
+  }
+
+  return Array.from(lines.values());
+}
+
 export function createEmptyJobDraft(): JobDraft {
   return {
     id: createDraftId("job"),
@@ -756,6 +828,24 @@ function createCostPreviewItem(input: {
     currency: input.currency,
     customerVisible: input.customerVisible,
   };
+}
+
+function buildQuotePreviewLineKey(areaId: string, productId: string, materialGroupId: string): string {
+  return [areaId, productId, materialGroupId].map(normalizeMaterialKeyPart).join("|");
+}
+
+function calculateQuoteLineUnitPrice(_input: {
+  area: JobAreaDraft;
+  product: AreaProductDraft;
+  materialGroupId: string;
+  materialSelection: MaterialSelectionDraft;
+  costPreview: CostPreview;
+}): number {
+  return 0;
+}
+
+function calculateQuoteLineTotalPrice(quantity: number, unitPrice: number): number {
+  return roundPreviewNumber(Math.max(0, quantity) * Math.max(0, unitPrice));
 }
 
 function getMaterialDisplayName(material: Pick<MaterialSelectionDraft, "materialName" | "brand" | "series">): string {

@@ -9,6 +9,12 @@ import {
   testBuildCostPreviewForMultipleMaterialGroups,
   testBuildCostPreviewForSingleMaterialGroup,
   testBuildCostPreviewUsesPieceOverrideMaterial,
+  testBuildQuotePreviewCreatesSingleLineForSingleMaterial,
+  testBuildQuotePreviewDoesNotCreateWasteLine,
+  testBuildQuotePreviewMergesSameAreaProductMaterial,
+  testBuildQuotePreviewSplitsPieceOverrideMaterial,
+  testBuildQuotePreviewSplitsSameProductDifferentMaterials,
+  testBuildQuotePreviewUsesDisplayNameHelper,
   testMaterialGroupIdIsDerivedFromEffectiveMaterial,
   testQuoteLinesCanSplitSameAreaProductByMaterialGroup,
   testWasteIsCostOnlyAndNotSeparateCustomerQuoteLine,
@@ -28,6 +34,12 @@ const tests: Array<[string, () => void]> = [
   ["cost preview piece override", testBuildCostPreviewUsesPieceOverrideMaterial],
   ["cost preview default waste", testBuildCostPreviewCalculatesDefaultWaste],
   ["cost preview totals aggregation", testBuildCostPreviewAggregatesTotals],
+  ["quote preview single material line", testBuildQuotePreviewCreatesSingleLineForSingleMaterial],
+  ["quote preview merges same material", testBuildQuotePreviewMergesSameAreaProductMaterial],
+  ["quote preview splits different materials", testBuildQuotePreviewSplitsSameProductDifferentMaterials],
+  ["quote preview splits piece override", testBuildQuotePreviewSplitsPieceOverrideMaterial],
+  ["quote preview hides waste line", testBuildQuotePreviewDoesNotCreateWasteLine],
+  ["quote preview display name", testBuildQuotePreviewUsesDisplayNameHelper],
 ];
 
 for (const [name, run] of tests) {

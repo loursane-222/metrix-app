@@ -4,6 +4,7 @@ import {
   DEFAULT_COST_PREVIEW_WASTE_RATIO,
   buildMaterialGroupKey,
   buildCostPreview,
+  buildQuotePreview,
   buildQuoteLineDisplayName,
   calculateWasteCost,
   effectiveMaterialSelection,
@@ -370,6 +371,130 @@ export function testBuildCostPreviewAggregatesTotals() {
   assert.equal(preview.totals.totalCost, breakdownTotalCost);
   assert.equal(preview.totalCost, preview.totals.totalCost);
   assert.equal(preview.wasteTotal.cost, preview.totals.wasteCost);
+}
+
+export function testBuildQuotePreviewCreatesSingleLineForSingleMaterial() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const [line] = buildQuotePreview(job);
+
+  assert.equal(line.areaId, "area-kitchen");
+  assert.equal(line.areaName, "Mutfak");
+  assert.equal(line.productId, "product-countertop");
+  assert.equal(line.productName, "Tezgah");
+  assert.equal(line.materialGroupId, buildMaterialGroupKey(material, job.areas[0].products[0].pieces[0]));
+  assert.equal(line.materialSelection?.materialName, "Calacatta");
+  assert.equal(line.displayName, "Mutfak / Tezgah / Calacatta / Belenco / Royal");
+  assert.equal(line.quantity, 0.6);
+  assert.equal(line.unit, "square_meter");
+  assert.equal(line.unitPrice, 0);
+  assert.equal(line.totalPrice, 0);
+}
+
+export function testBuildQuotePreviewMergesSameAreaProductMaterial() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-left", "area-kitchen", "product-countertop", "Sol", 100, 60, 1, 1.6),
+        createPiece("piece-right", "area-kitchen", "product-countertop", "Sag", 100, 40, 1, 1.4),
+      ]),
+    ]),
+  ]);
+  const lines = buildQuotePreview(job);
+
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].quantity, 1);
+}
+
+export function testBuildQuotePreviewSplitsSameProductDifferentMaterials() {
+  const calacatta = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+        createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+        {
+          ...createPiece("piece-nero", "area-kitchen", "product-countertop", "Nero", 100, 40, 1, 1.4),
+          materialSelection: nero,
+        },
+      ]),
+    ]),
+  ]);
+  const lines = buildQuotePreview(job);
+
+  assert.equal(lines.length, 2);
+  assert.equal(new Set(lines.map((line) => line.areaId)).size, 1);
+  assert.equal(new Set(lines.map((line) => line.productId)).size, 1);
+  assert.equal(new Set(lines.map((line) => line.materialGroupId)).size, 2);
+  assert.deepEqual(
+    lines.map((line) => line.materialSelection?.materialName).sort(),
+    ["Calacatta", "Nero"],
+  );
+}
+
+export function testBuildQuotePreviewSplitsPieceOverrideMaterial() {
+  const defaultMaterial = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const overrideMaterial = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const area = createArea("area-kitchen", "Mutfak", [
+    createProduct("product-countertop", "area-kitchen", "Tezgah", defaultMaterial, [
+      createPiece("piece-default", "area-kitchen", "product-countertop", "Default", 100, 60, 1, 1.6),
+      {
+        ...createPiece("piece-override", "area-kitchen", "product-countertop", "Override", 100, 60, 1, 1.6),
+        materialSelection: overrideMaterial,
+      },
+    ]),
+  ]);
+  const job = createJob([area]);
+  const lines = buildQuotePreview(job);
+  const overridePiece = area.products[0].pieces[1];
+  const overrideLine = lines.find((line) => line.materialSelection?.materialName === "Nero");
+
+  assert.equal(lines.length, 2);
+  assert.equal(overrideLine?.materialGroupId, buildMaterialGroupKey(effectiveMaterialSelection(area.products[0], overridePiece), overridePiece));
+}
+
+export function testBuildQuotePreviewDoesNotCreateWasteLine() {
+  const material = createMaterial({ materialName: "Calacatta", slabPrice: 5120, stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const costPreview = buildCostPreview(job);
+  const quoteLines = buildQuotePreview(job);
+
+  assert.equal(costPreview.details.some((detail) => detail.costType === "waste"), true);
+  assert.equal(quoteLines.some((line) => line.lineType === "extra" && line.label.toLocaleLowerCase("tr-TR").includes("fire")), false);
+  assert.equal(quoteLines.every((line) => line.includesWasteCost), true);
+}
+
+export function testBuildQuotePreviewUsesDisplayNameHelper() {
+  const material = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const job = createJob([
+    createArea("area-bathroom", "Banyo", [
+      createProduct("product-countertop", "area-bathroom", "Lavabo", material, [
+        createPiece("piece-countertop", "area-bathroom", "product-countertop", "Lavabo", 80, 50, 1, 1.3),
+      ]),
+    ]),
+  ]);
+  const [line] = buildQuotePreview(job);
+  const expectedDisplayName = buildQuoteLineDisplayName({
+    areaName: "Banyo",
+    productName: "Lavabo",
+    materialSelection: material,
+  });
+
+  assert.equal(line.displayName, expectedDisplayName);
+  assert.equal(line.label, expectedDisplayName);
 }
 
 type ComparableSummary = {
