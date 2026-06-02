@@ -4,6 +4,7 @@ import {
   DEFAULT_COST_PREVIEW_WASTE_RATIO,
   buildMaterialGroupKey,
   buildCostPreview,
+  buildLayoutPreview,
   buildQuotePreview,
   buildQuoteLineDisplayName,
   calculateWasteCost,
@@ -495,6 +496,151 @@ export function testBuildQuotePreviewUsesDisplayNameHelper() {
 
   assert.equal(line.displayName, expectedDisplayName);
   assert.equal(line.label, expectedDisplayName);
+}
+
+export function testBuildLayoutPreviewCreatesSingleGroupForSingleMaterial() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const preview = buildLayoutPreview(job);
+
+  assert.equal(preview.jobId, job.id);
+  assert.equal(preview.groups.length, 1);
+  assert.equal(preview.groups[0].materialGroupId, buildMaterialGroupKey(material, job.areas[0].products[0].pieces[0]));
+  assert.equal(preview.groups[0].pieces.length, 1);
+  assert.equal(preview.groups[0].status, "ready");
+}
+
+export function testBuildLayoutPreviewCreatesGroupsForDifferentMaterials() {
+  const calacatta = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+        createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+      ]),
+      createProduct("product-island", "area-kitchen", "Ada", nero, [
+        createPiece("piece-nero", "area-kitchen", "product-island", "Nero", 100, 40, 1, 1.4),
+      ]),
+    ]),
+  ]);
+  const preview = buildLayoutPreview(job);
+
+  assert.equal(preview.groups.length, 2);
+  assert.equal(new Set(preview.groups.map((group) => group.materialGroupId)).size, 2);
+}
+
+export function testBuildLayoutPreviewSendsPieceOverrideToDifferentGroup() {
+  const defaultMaterial = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const overrideMaterial = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const area = createArea("area-kitchen", "Mutfak", [
+    createProduct("product-countertop", "area-kitchen", "Tezgah", defaultMaterial, [
+      createPiece("piece-default", "area-kitchen", "product-countertop", "Default", 100, 60, 1, 1.6),
+      {
+        ...createPiece("piece-override", "area-kitchen", "product-countertop", "Override", 100, 40, 1, 1.4),
+        materialSelection: overrideMaterial,
+      },
+    ]),
+  ]);
+  const job = createJob([area]);
+  const preview = buildLayoutPreview(job);
+  const overridePiece = area.products[0].pieces[1];
+  const overrideGroupId = buildMaterialGroupKey(effectiveMaterialSelection(area.products[0], overridePiece), overridePiece);
+  const overrideGroup = preview.groups.find((group) => group.materialGroupId === overrideGroupId);
+
+  assert.equal(preview.groups.length, 2);
+  assert.equal(overrideGroup?.pieces.length, 1);
+  assert.equal(overrideGroup?.pieces[0].pieceId, "piece-override");
+}
+
+export function testBuildLayoutPreviewPreservesPieceMetadata() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-bathroom", "Banyo", [
+      createProduct("product-vanity", "area-bathroom", "Lavabo", material, [
+        createPiece("piece-vanity", "area-bathroom", "product-vanity", "Lavabo Tabla", 80, 50, 1, 1.3),
+      ]),
+    ]),
+  ]);
+  const preview = buildLayoutPreview(job);
+  const [piece] = preview.groups[0].pieces;
+
+  assert.equal(piece.areaId, "area-bathroom");
+  assert.equal(piece.areaName, "Banyo");
+  assert.equal(piece.productId, "product-vanity");
+  assert.equal(piece.productName, "Lavabo");
+  assert.equal(piece.pieceId, "piece-vanity");
+  assert.equal(piece.pieceName, "Lavabo Tabla");
+  assert.equal(piece.widthCm, 80);
+  assert.equal(piece.heightCm, 50);
+  assert.equal(piece.areaCm2, 4000);
+  assert.equal(piece.materialGroupId, preview.groups[0].materialGroupId);
+}
+
+export function testBuildLayoutPreviewCalculatesRequiredWasteAndTotalArea() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const preview = buildLayoutPreview(job);
+  const [group] = preview.groups;
+
+  assert.equal(group.requiredAreaCm2, 6000);
+  assert.equal(group.wasteAreaCm2, 720);
+  assert.equal(group.totalAreaCm2, 6720);
+  assert.equal(group.wasteAreaCm2, group.requiredAreaCm2 * DEFAULT_COST_PREVIEW_WASTE_RATIO);
+}
+
+export function testBuildLayoutPreviewMarksMissingMaterial() {
+  const missingMaterial = createMaterial({
+    materialName: "",
+    source: "unknown",
+    stockPlateId: undefined,
+    shadeCode: undefined,
+    lotNo: undefined,
+  });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", missingMaterial, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+  const preview = buildLayoutPreview(job);
+
+  assert.equal(preview.groups.length, 1);
+  assert.equal(preview.groups[0].status, "missing-material");
+}
+
+export function testBuildLayoutPreviewAggregatesTotals() {
+  const calacatta = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+        createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+      ]),
+      createProduct("product-island", "area-kitchen", "Ada", nero, [
+        createPiece("piece-nero", "area-kitchen", "product-island", "Nero", 100, 40, 1, 1.4),
+      ]),
+    ]),
+  ]);
+  const preview = buildLayoutPreview(job);
+
+  assert.equal(preview.totals.groupCount, 2);
+  assert.equal(preview.totals.pieceCount, 2);
+  assert.equal(preview.totals.requiredAreaCm2, 10000);
+  assert.equal(preview.totals.wasteAreaCm2, 1200);
+  assert.equal(preview.totals.totalAreaCm2, 11200);
 }
 
 type ComparableSummary = {

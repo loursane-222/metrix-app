@@ -192,6 +192,49 @@ export type PlateLayoutDraft = {
   warnings?: string[];
 };
 
+export type LayoutPreviewStatus = "ready" | "missing-material" | "empty";
+
+export type LayoutPreviewPiece = {
+  areaId: string;
+  areaName: string;
+  productId: string;
+  productName: string;
+  pieceId: string;
+  pieceName: string;
+  widthCm: number;
+  heightCm: number;
+  areaCm2: number;
+  materialSelection: MaterialSelectionDraft;
+  materialGroupId: string;
+};
+
+export type LayoutPreviewGroup = {
+  id: string;
+  materialGroupId: string;
+  materialSelection: MaterialSelectionDraft;
+  areaIds: string[];
+  productIds: string[];
+  pieces: LayoutPreviewPiece[];
+  requiredAreaCm2: number;
+  wasteAreaCm2: number;
+  totalAreaCm2: number;
+  status: LayoutPreviewStatus;
+};
+
+export type LayoutPreviewTotals = {
+  groupCount: number;
+  pieceCount: number;
+  requiredAreaCm2: number;
+  wasteAreaCm2: number;
+  totalAreaCm2: number;
+};
+
+export type LayoutPreview = {
+  jobId: string;
+  groups: LayoutPreviewGroup[];
+  totals: LayoutPreviewTotals;
+};
+
 export type CostPreviewItem = {
   id: string;
   areaId: string;
@@ -605,6 +648,37 @@ export function buildQuotePreview(jobDraft: JobDraft): QuotePreviewLine[] {
   return Array.from(lines.values());
 }
 
+export function buildLayoutPreview(jobDraft: JobDraft): LayoutPreview {
+  const materialGroups = rebuildMaterialGroups(jobDraft);
+  const groups = materialGroups.map<LayoutPreviewGroup>((group) => {
+    const pieces = findLayoutPreviewPiecesForGroup(jobDraft, group);
+    const requiredAreaCm2 = roundPreviewNumber(
+      pieces.reduce((sum, piece) => sum + Math.max(0, piece.areaCm2), 0),
+    );
+    const wasteAreaCm2 = calculateWasteAreaCm2(requiredAreaCm2);
+    const totalAreaCm2 = roundPreviewNumber(requiredAreaCm2 + wasteAreaCm2);
+
+    return {
+      id: `layout-${group.key}`,
+      materialGroupId: group.key,
+      materialSelection: { ...group.material },
+      areaIds: [...group.areaIds],
+      productIds: [...group.productIds],
+      pieces,
+      requiredAreaCm2,
+      wasteAreaCm2,
+      totalAreaCm2,
+      status: getLayoutPreviewGroupStatus(group.material, pieces),
+    };
+  });
+
+  return {
+    jobId: jobDraft.id,
+    groups,
+    totals: buildLayoutPreviewTotals(groups),
+  };
+}
+
 export function createEmptyJobDraft(): JobDraft {
   return {
     id: createDraftId("job"),
@@ -846,6 +920,69 @@ function calculateQuoteLineUnitPrice(_input: {
 
 function calculateQuoteLineTotalPrice(quantity: number, unitPrice: number): number {
   return roundPreviewNumber(Math.max(0, quantity) * Math.max(0, unitPrice));
+}
+
+function findLayoutPreviewPiecesForGroup(jobDraft: JobDraft, group: MaterialGroupDraft): LayoutPreviewPiece[] {
+  const pieceIds = new Set(group.pieceIds);
+  const pieces: LayoutPreviewPiece[] = [];
+
+  for (const area of jobDraft.areas) {
+    for (const product of area.products) {
+      for (const piece of product.pieces) {
+        if (!pieceIds.has(piece.id)) {
+          continue;
+        }
+
+        const materialSelection = effectiveMaterialSelection(product, piece);
+        const materialGroupId = buildMaterialGroupKey(materialSelection, piece);
+
+        pieces.push({
+          areaId: area.id,
+          areaName: area.name,
+          productId: product.id,
+          productName: product.name,
+          pieceId: piece.id,
+          pieceName: piece.label,
+          widthCm: piece.widthCm,
+          heightCm: piece.heightCm,
+          areaCm2: calculatePieceAreaCm2(piece),
+          materialSelection: { ...materialSelection },
+          materialGroupId,
+        });
+      }
+    }
+  }
+
+  return pieces;
+}
+
+function getLayoutPreviewGroupStatus(
+  materialSelection: MaterialSelectionDraft,
+  pieces: LayoutPreviewPiece[],
+): LayoutPreviewStatus {
+  if (pieces.length === 0) {
+    return "empty";
+  }
+
+  if (isMissingMaterialSelection(materialSelection)) {
+    return "missing-material";
+  }
+
+  return "ready";
+}
+
+function isMissingMaterialSelection(materialSelection: MaterialSelectionDraft): boolean {
+  return materialSelection.materialName.trim().length === 0 || materialSelection.source === "unknown";
+}
+
+function buildLayoutPreviewTotals(groups: LayoutPreviewGroup[]): LayoutPreviewTotals {
+  return {
+    groupCount: groups.length,
+    pieceCount: groups.reduce((sum, group) => sum + group.pieces.length, 0),
+    requiredAreaCm2: roundPreviewNumber(groups.reduce((sum, group) => sum + group.requiredAreaCm2, 0)),
+    wasteAreaCm2: roundPreviewNumber(groups.reduce((sum, group) => sum + group.wasteAreaCm2, 0)),
+    totalAreaCm2: roundPreviewNumber(groups.reduce((sum, group) => sum + group.totalAreaCm2, 0)),
+  };
 }
 
 function getMaterialDisplayName(material: Pick<MaterialSelectionDraft, "materialName" | "brand" | "series">): string {

@@ -9,6 +9,13 @@ import {
   testBuildCostPreviewForMultipleMaterialGroups,
   testBuildCostPreviewForSingleMaterialGroup,
   testBuildCostPreviewUsesPieceOverrideMaterial,
+  testBuildLayoutPreviewAggregatesTotals,
+  testBuildLayoutPreviewCalculatesRequiredWasteAndTotalArea,
+  testBuildLayoutPreviewCreatesGroupsForDifferentMaterials,
+  testBuildLayoutPreviewCreatesSingleGroupForSingleMaterial,
+  testBuildLayoutPreviewMarksMissingMaterial,
+  testBuildLayoutPreviewPreservesPieceMetadata,
+  testBuildLayoutPreviewSendsPieceOverrideToDifferentGroup,
   testBuildQuotePreviewCreatesSingleLineForSingleMaterial,
   testBuildQuotePreviewDoesNotCreateWasteLine,
   testBuildQuotePreviewMergesSameAreaProductMaterial,
@@ -40,6 +47,13 @@ const tests: Array<[string, () => void]> = [
   ["quote preview splits piece override", testBuildQuotePreviewSplitsPieceOverrideMaterial],
   ["quote preview hides waste line", testBuildQuotePreviewDoesNotCreateWasteLine],
   ["quote preview display name", testBuildQuotePreviewUsesDisplayNameHelper],
+  ["layout preview single material group", testBuildLayoutPreviewCreatesSingleGroupForSingleMaterial],
+  ["layout preview different material groups", testBuildLayoutPreviewCreatesGroupsForDifferentMaterials],
+  ["layout preview piece override group", testBuildLayoutPreviewSendsPieceOverrideToDifferentGroup],
+  ["layout preview preserves metadata", testBuildLayoutPreviewPreservesPieceMetadata],
+  ["layout preview area calculations", testBuildLayoutPreviewCalculatesRequiredWasteAndTotalArea],
+  ["layout preview missing material status", testBuildLayoutPreviewMarksMissingMaterial],
+  ["layout preview totals aggregation", testBuildLayoutPreviewAggregatesTotals],
 ];
 
 for (const [name, run] of tests) {
