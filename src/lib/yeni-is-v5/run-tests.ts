@@ -39,6 +39,10 @@ import {
   testSaveJobV5DraftUpdateChecksOwnershipBeforeReplacingChildren,
   testSaveJobV5DraftUpdateRollsBackWhenOwnershipFails,
   testSaveJobV5DraftValidatesCustomerOwnership,
+  testMapJobV5SaveErrorMapsRouteResponses,
+  testParseSaveJobV5DraftRequestAcceptsCreatePayload,
+  testParseSaveJobV5DraftRequestDerivesUpdateFromJobId,
+  testParseSaveJobV5DraftRequestRejectsInvalidPayload,
   testBuildPurchaseRequirementPreviewAggregatesTotals,
   testBuildPurchaseRequirementPreviewCreatesRequirementPerStockRequirement,
   testBuildPurchaseRequirementPreviewCreatesSingleRequirement,
@@ -122,6 +126,10 @@ const tests: Array<[string, () => void | Promise<void>]> = [
   ["v5 save update ownership rollback", testSaveJobV5DraftUpdateRollsBackWhenOwnershipFails],
   ["v5 save customer ownership", testSaveJobV5DraftValidatesCustomerOwnership],
   ["v5 save no partial writes outside transaction", testSaveJobV5DraftCreateDoesNotPartiallyWriteOutsideTransaction],
+  ["v5 save route create payload validation", testParseSaveJobV5DraftRequestAcceptsCreatePayload],
+  ["v5 save route update payload validation", testParseSaveJobV5DraftRequestDerivesUpdateFromJobId],
+  ["v5 save route rejects invalid payload", testParseSaveJobV5DraftRequestRejectsInvalidPayload],
+  ["v5 save route error mapping", testMapJobV5SaveErrorMapsRouteResponses],
 ];
 
 async function main() {

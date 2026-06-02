@@ -4,11 +4,18 @@ import type {
   JobV5PersistencePlan,
   JobV5PersistenceJobRecord,
 } from "./persistence";
+import type { JobDraft } from "./domain";
 
 export type JobV5SaveMode = "create" | "update";
 
 export type SaveJobV5DraftInput = BuildJobV5PersistencePlanInput & {
   mode: JobV5SaveMode;
+  jobId?: string;
+};
+
+export type SaveJobV5DraftRequest = {
+  job: JobDraft;
+  title: string;
   jobId?: string;
 };
 
@@ -62,6 +69,51 @@ export class JobV5SaveError extends Error {
     super(message);
     this.name = "JobV5SaveError";
   }
+}
+
+export function parseSaveJobV5DraftRequest(payload: unknown): SaveJobV5DraftRequest {
+  if (!isRecord(payload)) {
+    throw new JobV5SaveError("Request body must be an object", "invalid-input");
+  }
+
+  const title = readRequiredText(payload.title, "title");
+  const jobId = payload.jobId == null ? undefined : readRequiredText(payload.jobId, "jobId");
+  const job = parseJobDraft(payload.job);
+
+  return { job, title, jobId };
+}
+
+export function buildSaveJobV5DraftInput(
+  request: SaveJobV5DraftRequest,
+  atolyeId: string,
+): SaveJobV5DraftInput {
+  return {
+    job: request.job,
+    atolyeId,
+    title: request.title,
+    jobId: request.jobId,
+    mode: request.jobId ? "update" : "create",
+  };
+}
+
+export function mapJobV5SaveError(error: unknown): { status: number; body: { success: false; error: string } } {
+  if (error instanceof JobV5SaveError) {
+    const statusByCode: Record<JobV5SaveError["code"], number> = {
+      "invalid-input": 400,
+      "not-found": 404,
+      forbidden: 403,
+    };
+
+    return {
+      status: statusByCode[error.code],
+      body: { success: false, error: error.message },
+    };
+  }
+
+  return {
+    status: 500,
+    body: { success: false, error: "V5 job save failed" },
+  };
 }
 
 export async function saveJobV5Draft(
@@ -172,4 +224,125 @@ function buildSaveResult(mode: JobV5SaveMode, plan: JobV5PersistencePlan): SaveJ
 function withoutId(record: JobV5PersistenceJobRecord): Omit<JobV5PersistenceJobRecord, "id"> {
   const { id: _id, ...data } = record;
   return data;
+}
+
+function parseJobDraft(value: unknown): JobDraft {
+  if (!isRecord(value)) {
+    throw new JobV5SaveError("job is required", "invalid-input");
+  }
+
+  readRequiredText(value.id, "job.id");
+
+  if (!isRecord(value.customer)) {
+    throw new JobV5SaveError("job.customer is required", "invalid-input");
+  }
+
+  readRequiredText(value.customer.name, "job.customer.name");
+
+  if (!Array.isArray(value.areas)) {
+    throw new JobV5SaveError("job.areas must be an array", "invalid-input");
+  }
+
+  if (!["draft", "ready", "quoted"].includes(String(value.status))) {
+    throw new JobV5SaveError("job.status is invalid", "invalid-input");
+  }
+
+  for (const [areaIndex, area] of value.areas.entries()) {
+    parseAreaDraft(area, areaIndex);
+  }
+
+  return value as JobDraft;
+}
+
+function parseAreaDraft(value: unknown, areaIndex: number): void {
+  if (!isRecord(value)) {
+    throw new JobV5SaveError(`job.areas[${areaIndex}] must be an object`, "invalid-input");
+  }
+
+  readRequiredText(value.id, `job.areas[${areaIndex}].id`);
+  readRequiredText(value.name, `job.areas[${areaIndex}].name`);
+
+  if (!Array.isArray(value.products)) {
+    throw new JobV5SaveError(`job.areas[${areaIndex}].products must be an array`, "invalid-input");
+  }
+
+  for (const [productIndex, product] of value.products.entries()) {
+    parseProductDraft(product, areaIndex, productIndex);
+  }
+}
+
+function parseProductDraft(value: unknown, areaIndex: number, productIndex: number): void {
+  if (!isRecord(value)) {
+    throw new JobV5SaveError(
+      `job.areas[${areaIndex}].products[${productIndex}] must be an object`,
+      "invalid-input",
+    );
+  }
+
+  readRequiredText(value.id, `job.areas[${areaIndex}].products[${productIndex}].id`);
+  readRequiredText(value.name, `job.areas[${areaIndex}].products[${productIndex}].name`);
+  parseMaterialSelectionDraft(
+    value.defaultMaterialSelection,
+    `job.areas[${areaIndex}].products[${productIndex}].defaultMaterialSelection`,
+  );
+
+  if (!Array.isArray(value.pieces)) {
+    throw new JobV5SaveError(
+      `job.areas[${areaIndex}].products[${productIndex}].pieces must be an array`,
+      "invalid-input",
+    );
+  }
+
+  for (const [pieceIndex, piece] of value.pieces.entries()) {
+    parsePieceDraft(piece, areaIndex, productIndex, pieceIndex);
+  }
+}
+
+function parsePieceDraft(value: unknown, areaIndex: number, productIndex: number, pieceIndex: number): void {
+  if (!isRecord(value)) {
+    throw new JobV5SaveError(
+      `job.areas[${areaIndex}].products[${productIndex}].pieces[${pieceIndex}] must be an object`,
+      "invalid-input",
+    );
+  }
+
+  const path = `job.areas[${areaIndex}].products[${productIndex}].pieces[${pieceIndex}]`;
+  readRequiredText(value.id, `${path}.id`);
+  readRequiredText(value.label, `${path}.label`);
+  readFiniteNumber(value.widthCm, `${path}.widthCm`);
+  readFiniteNumber(value.heightCm, `${path}.heightCm`);
+  readFiniteNumber(value.quantity, `${path}.quantity`);
+
+  if (value.materialSelection != null) {
+    parseMaterialSelectionDraft(value.materialSelection, `${path}.materialSelection`);
+  }
+}
+
+function parseMaterialSelectionDraft(value: unknown, path: string): void {
+  if (!isRecord(value)) {
+    throw new JobV5SaveError(`${path} must be an object`, "invalid-input");
+  }
+
+  readRequiredText(value.materialName, `${path}.materialName`);
+  readRequiredText(value.source, `${path}.source`);
+}
+
+function readRequiredText(value: unknown, fieldName: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new JobV5SaveError(`${fieldName} is required`, "invalid-input");
+  }
+
+  return value.trim();
+}
+
+function readFiniteNumber(value: unknown, fieldName: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new JobV5SaveError(`${fieldName} must be a number`, "invalid-input");
+  }
+
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

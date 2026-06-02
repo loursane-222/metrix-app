@@ -18,7 +18,13 @@ import {
   summarizeMaterialGroup,
 } from "../domain";
 import { buildJobV5PersistencePlan } from "../persistence";
-import { JobV5SaveError, saveJobV5Draft } from "../save";
+import {
+  JobV5SaveError,
+  buildSaveJobV5DraftInput,
+  mapJobV5SaveError,
+  parseSaveJobV5DraftRequest,
+  saveJobV5Draft,
+} from "../save";
 import type {
   AreaProductDraft,
   CostPreview,
@@ -1373,6 +1379,60 @@ export async function testSaveJobV5DraftCreateDoesNotPartiallyWriteOutsideTransa
   assert.equal(db.transactionCount, 1);
   assert.equal(db.calls.includes("transaction:rollback"), true);
   assert.equal(db.calls.includes("transaction:commit"), false);
+}
+
+export function testParseSaveJobV5DraftRequestAcceptsCreatePayload() {
+  const material = createMaterial({ materialName: "Calacatta" });
+  const job = createJob([
+    createArea("area-kitchen", "Mutfak", [
+      createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+        createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+      ]),
+    ]),
+  ]);
+
+  const request = parseSaveJobV5DraftRequest({ title: "Mutfak Tezgah", job });
+  const input = buildSaveJobV5DraftInput(request, "atolye-1");
+
+  assert.equal(request.title, "Mutfak Tezgah");
+  assert.equal(request.jobId, undefined);
+  assert.equal(input.mode, "create");
+  assert.equal(input.atolyeId, "atolye-1");
+}
+
+export function testParseSaveJobV5DraftRequestDerivesUpdateFromJobId() {
+  const request = parseSaveJobV5DraftRequest({ title: "Mutfak Tezgah", jobId: "job-v5-1", job: createJob([]) });
+  const input = buildSaveJobV5DraftInput(request, "atolye-1");
+
+  assert.equal(input.mode, "update");
+  assert.equal(input.jobId, "job-v5-1");
+}
+
+export function testParseSaveJobV5DraftRequestRejectsInvalidPayload() {
+  assert.throws(
+    () => parseSaveJobV5DraftRequest({ title: "", job: createJob([]) }),
+    (error) => error instanceof JobV5SaveError && error.code === "invalid-input",
+  );
+  assert.throws(
+    () => parseSaveJobV5DraftRequest({ title: "Mutfak Tezgah", job: { ...createJob([]), areas: "bad" } }),
+    /job.areas must be an array/,
+  );
+}
+
+export function testMapJobV5SaveErrorMapsRouteResponses() {
+  assert.deepEqual(mapJobV5SaveError(new JobV5SaveError("bad payload", "invalid-input")), {
+    status: 400,
+    body: { success: false, error: "bad payload" },
+  });
+  assert.deepEqual(mapJobV5SaveError(new JobV5SaveError("missing job", "not-found")), {
+    status: 404,
+    body: { success: false, error: "missing job" },
+  });
+  assert.deepEqual(mapJobV5SaveError(new JobV5SaveError("wrong customer", "forbidden")), {
+    status: 403,
+    body: { success: false, error: "wrong customer" },
+  });
+  assert.equal(mapJobV5SaveError(new Error("unexpected")).status, 500);
 }
 
 type ComparableSummary = {
