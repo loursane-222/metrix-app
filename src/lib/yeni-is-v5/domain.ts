@@ -235,6 +235,31 @@ export type LayoutPreview = {
   totals: LayoutPreviewTotals;
 };
 
+export type StockRequirementStatus = "ready" | "insufficient-stock" | "purchase-required";
+
+export type StockRequirementItem = {
+  materialGroupId: string;
+  materialSelection: MaterialSelectionDraft;
+  requiredAreaCm2: number;
+  wasteAreaCm2: number;
+  totalAreaCm2: number;
+  estimatedPlateCount: number;
+  status: StockRequirementStatus;
+};
+
+export type StockRequirementTotals = {
+  requirementCount: number;
+  totalRequiredAreaCm2: number;
+  totalWasteAreaCm2: number;
+  totalAreaCm2: number;
+};
+
+export type StockRequirementPreview = {
+  jobId: string;
+  requirements: StockRequirementItem[];
+  totals: StockRequirementTotals;
+};
+
 export type CostPreviewItem = {
   id: string;
   areaId: string;
@@ -314,6 +339,9 @@ export type JobTotalsPreview = {
 const DEFAULT_CURRENCY: Currency = "TRY";
 const DEFAULT_TAX_RATE = 20;
 export const DEFAULT_COST_PREVIEW_WASTE_RATIO = 0.12;
+export const DEFAULT_STOCK_REQUIREMENT_PLATE_WIDTH_CM = 162;
+export const DEFAULT_STOCK_REQUIREMENT_PLATE_HEIGHT_CM = 324;
+export const PLATE_AREA_CM2 = DEFAULT_STOCK_REQUIREMENT_PLATE_WIDTH_CM * DEFAULT_STOCK_REQUIREMENT_PLATE_HEIGHT_CM;
 
 export function normalizeMaterialKeyPart(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined || value === "") {
@@ -679,6 +707,35 @@ export function buildLayoutPreview(jobDraft: JobDraft): LayoutPreview {
   };
 }
 
+export function buildStockRequirementPreview(layoutPreview: LayoutPreview): StockRequirementPreview {
+  const requirements = layoutPreview.groups.map<StockRequirementItem>((group) => ({
+    materialGroupId: group.materialGroupId,
+    materialSelection: { ...group.materialSelection },
+    requiredAreaCm2: group.requiredAreaCm2,
+    wasteAreaCm2: group.wasteAreaCm2,
+    totalAreaCm2: group.totalAreaCm2,
+    estimatedPlateCount: calculateEstimatedPlateCount(group.totalAreaCm2),
+    status: "ready",
+  }));
+
+  return {
+    jobId: layoutPreview.jobId,
+    requirements,
+    totals: buildStockRequirementTotals(requirements),
+  };
+}
+
+export function calculateEstimatedPlateCount(totalAreaCm2: number, plateAreaCm2: number = PLATE_AREA_CM2): number {
+  const normalizedTotalAreaCm2 = Math.max(0, totalAreaCm2);
+  const normalizedPlateAreaCm2 = Math.max(0, plateAreaCm2);
+
+  if (normalizedTotalAreaCm2 <= 0 || normalizedPlateAreaCm2 <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(normalizedTotalAreaCm2 / normalizedPlateAreaCm2);
+}
+
 export function createEmptyJobDraft(): JobDraft {
   return {
     id: createDraftId("job"),
@@ -982,6 +1039,19 @@ function buildLayoutPreviewTotals(groups: LayoutPreviewGroup[]): LayoutPreviewTo
     requiredAreaCm2: roundPreviewNumber(groups.reduce((sum, group) => sum + group.requiredAreaCm2, 0)),
     wasteAreaCm2: roundPreviewNumber(groups.reduce((sum, group) => sum + group.wasteAreaCm2, 0)),
     totalAreaCm2: roundPreviewNumber(groups.reduce((sum, group) => sum + group.totalAreaCm2, 0)),
+  };
+}
+
+function buildStockRequirementTotals(requirements: StockRequirementItem[]): StockRequirementTotals {
+  return {
+    requirementCount: requirements.length,
+    totalRequiredAreaCm2: roundPreviewNumber(
+      requirements.reduce((sum, requirement) => sum + requirement.requiredAreaCm2, 0),
+    ),
+    totalWasteAreaCm2: roundPreviewNumber(
+      requirements.reduce((sum, requirement) => sum + requirement.wasteAreaCm2, 0),
+    ),
+    totalAreaCm2: roundPreviewNumber(requirements.reduce((sum, requirement) => sum + requirement.totalAreaCm2, 0)),
   };
 }
 

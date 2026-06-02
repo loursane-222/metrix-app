@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { materialGroupFixtures } from "../fixtures/material-groups";
 import {
   DEFAULT_COST_PREVIEW_WASTE_RATIO,
+  PLATE_AREA_CM2,
   buildMaterialGroupKey,
   buildCostPreview,
   buildLayoutPreview,
   buildQuotePreview,
   buildQuoteLineDisplayName,
+  buildStockRequirementPreview,
+  calculateEstimatedPlateCount,
   calculateWasteCost,
   effectiveMaterialSelection,
   rebuildMaterialGroups,
@@ -640,6 +643,96 @@ export function testBuildLayoutPreviewAggregatesTotals() {
   assert.equal(preview.totals.pieceCount, 2);
   assert.equal(preview.totals.requiredAreaCm2, 10000);
   assert.equal(preview.totals.wasteAreaCm2, 1200);
+  assert.equal(preview.totals.totalAreaCm2, 11200);
+}
+
+export function testBuildStockRequirementPreviewCreatesSingleRequirement() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+          createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildStockRequirementPreview(layoutPreview);
+  const [requirement] = preview.requirements;
+
+  assert.equal(preview.jobId, layoutPreview.jobId);
+  assert.equal(preview.requirements.length, 1);
+  assert.equal(requirement.materialGroupId, layoutPreview.groups[0].materialGroupId);
+  assert.equal(requirement.materialSelection.materialName, "Calacatta");
+  assert.equal(requirement.status, "ready");
+}
+
+export function testBuildStockRequirementPreviewCreatesRequirementPerMaterialGroup() {
+  const calacatta = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+          createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+        ]),
+        createProduct("product-island", "area-kitchen", "Ada", nero, [
+          createPiece("piece-nero", "area-kitchen", "product-island", "Nero", 100, 40, 1, 1.4),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildStockRequirementPreview(layoutPreview);
+
+  assert.equal(preview.requirements.length, 2);
+  assert.equal(new Set(preview.requirements.map((requirement) => requirement.materialGroupId)).size, 2);
+}
+
+export function testCalculateEstimatedPlateCountUsesDefaultPlateArea() {
+  assert.equal(PLATE_AREA_CM2, 52488);
+  assert.equal(calculateEstimatedPlateCount(0), 0);
+  assert.equal(calculateEstimatedPlateCount(PLATE_AREA_CM2), 1);
+  assert.equal(calculateEstimatedPlateCount(PLATE_AREA_CM2 + 1), 2);
+}
+
+export function testBuildStockRequirementPreviewIncludesWasteAreaInTotal() {
+  const material = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", material, [
+          createPiece("piece-countertop", "area-kitchen", "product-countertop", "Tezgah", 100, 60, 1, 1.6),
+        ]),
+      ]),
+    ]),
+  );
+  const [requirement] = buildStockRequirementPreview(layoutPreview).requirements;
+
+  assert.equal(requirement.requiredAreaCm2, 6000);
+  assert.equal(requirement.wasteAreaCm2, 720);
+  assert.equal(requirement.totalAreaCm2, 6720);
+}
+
+export function testBuildStockRequirementPreviewAggregatesTotals() {
+  const calacatta = createMaterial({ materialName: "Calacatta", stockPlateId: "stock-calacatta" });
+  const nero = createMaterial({ materialName: "Nero", stockPlateId: "stock-nero", shadeCode: "N" });
+  const layoutPreview = buildLayoutPreview(
+    createJob([
+      createArea("area-kitchen", "Mutfak", [
+        createProduct("product-countertop", "area-kitchen", "Tezgah", calacatta, [
+          createPiece("piece-calacatta", "area-kitchen", "product-countertop", "Calacatta", 100, 60, 1, 1.6),
+        ]),
+        createProduct("product-island", "area-kitchen", "Ada", nero, [
+          createPiece("piece-nero", "area-kitchen", "product-island", "Nero", 100, 40, 1, 1.4),
+        ]),
+      ]),
+    ]),
+  );
+  const preview = buildStockRequirementPreview(layoutPreview);
+
+  assert.equal(preview.totals.requirementCount, 2);
+  assert.equal(preview.totals.totalRequiredAreaCm2, 10000);
+  assert.equal(preview.totals.totalWasteAreaCm2, 1200);
   assert.equal(preview.totals.totalAreaCm2, 11200);
 }
 

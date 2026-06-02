@@ -22,6 +22,11 @@ import {
   testBuildQuotePreviewSplitsPieceOverrideMaterial,
   testBuildQuotePreviewSplitsSameProductDifferentMaterials,
   testBuildQuotePreviewUsesDisplayNameHelper,
+  testBuildStockRequirementPreviewAggregatesTotals,
+  testBuildStockRequirementPreviewCreatesRequirementPerMaterialGroup,
+  testBuildStockRequirementPreviewCreatesSingleRequirement,
+  testBuildStockRequirementPreviewIncludesWasteAreaInTotal,
+  testCalculateEstimatedPlateCountUsesDefaultPlateArea,
   testMaterialGroupIdIsDerivedFromEffectiveMaterial,
   testQuoteLinesCanSplitSameAreaProductByMaterialGroup,
   testWasteIsCostOnlyAndNotSeparateCustomerQuoteLine,
@@ -54,6 +59,11 @@ const tests: Array<[string, () => void]> = [
   ["layout preview area calculations", testBuildLayoutPreviewCalculatesRequiredWasteAndTotalArea],
   ["layout preview missing material status", testBuildLayoutPreviewMarksMissingMaterial],
   ["layout preview totals aggregation", testBuildLayoutPreviewAggregatesTotals],
+  ["stock requirement single material", testBuildStockRequirementPreviewCreatesSingleRequirement],
+  ["stock requirement multiple materials", testBuildStockRequirementPreviewCreatesRequirementPerMaterialGroup],
+  ["stock requirement plate count", testCalculateEstimatedPlateCountUsesDefaultPlateArea],
+  ["stock requirement includes waste area", testBuildStockRequirementPreviewIncludesWasteAreaInTotal],
+  ["stock requirement totals aggregation", testBuildStockRequirementPreviewAggregatesTotals],
 ];
 
 for (const [name, run] of tests) {
